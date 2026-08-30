@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { apiClient } from "@/lib/api-client";
+import { formatMoney } from "@/lib/format";
 import type { TourSummary } from "@/types/tour";
 
 export default function ToursSearchPage() {
@@ -48,7 +49,7 @@ export default function ToursSearchPage() {
             className="rounded-lg border border-zinc-200 p-4 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
           >
             <h3 className="font-medium text-zinc-900 dark:text-zinc-50">{tour.title}</h3>
-            <p className="mt-1 text-sm text-zinc-500">{tour.duration_days} days · from ${tour.base_price}</p>
+            <p className="mt-1 text-sm text-zinc-500">{tour.duration_days} days · from {formatMoney(tour.base_price)}</p>
             {tour.description && <p className="mt-1 line-clamp-2 text-xs text-zinc-400">{tour.description}</p>}
           </Link>
         ))}

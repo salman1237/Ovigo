@@ -5,6 +5,7 @@ import { useSearchParams, useParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 import { apiClient, ApiError } from "@/lib/api-client";
+import { formatMoney } from "@/lib/format";
 import { BOOKING_STATUS_LABELS, type Booking, type BookingItem } from "@/types/booking";
 import type { Dispute } from "@/types/dispute";
 
@@ -56,7 +57,7 @@ function BookingDetailContent() {
           {BOOKING_STATUS_LABELS[booking.status]}
         </span>
       </div>
-      <p className="mt-1 text-sm text-zinc-500">Total: ${booking.total_amount} {booking.currency}</p>
+      <p className="mt-1 text-sm text-zinc-500">Total: {formatMoney(booking.total_amount)}</p>
 
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
@@ -232,7 +233,7 @@ function BookingItemCard({ item }: { item: BookingItem }) {
     <div className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
       <p className="font-medium capitalize">{item.item_type.replace("_", " ")}</p>
       <p className="text-zinc-500">
-        {item.quantity} × ${item.unit_price} = ${item.subtotal}
+        {item.quantity} × {formatMoney(item.unit_price)} = {formatMoney(item.subtotal)}
         {item.check_in_date && ` · ${item.check_in_date} → ${item.check_out_date}`}
       </p>
       <p className="mt-1 text-xs capitalize text-zinc-400">{item.status.replace("_", " ")}</p>

@@ -7,6 +7,7 @@ import { useState } from "react";
 import { ImageGallery } from "@/components/shared/ImageGallery";
 import { LocationPicker } from "@/components/shared/LocationPicker";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { formatMoney } from "@/lib/format";
 import type { Location } from "@/types/location";
 import { AMENITY_LABELS, AmenityKey, Property } from "@/types/stay";
 
@@ -170,7 +171,7 @@ function RoomTypesSection({ property, run }: { property: Property; run: (fn: () 
       <ul className="flex flex-col gap-1">
         {property.room_types.map((rt) => (
           <li key={rt.id} className="flex items-center justify-between text-sm">
-            <span>{rt.name} — up to {rt.max_occupancy} guests, ${rt.base_price}/night, {rt.total_units} unit(s)</span>
+            <span>{rt.name} — up to {rt.max_occupancy} guests, {formatMoney(rt.base_price)}/night, {rt.total_units} unit(s)</span>
             <button
               onClick={() => run(() => apiClient.delete(`/api/v1/properties/${property.id}/room-types/${rt.id}`, { auth: true }))}
               className="text-xs text-red-600"

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { apiClient, ApiError } from "@/lib/api-client";
+import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Tour } from "@/types/tour";
 
@@ -127,7 +128,7 @@ export default function DashboardToursPage() {
           >
             <div>
               <p className="font-medium text-zinc-900 dark:text-zinc-50">{tour.title}</p>
-              <p className="text-xs text-zinc-500">{tour.duration_days} days · ${tour.base_price}</p>
+              <p className="text-xs text-zinc-500">{tour.duration_days} days · {formatMoney(tour.base_price)}</p>
             </div>
             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[tour.status]}`}>
               {tour.status.replace("_", " ")}

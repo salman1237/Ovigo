@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { ReviewsList } from "@/components/shared/ReviewsList";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Booking } from "@/types/booking";
 import type { Tour } from "@/types/tour";
@@ -25,7 +26,7 @@ export default function TourDetailPage() {
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
       <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{tour.title}</h1>
-      <p className="mt-1 text-sm text-zinc-500">{tour.duration_days} days · from ${tour.base_price} · up to {tour.max_group_size} people</p>
+      <p className="mt-1 text-sm text-zinc-500">{tour.duration_days} days · from {formatMoney(tour.base_price)} · up to {tour.max_group_size} people</p>
       {tour.description && <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">{tour.description}</p>}
 
       {tour.itinerary.length > 0 && (
@@ -92,7 +93,7 @@ export default function TourDetailPage() {
           <div>
             <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Optional add-ons</h2>
             <ul className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              {tour.addons.map((a) => <li key={a.id}>{a.name} — ${a.price}</li>)}
+              {tour.addons.map((a) => <li key={a.id}>{a.name} — {formatMoney(a.price)}</li>)}
             </ul>
           </div>
         )}
@@ -205,7 +206,7 @@ function BookTourSection({ tour }: { tour: Tour }) {
             />
           ))}
         </div>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">${total}</span></p>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span></p>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button
           onClick={book}

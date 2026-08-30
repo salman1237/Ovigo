@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
 import { apiClient } from "@/lib/api-client";
+import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
 import { BOOKING_STATUS_LABELS, type Booking } from "@/types/booking";
 
@@ -67,7 +68,7 @@ function BookingsListContent() {
           >
             <div>
               <p className="font-medium text-zinc-900 dark:text-zinc-50">
-                {booking.items.length} item{booking.items.length === 1 ? "" : "s"} · ${booking.total_amount}
+                {booking.items.length} item{booking.items.length === 1 ? "" : "s"} · {formatMoney(booking.total_amount)}
               </p>
               <p className="text-xs text-zinc-500">{new Date(booking.created_at).toLocaleDateString()}</p>
             </div>

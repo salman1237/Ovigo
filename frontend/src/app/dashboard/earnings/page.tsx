@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { apiClient, ApiError } from "@/lib/api-client";
+import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
 import type { EarningsSummary } from "@/types/earnings";
 
@@ -54,9 +55,9 @@ function EarningsCard({ title, endpoint }: { title: string; endpoint: string }) 
           <div className="mt-4 flex flex-col gap-1">
             {data.commissions.map((c) => (
               <div key={c.id} className="flex items-center justify-between text-xs text-zinc-500">
-                <span>{new Date(c.created_at).toLocaleDateString()} · {(Number(c.rate) * 100).toFixed(0)}% of ${c.gross_amount}</span>
+                <span>{new Date(c.created_at).toLocaleDateString()} · {(Number(c.rate) * 100).toFixed(0)}% of {formatMoney(c.gross_amount)}</span>
                 <span className={c.status === "payable" ? "text-emerald-600" : "text-amber-600"}>
-                  ${c.partner_net_amount} · {c.status}
+                  {formatMoney(c.partner_net_amount)} · {c.status}
                 </span>
               </div>
             ))}
@@ -72,7 +73,7 @@ function Stat({ label, value, highlight }: { label: string; value: string; highl
   return (
     <div>
       <p className="text-xs text-zinc-500">{label}</p>
-      <p className={`font-semibold ${highlight ? "text-emerald-600" : "text-zinc-900 dark:text-zinc-50"}`}>${value}</p>
+      <p className={`font-semibold ${highlight ? "text-emerald-600" : "text-zinc-900 dark:text-zinc-50"}`}>{formatMoney(value)}</p>
     </div>
   );
 }

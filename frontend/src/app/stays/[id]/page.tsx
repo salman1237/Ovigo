@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { ReviewsList } from "@/components/shared/ReviewsList";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Booking } from "@/types/booking";
 import { AMENITY_LABELS, PROPERTY_TYPE_LABELS, type Property } from "@/types/stay";
@@ -48,7 +49,7 @@ export default function StayDetailPage() {
             {property.room_types.map((rt) => (
               <div key={rt.id} className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
                 <p className="font-medium">{rt.name}</p>
-                <p className="text-zinc-500">Up to {rt.max_occupancy} guests · ${rt.base_price}/night</p>
+                <p className="text-zinc-500">Up to {rt.max_occupancy} guests · {formatMoney(rt.base_price)}/night</p>
                 {rt.description && <p className="mt-1 text-zinc-400">{rt.description}</p>}
               </div>
             ))}
@@ -140,7 +141,7 @@ function BookStaySection({ property }: { property: Property }) {
             className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
           >
             {property.room_types.map((rt) => (
-              <option key={rt.id} value={rt.id}>{rt.name} — ${rt.base_price}/night</option>
+              <option key={rt.id} value={rt.id}>{rt.name} — {formatMoney(rt.base_price)}/night</option>
             ))}
           </select>
         </div>
@@ -178,7 +179,7 @@ function BookStaySection({ property }: { property: Property }) {
         </div>
         {nights > 0 && (
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            {nights} night(s) × {quantity} room(s) — Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">${total}</span>
+            {nights} night(s) × {quantity} room(s) — Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span>
           </p>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}

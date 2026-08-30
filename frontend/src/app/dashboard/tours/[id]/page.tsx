@@ -7,6 +7,7 @@ import { useState } from "react";
 import { ImageGallery } from "@/components/shared/ImageGallery";
 import { LocationPicker } from "@/components/shared/LocationPicker";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { formatMoney } from "@/lib/format";
 import type { Location } from "@/types/location";
 import type { MealType, Tour } from "@/types/tour";
 
@@ -219,7 +220,7 @@ function AddonsSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<unkn
       <ul className="flex flex-col gap-1">
         {tour.addons.map((a) => (
           <li key={a.id} className="flex items-center justify-between text-sm">
-            <span>{a.name} — ${a.price}</span>
+            <span>{a.name} — {formatMoney(a.price)}</span>
             <button onClick={() => run(() => apiClient.delete(`/api/v1/tours/${tour.id}/addons/${a.id}`, { auth: true }))} className="text-xs text-red-600">Remove</button>
           </li>
         ))}

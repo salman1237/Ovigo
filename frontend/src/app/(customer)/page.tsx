@@ -11,7 +11,6 @@ export default function HomePage() {
       </h1>
       <p className="mt-4 max-w-xl text-lg text-zinc-600 dark:text-zinc-400">
         Discover verified local experts, guides, hotels and stays by destination.
-        Foundation build in progress — Phase 1, Sprint 1-2.
       </p>
       <div className="mt-8 flex gap-4">
         <Link
