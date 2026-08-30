@@ -11,4 +11,7 @@ in both.
 from app.modules.admin import models as _admin_models  # noqa: F401
 from app.modules.locations import models as _locations_models  # noqa: F401
 from app.modules.partners import models as _partners_models  # noqa: F401
+from app.modules.profiles import models as _profiles_models  # noqa: F401
+from app.modules.stays import models as _stays_models  # noqa: F401
+from app.modules.tours import models as _tours_models  # noqa: F401
 from app.modules.users import models as _users_models  # noqa: F401

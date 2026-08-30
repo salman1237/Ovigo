@@ -4,14 +4,14 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-08-30 (Sprint 3-4 complete)_
+_Last updated: 2026-08-30 (Sprint 5-6 complete)_
 
 ## Infrastructure & deployment status
 
 | Item | Status | Notes |
 |---|---|---|
 | GitHub repo | Done | `salman1237/Ovigo`, connected |
-| NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 8 tables live (`users`, `partner_accounts`, `partner_roles`, `locations`, `partner_role_applications`, `partner_documents`, `location_tags`, `audit_logs`) |
+| NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 20 tables live (Sprint 1-4 set plus `local_expert_profiles`, `host_profiles`, `tours`, `tour_itineraries`, `tour_departures`, `tour_meals`, `tour_activities`, `tour_addons`, `tour_transport`, `tour_stays`, `properties`, `property_amenities`, `room_types`, `availability_calendars`) |
 | Backend scaffold | Done | FastAPI app, config, async SQLAlchemy engine, Alembic wired to Neon |
 | Frontend scaffold | Done | Next.js 16 (App Router, Tailwind v4, TypeScript), builds clean |
 | Vercel project link + auto-deploy | Done | Project `ovigo` (`salman2033` team) linked, GitHub repo connected, production live at `ovigo.vercel.app`, built with `NEXT_PUBLIC_API_URL` pointing at the live backend (confirmed baked into the production JS bundle). |
@@ -54,16 +54,24 @@ _Last updated: 2026-08-30 (Sprint 3-4 complete)_
 
 | Task | Status |
 |---|---|
-| Local Expert profile creation | Not started |
-| Fixed-date tour creation with mandatory fields | Not started |
-| Tour itinerary, stays, transport, meals, activities, add-ons | Not started |
-| Tour publishing workflow & admin approval | Not started |
-| Host profile & property creation | Not started |
-| Room/unit management | Not started |
-| Availability calendar | Not started |
-| Property amenities, policies, images | Not started |
-| Stay search & discovery | Not started |
-| Tour search by destination | Not started |
+| Local Expert profile creation | Done — `PUT/GET /api/v1/partners/profiles/expert`, requires an approved Local Expert role |
+| Fixed-date tour creation with mandatory fields | Done — title, description, duration, base price, max group size; draft → pending_review → published/rejected lifecycle |
+| Tour itinerary, stays, transport, meals, activities, add-ons | Done — each as its own child table with add/delete endpoints (`/dashboard/tours/[id]` UI). `tour_stays`/`tour_transport` are lightweight descriptive line items rather than deep Property/Vehicle integrations — see `tours/models.py` docstring |
+| Tour publishing workflow & admin approval | Done — `submit` requires ≥1 itinerary day, ≥1 departure, ≥1 location tag (MVP AC #20 enforced, verified by test); admin approve/reject at `/admin/tours`, audit-logged |
+| Host profile & property creation | Done — `PUT/GET /api/v1/partners/profiles/host`, requires an approved Host or Hotel role |
+| Room/unit management | Done — `room_types` per property (name, max occupancy, price, unit count); individual physical-room tracking deferred (hotel-grade feature, Phase 3) |
+| Availability calendar | Done — `availability_calendars` (room type × date × available units, optional price override), settable as a date range in one call |
+| Property amenities, policies, images | Amenities and policies done (policies embedded as columns on `properties` — see model docstring for why). Images not done — no object storage credential yet, same blocker as partner documents |
+| Stay search & discovery | Done — `/api/v1/search/stays` filters by destination (including descendant destinations, e.g. searching "Bangladesh" surfaces Cox's Bazar) and by actual date-range availability, not just location |
+| Tour search by destination | Done — `/api/v1/tours?location_slug=` and `/api/v1/search/experts`; `/api/v1/search/destinations` returns locations with published-listing counts |
+
+**Frontend:** `/dashboard/tours` + `/dashboard/tours/[id]` (Local Expert), `/dashboard/properties` + `/dashboard/properties/[id]` (Host), `/admin/tours` + `/admin/properties` (moderation queues), `/tours` + `/tours/[id]` and `/stays` + `/stays/[id]` (public search/detail). Builds and lints clean.
+
+**Bugs found and fixed during this sprint's own verification** (both caught by the smoke test, not by the user — noting since they're instructive):
+1. **Stale relationship data in "add child" responses.** Every `add_itinerary_day`/`add_room_type`/etc. function fetched the parent (with eager-loaded children) *before* mutating, then re-fetched after commit to build the response — but SQLAlchemy's identity map handed back the first fetch's already-loaded (now stale) collection instead of re-querying it, so the API response silently omitted whatever was just added, even though the DB write itself was correct. Fixed with `execution_options(populate_existing=True)` on `get_own_tour_or_404`/`get_own_property_or_404`/the `_for_view` variants. This is a general pattern risk — any future "mutate then re-fetch in the same session" code should use it too.
+2. **`ALTER TYPE ... ADD VALUE` isn't autogenerated.** Adding `TOUR`/`PROPERTY` to the existing `TaggableEntityType` enum wasn't picked up by `alembic revision --autogenerate` (it only detects new/dropped tables and columns, not new values on an existing native Postgres enum) — required a hand-written migration.
+
+**Verified:** A full expert-and-host smoke test against Neon — apply for both roles, admin-approve both, create+build+tag+submit+approve a tour, create+build+tag+set-availability+submit+approve a property, confirm both show up in public listings and in destination/date-filtered search (including a negative case: an uncovered date range correctly excludes the property), and confirm submitting a tour with no location tag is rejected (409).
 
 ### Sprint 7-8 — Booking, Payment & Reviews (Wk 13-16)
 
@@ -107,11 +115,11 @@ Not started. See technical document §8, Phase 4.
 |---|---|---|
 | 1 | A partner can register and select a role | Done |
 | 2 | Admin can verify and approve each role separately | Done |
-| 3 | A Local Expert can create a fixed-date tour with all mandatory service details | Pending |
-| 4 | A traveler can search tours using destination tags | Pending |
-| 5 | A traveler can view the Expert's verified profile and successful-tour count | Pending |
-| 6 | A Host can create a property, room inventory and availability calendar | Pending |
-| 7 | A traveler can search and book a stay | Pending |
+| 3 | A Local Expert can create a fixed-date tour with all mandatory service details | Done |
+| 4 | A traveler can search tours using destination tags | Done |
+| 5 | A traveler can view the Expert's verified profile and successful-tour count | In progress — profile view works via `/api/v1/search/experts`; successful-tour count is stubbed at 0 until the booking engine (Sprint 7-8) can compute it from completed bookings |
+| 6 | A Host can create a property, room inventory and availability calendar | Done |
+| 7 | A traveler can search and book a stay | In progress — search (with real date-availability filtering) is done; booking itself is Sprint 7-8 |
 | 8 | A booking cannot exceed available inventory | Pending |
 | 9 | A traveler can pay and receive confirmation | Pending |
 | 10 | Ovigo commission is calculated automatically | Pending |
@@ -124,4 +132,4 @@ Not started. See technical document §8, Phase 4.
 | 17 | Partners can purchase featured placement | Pending |
 | 18 | Sponsored results are visibly labelled | Pending |
 | 19 | All important Admin actions are audit logged | Done so far (role approve/reject, document verify/reject) — extend as each new admin action lands |
-| 20 | Tour, stay and partner profiles cannot be published without location tags | In progress — tagging mechanism exists (`location_tags`) and is wired to partner roles; the actual publish-gate enforcement lands once there's a "publish" action to gate (tours/stays/profiles, Sprint 5-6) |
+| 20 | Tour, stay and partner profiles cannot be published without location tags | Done — enforced server-side at submit time for both tours and properties (verified: submitting without a tag returns 409); partner-role profiles don't have a separate "publish" gate yet since they're not publicly browsable pages on their own outside search results |

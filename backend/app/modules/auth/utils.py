@@ -37,3 +37,25 @@ async def get_current_user(
     if user is None or not user.is_active:
         raise credentials_exception
     return user
+
+
+async def get_current_user_optional(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    """Like get_current_user, but returns None instead of 401 — for endpoints that are
+    public but behave differently for an authenticated owner (e.g. a draft tour/property
+    is visible to its owner but 404s for everyone else)."""
+    if credentials is None:
+        return None
+    payload = decode_token(credentials.credentials)
+    if payload is None or payload.get("type") != TokenType.ACCESS.value:
+        return None
+    user_id = payload.get("sub")
+    if user_id is None:
+        return None
+    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active:
+        return None
+    return user

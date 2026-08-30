@@ -29,8 +29,20 @@ export function Header() {
         Ovigo
       </Link>
       <nav className="flex items-center gap-4 text-sm">
+        <Link href="/tours" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+          Tours
+        </Link>
+        <Link href="/stays" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+          Stays
+        </Link>
         {user ? (
           <>
+            <Link href="/dashboard/tours" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+              My Tours
+            </Link>
+            <Link href="/dashboard/properties" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+              My Properties
+            </Link>
             <Link href="/account/partner" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
               Become a Partner
             </Link>

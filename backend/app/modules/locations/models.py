@@ -25,10 +25,11 @@ class LocationType(str, enum.Enum):
 
 
 class TaggableEntityType(str, enum.Enum):
-    """Entity kinds that can be tagged to a location. Extend as new modules land
-    (TOUR, PROPERTY, ... in Sprint 5-6)."""
+    """Entity kinds that can be tagged to a location."""
 
     PARTNER_ROLE = "partner_role"
+    TOUR = "tour"
+    PROPERTY = "property"
 
 
 class Location(Base):

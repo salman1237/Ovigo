@@ -8,6 +8,10 @@ from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
 from app.modules.locations.router import router as locations_router
 from app.modules.partners.router import router as partners_router
+from app.modules.profiles.router import router as profiles_router
+from app.modules.search.router import router as search_router
+from app.modules.stays.router import router as stays_router
+from app.modules.tours.router import router as tours_router
 from app.modules.users.router import router as users_router
 
 settings = get_settings()
@@ -32,6 +36,10 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(locations_router)
 app.include_router(partners_router)
+app.include_router(profiles_router)
+app.include_router(tours_router)
+app.include_router(stays_router)
+app.include_router(search_router)
 app.include_router(admin_router)
 
 

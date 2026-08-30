@@ -10,8 +10,16 @@ from app.core.permissions import require_admin
 from app.database import get_db
 from app.modules.admin import service
 from app.modules.admin.models import AuditLog
-from app.modules.admin.schemas import AdminPartnerRoleRead, AuditLogRead, RejectRequest
+from app.modules.admin.schemas import (
+    AdminPartnerRoleRead,
+    AdminPropertyRead,
+    AdminTourRead,
+    AuditLogRead,
+    RejectRequest,
+)
 from app.modules.partners.models import PartnerDocument
+from app.modules.stays.models import PropertyStatus
+from app.modules.tours.models import TourStatus
 from app.modules.users.models import PartnerRoleStatus, User
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -78,3 +86,47 @@ async def reject_document(
 async def list_audit_logs(limit: int = 100, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit))
     return list(result.scalars().all())
+
+
+@router.get("/tours", response_model=list[AdminTourRead])
+async def list_tours(status: TourStatus | None = None, db: AsyncSession = Depends(get_db)):
+    return await service.list_tours(db, status)
+
+
+@router.post("/tours/{tour_id}/approve", response_model=AdminTourRead)
+async def approve_tour(
+    tour_id: uuid.UUID, current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)
+):
+    return await service.approve_tour(db, current_user, tour_id)
+
+
+@router.post("/tours/{tour_id}/reject", response_model=AdminTourRead)
+async def reject_tour(
+    tour_id: uuid.UUID,
+    payload: RejectRequest,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.reject_tour(db, current_user, tour_id, payload.reason)
+
+
+@router.get("/properties", response_model=list[AdminPropertyRead])
+async def list_properties(status: PropertyStatus | None = None, db: AsyncSession = Depends(get_db)):
+    return await service.list_properties(db, status)
+
+
+@router.post("/properties/{property_id}/approve", response_model=AdminPropertyRead)
+async def approve_property(
+    property_id: uuid.UUID, current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)
+):
+    return await service.approve_property(db, current_user, property_id)
+
+
+@router.post("/properties/{property_id}/reject", response_model=AdminPropertyRead)
+async def reject_property(
+    property_id: uuid.UUID,
+    payload: RejectRequest,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.reject_property(db, current_user, property_id, payload.reason)

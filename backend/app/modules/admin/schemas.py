@@ -4,6 +4,8 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 from app.modules.partners.schemas import PartnerDocumentRead
+from app.modules.stays.models import PropertyStatus
+from app.modules.tours.models import TourStatus
 from app.modules.users.models import PartnerRoleStatus, PartnerRoleType
 
 
@@ -33,6 +35,37 @@ class AdminPartnerRoleRead(BaseModel):
 
 class RejectRequest(BaseModel):
     reason: str
+
+
+class AdminTourRead(BaseModel):
+    """A tour as seen in the moderation queue — includes the submitting expert's identity."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    title: str
+    slug: str
+    description: str | None
+    duration_days: int
+    status: TourStatus
+    rejection_reason: str | None
+    created_at: datetime
+    applicant: AdminUserSummary
+
+
+class AdminPropertyRead(BaseModel):
+    """A property as seen in the moderation queue — includes the submitting host's identity."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    slug: str
+    description: str | None
+    status: PropertyStatus
+    rejection_reason: str | None
+    created_at: datetime
+    applicant: AdminUserSummary
 
 
 class AuditLogRead(BaseModel):

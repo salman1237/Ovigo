@@ -14,3 +14,10 @@ export interface Location {
 export interface LocationNode extends Location {
   children: LocationNode[];
 }
+
+export interface LocationTag {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  location: Location;
+}

@@ -7,13 +7,15 @@ from sqlalchemy.orm import selectinload
 
 from app.core import audit
 from app.core.exceptions import ConflictError, NotFoundError
-from app.modules.admin.schemas import AdminPartnerRoleRead, AdminUserSummary
+from app.modules.admin.schemas import AdminPartnerRoleRead, AdminPropertyRead, AdminTourRead, AdminUserSummary
 from app.modules.partners.models import (
     ApplicationStatus,
     DocumentStatus,
     PartnerDocument,
     PartnerRoleApplication,
 )
+from app.modules.stays.models import Property, PropertyStatus
+from app.modules.tours.models import Tour, TourStatus
 from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleStatus, User
 
 
@@ -151,3 +153,130 @@ async def reject_document(
     )
     await db.refresh(document)
     return document
+
+
+def _to_admin_tour_read(tour: Tour) -> AdminTourRead:
+    return AdminTourRead(
+        id=tour.id,
+        title=tour.title,
+        slug=tour.slug,
+        description=tour.description,
+        duration_days=tour.duration_days,
+        status=tour.status,
+        rejection_reason=tour.rejection_reason,
+        created_at=tour.created_at,
+        applicant=AdminUserSummary.model_validate(tour.local_expert_role.partner_account.user),
+    )
+
+
+async def list_tours(db: AsyncSession, status: TourStatus | None) -> list[AdminTourRead]:
+    query = select(Tour).options(
+        selectinload(Tour.local_expert_role)
+        .selectinload(PartnerRole.partner_account)
+        .selectinload(PartnerAccount.user)
+    )
+    if status is not None:
+        query = query.where(Tour.status == status)
+    result = await db.execute(query.order_by(Tour.created_at.desc()))
+    return [_to_admin_tour_read(tour) for tour in result.scalars().all()]
+
+
+async def _get_tour_with_relations(db: AsyncSession, tour_id: uuid.UUID) -> Tour:
+    result = await db.execute(
+        select(Tour)
+        .where(Tour.id == tour_id)
+        .options(
+            selectinload(Tour.local_expert_role)
+            .selectinload(PartnerRole.partner_account)
+            .selectinload(PartnerAccount.user)
+        )
+    )
+    tour = result.scalar_one_or_none()
+    if tour is None:
+        raise NotFoundError("Tour not found")
+    return tour
+
+
+async def approve_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID) -> AdminTourRead:
+    tour = await _get_tour_with_relations(db, tour_id)
+    if tour.status != TourStatus.PENDING_REVIEW:
+        raise ConflictError(f"Tour is {tour.status.value}, not pending review")
+    tour.status = TourStatus.PUBLISHED
+    await db.commit()
+    await audit.record(db, actor_id=admin.id, action="tour.approve", entity_type="tour", entity_id=tour.id)
+    return _to_admin_tour_read(tour)
+
+
+async def reject_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID, reason: str) -> AdminTourRead:
+    tour = await _get_tour_with_relations(db, tour_id)
+    if tour.status != TourStatus.PENDING_REVIEW:
+        raise ConflictError(f"Tour is {tour.status.value}, not pending review")
+    tour.status = TourStatus.REJECTED
+    tour.rejection_reason = reason
+    await db.commit()
+    await audit.record(
+        db, actor_id=admin.id, action="tour.reject", entity_type="tour", entity_id=tour.id, extra={"reason": reason}
+    )
+    return _to_admin_tour_read(tour)
+
+
+def _to_admin_property_read(prop: Property) -> AdminPropertyRead:
+    return AdminPropertyRead(
+        id=prop.id,
+        name=prop.name,
+        slug=prop.slug,
+        description=prop.description,
+        status=prop.status,
+        rejection_reason=prop.rejection_reason,
+        created_at=prop.created_at,
+        applicant=AdminUserSummary.model_validate(prop.host_role.partner_account.user),
+    )
+
+
+async def list_properties(db: AsyncSession, status: PropertyStatus | None) -> list[AdminPropertyRead]:
+    query = select(Property).options(
+        selectinload(Property.host_role).selectinload(PartnerRole.partner_account).selectinload(PartnerAccount.user)
+    )
+    if status is not None:
+        query = query.where(Property.status == status)
+    result = await db.execute(query.order_by(Property.created_at.desc()))
+    return [_to_admin_property_read(prop) for prop in result.scalars().all()]
+
+
+async def _get_property_with_relations(db: AsyncSession, property_id: uuid.UUID) -> Property:
+    result = await db.execute(
+        select(Property)
+        .where(Property.id == property_id)
+        .options(
+            selectinload(Property.host_role)
+            .selectinload(PartnerRole.partner_account)
+            .selectinload(PartnerAccount.user)
+        )
+    )
+    prop = result.scalar_one_or_none()
+    if prop is None:
+        raise NotFoundError("Property not found")
+    return prop
+
+
+async def approve_property(db: AsyncSession, admin: User, property_id: uuid.UUID) -> AdminPropertyRead:
+    prop = await _get_property_with_relations(db, property_id)
+    if prop.status != PropertyStatus.PENDING_REVIEW:
+        raise ConflictError(f"Property is {prop.status.value}, not pending review")
+    prop.status = PropertyStatus.PUBLISHED
+    await db.commit()
+    await audit.record(db, actor_id=admin.id, action="property.approve", entity_type="property", entity_id=prop.id)
+    return _to_admin_property_read(prop)
+
+
+async def reject_property(db: AsyncSession, admin: User, property_id: uuid.UUID, reason: str) -> AdminPropertyRead:
+    prop = await _get_property_with_relations(db, property_id)
+    if prop.status != PropertyStatus.PENDING_REVIEW:
+        raise ConflictError(f"Property is {prop.status.value}, not pending review")
+    prop.status = PropertyStatus.REJECTED
+    prop.rejection_reason = reason
+    await db.commit()
+    await audit.record(
+        db, actor_id=admin.id, action="property.reject", entity_type="property", entity_id=prop.id, extra={"reason": reason}
+    )
+    return _to_admin_property_read(prop)
