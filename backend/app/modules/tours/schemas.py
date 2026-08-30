@@ -117,6 +117,13 @@ class TourStayRead(BaseModel):
     nights: int
 
 
+class TourImageRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    file_name: str
+    sort_order: int
+
+
 class TourRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -138,6 +145,7 @@ class TourRead(BaseModel):
     addons: list[AddonRead] = []
     transport: list[TransportRead] = []
     stays: list[TourStayRead] = []
+    images: list[TourImageRead] = []
 
 
 class TourSummary(BaseModel):

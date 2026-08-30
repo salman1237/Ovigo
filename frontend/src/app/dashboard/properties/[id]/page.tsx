@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
+import { ImageGallery } from "@/components/shared/ImageGallery";
 import { LocationPicker } from "@/components/shared/LocationPicker";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { Location } from "@/types/location";
@@ -58,6 +59,15 @@ export default function PropertyEditPage() {
         </p>
       )}
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+
+      <Section title="Photos">
+        <ImageGallery
+          basePath={`/api/v1/properties/${property.id}`}
+          images={property.images}
+          onChange={refetch}
+          editable={property.status !== "pending_review"}
+        />
+      </Section>
 
       <Section title="Destinations">
         <LocationsSection propertyId={id} run={run} />

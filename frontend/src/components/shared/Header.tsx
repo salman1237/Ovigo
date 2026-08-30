@@ -43,6 +43,9 @@ export function Header() {
             <Link href="/dashboard/properties" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
               My Properties
             </Link>
+            <Link href="/dashboard/profile" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+              My Profile
+            </Link>
             <Link href="/account/partner" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
               Become a Partner
             </Link>

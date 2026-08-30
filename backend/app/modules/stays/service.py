@@ -6,11 +6,19 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core import storage
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.slugs import slugify, unique_suffix
 from app.modules.locations import service as locations_service
 from app.modules.locations.models import TaggableEntityType
-from app.modules.stays.models import AvailabilityCalendar, Property, PropertyAmenity, PropertyStatus, RoomType
+from app.modules.stays.models import (
+    AvailabilityCalendar,
+    Property,
+    PropertyAmenity,
+    PropertyImage,
+    PropertyStatus,
+    RoomType,
+)
 from app.modules.stays.schemas import (
     AmenitySet,
     AvailabilityRangeSet,
@@ -20,7 +28,9 @@ from app.modules.stays.schemas import (
 )
 from app.modules.users.models import PartnerRole
 
-_EAGER = (selectinload(Property.room_types), selectinload(Property.amenities))
+_EAGER = (selectinload(Property.room_types), selectinload(Property.amenities), selectinload(Property.images))
+
+MAX_IMAGES_PER_PROPERTY = 15
 
 
 async def _unique_slug(db: AsyncSession, name: str) -> str:
@@ -118,6 +128,55 @@ async def add_room_type(
     db.add(RoomType(property_id=prop.id, **payload.model_dump()))
     await db.commit()
     return await get_own_property_or_404(db, role, property_id)
+
+
+async def add_image(
+    db: AsyncSession, role: PartnerRole, property_id: uuid.UUID, file_name: str, content_type: str, data: bytes
+) -> Property:
+    prop = await get_own_property_or_404(db, role, property_id)
+    _require_editable(prop)
+    if len(prop.images) >= MAX_IMAGES_PER_PROPERTY:
+        raise ConflictError(f"A property can have at most {MAX_IMAGES_PER_PROPERTY} images")
+    storage.validate_image(content_type, len(data))
+
+    key = storage.build_key(f"properties/{prop.id}", file_name)
+    storage.upload_bytes(key, data, content_type)
+    db.add(
+        PropertyImage(
+            property_id=prop.id,
+            storage_key=key,
+            content_type=content_type,
+            file_name=file_name,
+            sort_order=len(prop.images),
+        )
+    )
+    await db.commit()
+    return await get_own_property_or_404(db, role, property_id)
+
+
+async def delete_image(db: AsyncSession, role: PartnerRole, property_id: uuid.UUID, image_id: uuid.UUID) -> Property:
+    prop = await get_own_property_or_404(db, role, property_id)
+    _require_editable(prop)
+    result = await db.execute(
+        select(PropertyImage).where(PropertyImage.id == image_id, PropertyImage.property_id == prop.id)
+    )
+    image = result.scalar_one_or_none()
+    if image is None:
+        raise NotFoundError("Image not found")
+    storage.delete_object(image.storage_key)
+    await db.delete(image)
+    await db.commit()
+    return await get_own_property_or_404(db, role, property_id)
+
+
+async def get_image_or_404(db: AsyncSession, property_id: uuid.UUID, image_id: uuid.UUID) -> PropertyImage:
+    result = await db.execute(
+        select(PropertyImage).where(PropertyImage.id == image_id, PropertyImage.property_id == property_id)
+    )
+    image = result.scalar_one_or_none()
+    if image is None:
+        raise NotFoundError("Image not found")
+    return image
 
 
 async def delete_room_type(db: AsyncSession, role: PartnerRole, property_id: uuid.UUID, room_type_id: uuid.UUID) -> Property:

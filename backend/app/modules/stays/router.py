@@ -1,10 +1,12 @@
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import storage
 from app.core.permissions import require_approved_role
 from app.database import get_db
 from app.modules.auth.utils import get_current_user_optional
@@ -152,6 +154,41 @@ async def get_calendar(
 ):
     await service.get_property_for_view(db, property_id, viewer_role)  # visible to public (if published) or owner
     return await service.get_availability(db, room_type_id, start_date, end_date)
+
+
+@router.post("/{property_id}/images", response_model=PropertyRead)
+async def add_property_image(
+    property_id: uuid.UUID,
+    file: UploadFile = File(...),
+    role: PartnerRole = Depends(require_host),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await file.read()
+    return await service.add_image(
+        db, role, property_id, file.filename or "image", file.content_type or "application/octet-stream", data
+    )
+
+
+@router.delete("/{property_id}/images/{image_id}", response_model=PropertyRead)
+async def delete_property_image(
+    property_id: uuid.UUID,
+    image_id: uuid.UUID,
+    role: PartnerRole = Depends(require_host),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.delete_image(db, role, property_id, image_id)
+
+
+@router.get("/{property_id}/images/{image_id}/file")
+async def get_property_image_file(
+    property_id: uuid.UUID,
+    image_id: uuid.UUID,
+    viewer_role: PartnerRole | None = Depends(_viewer_role),
+    db: AsyncSession = Depends(get_db),
+):
+    await service.get_property_for_view(db, property_id, viewer_role)  # visibility gate
+    image = await service.get_image_or_404(db, property_id, image_id)
+    return Response(content=storage.get_bytes(image.storage_key), media_type=image.content_type)
 
 
 @router.post("/{property_id}/locations", response_model=list[LocationTagRead])

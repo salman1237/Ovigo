@@ -22,6 +22,7 @@ class LocalExpertProfileRead(BaseModel):
     years_experience: int | None
     languages: list[str] | None
     is_published: bool
+    has_photo: bool
     created_at: datetime
 
 
@@ -39,4 +40,5 @@ class HostProfileRead(BaseModel):
     business_name: str | None
     bio: str | None
     is_published: bool
+    has_photo: bool
     created_at: datetime

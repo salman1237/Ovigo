@@ -41,6 +41,12 @@ export interface RoomType {
   total_units: number;
 }
 
+export interface PropertyImage {
+  id: string;
+  file_name: string;
+  sort_order: number;
+}
+
 export interface Property {
   id: string;
   host_role_id: string;
@@ -59,6 +65,7 @@ export interface Property {
   created_at: string;
   room_types: RoomType[];
   amenities: { amenity: AmenityKey }[];
+  images: PropertyImage[];
 }
 
 export interface PropertySummary {

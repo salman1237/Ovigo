@@ -48,6 +48,12 @@ export interface TourStay {
   nights: number;
 }
 
+export interface TourImage {
+  id: string;
+  file_name: string;
+  sort_order: number;
+}
+
 export interface Tour {
   id: string;
   local_expert_role_id: string;
@@ -60,6 +66,7 @@ export interface Tour {
   status: TourStatus;
   rejection_reason: string | null;
   created_at: string;
+  images: TourImage[];
   itinerary: ItineraryDay[];
   departures: Departure[];
   meals: Meal[];

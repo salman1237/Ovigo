@@ -21,6 +21,17 @@ class Settings(BaseSettings):
     environment: str = "development"
     cors_origins: str = "http://localhost:3000"
 
+    # Cloudflare R2 (S3-compatible object storage)
+    r2_account_id: str | None = None
+    r2_access_key_id: str | None = None
+    r2_secret_access_key: str | None = None
+    r2_bucket_name: str | None = None
+    r2_endpoint_url: str | None = None
+
+    @property
+    def r2_configured(self) -> bool:
+        return all([self.r2_access_key_id, self.r2_secret_access_key, self.r2_bucket_name, self.r2_endpoint_url])
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

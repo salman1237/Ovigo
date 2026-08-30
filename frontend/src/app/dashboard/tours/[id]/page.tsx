@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
+import { ImageGallery } from "@/components/shared/ImageGallery";
 import { LocationPicker } from "@/components/shared/LocationPicker";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { Location } from "@/types/location";
@@ -58,6 +59,10 @@ export default function TourEditPage() {
         </p>
       )}
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+
+      <Section title="Photos">
+        <ImageGallery basePath={`/api/v1/tours/${tour.id}`} images={tour.images} onChange={refetch} editable={tour.status !== "pending_review"} />
+      </Section>
 
       <LocationsSection tourId={id} run={run} />
       <ItinerarySection tour={tour} run={run} />

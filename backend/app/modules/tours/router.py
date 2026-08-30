@@ -1,9 +1,11 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import storage
 from app.core.permissions import require_approved_role
 from app.database import get_db
 from app.modules.auth.utils import get_current_user_optional
@@ -235,6 +237,41 @@ async def delete_stay(
     db: AsyncSession = Depends(get_db),
 ):
     return await service.delete_child(db, role, tour_id, "stays", item_id)
+
+
+@router.post("/{tour_id}/images", response_model=TourRead)
+async def add_tour_image(
+    tour_id: uuid.UUID,
+    file: UploadFile = File(...),
+    role: PartnerRole = Depends(require_expert),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await file.read()
+    return await service.add_image(
+        db, role, tour_id, file.filename or "image", file.content_type or "application/octet-stream", data
+    )
+
+
+@router.delete("/{tour_id}/images/{image_id}", response_model=TourRead)
+async def delete_tour_image(
+    tour_id: uuid.UUID,
+    image_id: uuid.UUID,
+    role: PartnerRole = Depends(require_expert),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.delete_image(db, role, tour_id, image_id)
+
+
+@router.get("/{tour_id}/images/{image_id}/file")
+async def get_tour_image_file(
+    tour_id: uuid.UUID,
+    image_id: uuid.UUID,
+    viewer_role: PartnerRole | None = Depends(_viewer_role),
+    db: AsyncSession = Depends(get_db),
+):
+    await service.get_tour_for_view(db, tour_id, viewer_role)  # visibility gate: published or owner
+    image = await service.get_image_or_404(db, tour_id, image_id)
+    return Response(content=storage.get_bytes(image.storage_key), media_type=image.content_type)
 
 
 @router.post("/{tour_id}/locations", response_model=list[LocationTagRead])

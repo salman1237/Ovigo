@@ -67,6 +67,9 @@ class Tour(Base):
     addons: Mapped[list["TourAddon"]] = relationship(back_populates="tour", cascade="all, delete-orphan")
     transport: Mapped[list["TourTransport"]] = relationship(back_populates="tour", cascade="all, delete-orphan")
     stays: Mapped[list["TourStay"]] = relationship(back_populates="tour", cascade="all, delete-orphan")
+    images: Mapped[list["TourImage"]] = relationship(
+        back_populates="tour", cascade="all, delete-orphan", order_by="TourImage.sort_order"
+    )
 
 
 class TourItineraryDay(Base):
@@ -152,3 +155,17 @@ class TourStay(Base):
     nights: Mapped[int] = mapped_column(Integer, default=1)
 
     tour: Mapped["Tour"] = relationship(back_populates="stays")
+
+
+class TourImage(Base):
+    __tablename__ = "tour_images"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tour_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tours.id", ondelete="CASCADE"))
+    storage_key: Mapped[str] = mapped_column(String(500))
+    content_type: Mapped[str] = mapped_column(String(100))
+    file_name: Mapped[str] = mapped_column(String(255))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    tour: Mapped["Tour"] = relationship(back_populates="images")

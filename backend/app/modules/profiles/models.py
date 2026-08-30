@@ -24,6 +24,8 @@ class LocalExpertProfile(Base):
     years_experience: Mapped[int | None] = mapped_column(Integer, nullable=True)
     languages: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False)
+    photo_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    photo_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -31,6 +33,10 @@ class LocalExpertProfile(Base):
     )
 
     partner_role: Mapped["PartnerRole"] = relationship()  # noqa: F821
+
+    @property
+    def has_photo(self) -> bool:
+        return self.photo_key is not None
 
 
 class HostProfile(Base):
@@ -43,6 +49,8 @@ class HostProfile(Base):
     business_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False)
+    photo_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    photo_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -50,3 +58,7 @@ class HostProfile(Base):
     )
 
     partner_role: Mapped["PartnerRole"] = relationship()  # noqa: F821
+
+    @property
+    def has_photo(self) -> bool:
+        return self.photo_key is not None

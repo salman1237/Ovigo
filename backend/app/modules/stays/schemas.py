@@ -68,6 +68,13 @@ class AvailabilityRead(BaseModel):
     price_override: Decimal | None
 
 
+class PropertyImageRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    file_name: str
+    sort_order: int
+
+
 class PropertyRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -88,6 +95,7 @@ class PropertyRead(BaseModel):
     created_at: datetime
     room_types: list[RoomTypeRead] = []
     amenities: list[AmenityRead] = []
+    images: list[PropertyImageRead] = []
 
 
 class PropertySummary(BaseModel):

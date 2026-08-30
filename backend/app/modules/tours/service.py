@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core import storage
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.slugs import slugify, unique_suffix
 from app.modules.locations import service as locations_service
@@ -13,6 +14,7 @@ from app.modules.tours.models import (
     TourActivity,
     TourAddon,
     TourDeparture,
+    TourImage,
     TourItineraryDay,
     TourMeal,
     TourStatus,
@@ -40,7 +42,10 @@ _EAGER = (
     selectinload(Tour.addons),
     selectinload(Tour.transport),
     selectinload(Tour.stays),
+    selectinload(Tour.images),
 )
+
+MAX_IMAGES_PER_TOUR = 10
 
 
 async def _unique_slug(db: AsyncSession, title: str) -> str:
@@ -186,6 +191,51 @@ async def add_stay(db: AsyncSession, role: PartnerRole, tour_id: uuid.UUID, payl
     db.add(TourStay(tour_id=tour.id, **payload.model_dump()))
     await db.commit()
     return await get_own_tour_or_404(db, role, tour_id)
+
+
+async def add_image(
+    db: AsyncSession, role: PartnerRole, tour_id: uuid.UUID, file_name: str, content_type: str, data: bytes
+) -> Tour:
+    tour = await get_own_tour_or_404(db, role, tour_id)
+    _require_editable(tour)
+    if len(tour.images) >= MAX_IMAGES_PER_TOUR:
+        raise ConflictError(f"A tour can have at most {MAX_IMAGES_PER_TOUR} images")
+    storage.validate_image(content_type, len(data))
+
+    key = storage.build_key(f"tours/{tour.id}", file_name)
+    storage.upload_bytes(key, data, content_type)
+    db.add(
+        TourImage(
+            tour_id=tour.id,
+            storage_key=key,
+            content_type=content_type,
+            file_name=file_name,
+            sort_order=len(tour.images),
+        )
+    )
+    await db.commit()
+    return await get_own_tour_or_404(db, role, tour_id)
+
+
+async def delete_image(db: AsyncSession, role: PartnerRole, tour_id: uuid.UUID, image_id: uuid.UUID) -> Tour:
+    tour = await get_own_tour_or_404(db, role, tour_id)
+    _require_editable(tour)
+    result = await db.execute(select(TourImage).where(TourImage.id == image_id, TourImage.tour_id == tour.id))
+    image = result.scalar_one_or_none()
+    if image is None:
+        raise NotFoundError("Image not found")
+    storage.delete_object(image.storage_key)
+    await db.delete(image)
+    await db.commit()
+    return await get_own_tour_or_404(db, role, tour_id)
+
+
+async def get_image_or_404(db: AsyncSession, tour_id: uuid.UUID, image_id: uuid.UUID) -> TourImage:
+    result = await db.execute(select(TourImage).where(TourImage.id == image_id, TourImage.tour_id == tour_id))
+    image = result.scalar_one_or_none()
+    if image is None:
+        raise NotFoundError("Image not found")
+    return image
 
 
 _CHILD_MODELS = {

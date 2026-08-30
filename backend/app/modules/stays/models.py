@@ -93,6 +93,9 @@ class Property(Base):
     host_role: Mapped["PartnerRole"] = relationship()  # noqa: F821
     room_types: Mapped[list["RoomType"]] = relationship(back_populates="property", cascade="all, delete-orphan")
     amenities: Mapped[list["PropertyAmenity"]] = relationship(back_populates="property", cascade="all, delete-orphan")
+    images: Mapped[list["PropertyImage"]] = relationship(
+        back_populates="property", cascade="all, delete-orphan", order_by="PropertyImage.sort_order"
+    )
 
 
 class PropertyAmenity(Base):
@@ -136,3 +139,17 @@ class AvailabilityCalendar(Base):
     price_override: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
 
     room_type: Mapped["RoomType"] = relationship(back_populates="availability")
+
+
+class PropertyImage(Base):
+    __tablename__ = "property_images"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    property_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("properties.id", ondelete="CASCADE"))
+    storage_key: Mapped[str] = mapped_column(String(500))
+    content_type: Mapped[str] = mapped_column(String(100))
+    file_name: Mapped[str] = mapped_column(String(255))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    property: Mapped["Property"] = relationship(back_populates="images")
