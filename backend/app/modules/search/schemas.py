@@ -12,8 +12,7 @@ class ExpertSearchResult(BaseModel):
     bio: str | None
     years_experience: int | None
     languages: list[str] | None
-    # Placeholder until the booking engine (Sprint 7-8) can compute this from completed
-    # bookings — MVP acceptance criterion #5 depends on that data existing.
+    # Completed tour-departure bookings for this expert (MVP acceptance criterion #5).
     successful_tour_count: int = 0
 
 

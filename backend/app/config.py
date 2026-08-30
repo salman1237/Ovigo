@@ -20,6 +20,31 @@ class Settings(BaseSettings):
     # App
     environment: str = "development"
     cors_origins: str = "http://localhost:3000"
+    frontend_url: str = "http://localhost:3000"
+    # Public URL of this API — used to build SSLCommerz callback/IPN URLs, which
+    # must be reachable from SSLCommerz's servers (so never localhost in production).
+    backend_url: str = "http://127.0.0.1:8000"
+
+    # SSLCommerz (payment gateway) — sandbox by default
+    sslcommerz_store_id: str | None = None
+    sslcommerz_store_passwd: str | None = None
+    sslcommerz_is_live: bool = False
+
+    @property
+    def sslcommerz_configured(self) -> bool:
+        return bool(self.sslcommerz_store_id and self.sslcommerz_store_passwd)
+
+    @property
+    def sslcommerz_api_url(self) -> str:
+        if self.sslcommerz_is_live:
+            return "https://securepay.sslcommerz.com/gwprocess/v4/api.php"
+        return "https://sandbox-gw.sslcommerz.com/gwprocess/v4/api.php"
+
+    @property
+    def sslcommerz_validation_url(self) -> str:
+        if self.sslcommerz_is_live:
+            return "https://securepay.sslcommerz.com/validator/api/validationserverAPI.php"
+        return "https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php"
 
     # Cloudflare R2 (S3-compatible object storage)
     r2_account_id: str | None = None

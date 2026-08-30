@@ -1,0 +1,78 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+
+import { apiClient, ApiError } from "@/lib/api-client";
+import { useAuthStore } from "@/stores/auth-store";
+import type { EarningsSummary } from "@/types/earnings";
+
+export default function EarningsPage() {
+  const user = useAuthStore((s) => s.user);
+
+  if (!user) {
+    return <p className="px-6 py-12 text-sm text-zinc-400">Sign in to view your earnings.</p>;
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
+      <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Earnings</h1>
+      <p className="mt-1 text-sm text-zinc-500">
+        Commission is calculated automatically when a booking is paid, and becomes payable once the
+        booking is completed. Payouts aren&apos;t processed yet — that lands in a later phase.
+      </p>
+
+      <div className="mt-6 flex flex-col gap-6">
+        <EarningsCard title="As a Local Expert" endpoint="/api/v1/partners/earnings/expert" />
+        <EarningsCard title="As a Host" endpoint="/api/v1/partners/earnings/host" />
+      </div>
+    </div>
+  );
+}
+
+function EarningsCard({ title, endpoint }: { title: string; endpoint: string }) {
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["earnings", endpoint],
+    queryFn: () => apiClient.get<EarningsSummary>(endpoint, { auth: true }),
+    retry: false,
+  });
+
+  const notEligible = isError && error instanceof ApiError && error.status === 403;
+
+  return (
+    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <h2 className="font-medium text-zinc-900 dark:text-zinc-50">{title}</h2>
+      {isLoading && <p className="mt-2 text-sm text-zinc-400">Loading…</p>}
+      {notEligible && <p className="mt-2 text-sm text-zinc-500">No approved role of this type yet.</p>}
+      {data && (
+        <>
+          <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+            <Stat label="Gross" value={data.total_gross} />
+            <Stat label="Ovigo commission" value={data.total_commission} />
+            <Stat label="Pending" value={data.total_net_pending} />
+            <Stat label="Payable" value={data.total_net_payable} highlight />
+          </div>
+          <div className="mt-4 flex flex-col gap-1">
+            {data.commissions.map((c) => (
+              <div key={c.id} className="flex items-center justify-between text-xs text-zinc-500">
+                <span>{new Date(c.created_at).toLocaleDateString()} · {(Number(c.rate) * 100).toFixed(0)}% of ${c.gross_amount}</span>
+                <span className={c.status === "payable" ? "text-emerald-600" : "text-amber-600"}>
+                  ${c.partner_net_amount} · {c.status}
+                </span>
+              </div>
+            ))}
+            {data.commissions.length === 0 && <p className="text-xs text-zinc-400">No earnings yet.</p>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div>
+      <p className="text-xs text-zinc-500">{label}</p>
+      <p className={`font-semibold ${highlight ? "text-emerald-600" : "text-zinc-900 dark:text-zinc-50"}`}>${value}</p>
+    </div>
+  );
+}

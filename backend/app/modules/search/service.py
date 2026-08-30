@@ -5,12 +5,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.modules.bookings.models import BookingItem, BookingItemStatus
 from app.modules.locations.models import Location, LocationTag, TaggableEntityType
 from app.modules.profiles.models import LocalExpertProfile
 from app.modules.search.schemas import DestinationSummary, ExpertSearchResult
 from app.modules.stays import service as stays_service
 from app.modules.stays.models import Property, PropertyStatus
-from app.modules.tours.models import Tour, TourStatus
+from app.modules.tours.models import Tour, TourDeparture, TourStatus
 from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleStatus, User
 
 
@@ -56,6 +57,23 @@ async def search_stays(
     return available
 
 
+async def _successful_tour_counts(db: AsyncSession, role_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+    """Completed tour-departure bookings per Local Expert role — MVP acceptance
+    criterion #5 ("successful-tour count"). Empty dict short-circuits an otherwise
+    harmless-but-pointless query when there are no experts to look up."""
+    if not role_ids:
+        return {}
+    result = await db.execute(
+        select(Tour.local_expert_role_id, func.count(BookingItem.id))
+        .select_from(BookingItem)
+        .join(TourDeparture, BookingItem.tour_departure_id == TourDeparture.id)
+        .join(Tour, TourDeparture.tour_id == Tour.id)
+        .where(BookingItem.status == BookingItemStatus.COMPLETED, Tour.local_expert_role_id.in_(role_ids))
+        .group_by(Tour.local_expert_role_id)
+    )
+    return dict(result.all())
+
+
 async def search_experts(db: AsyncSession, location_ids: list[uuid.UUID] | None) -> list[ExpertSearchResult]:
     query = (
         select(LocalExpertProfile, User.full_name)
@@ -71,6 +89,8 @@ async def search_experts(db: AsyncSession, location_ids: list[uuid.UUID] | None)
         ).where(LocationTag.location_id.in_(location_ids))
 
     result = await db.execute(query.distinct())
+    rows = result.all()
+    tour_counts = await _successful_tour_counts(db, [profile.partner_role_id for profile, _ in rows])
     return [
         ExpertSearchResult(
             partner_role_id=profile.partner_role_id,
@@ -79,8 +99,9 @@ async def search_experts(db: AsyncSession, location_ids: list[uuid.UUID] | None)
             bio=profile.bio,
             years_experience=profile.years_experience,
             languages=profile.languages,
+            successful_tour_count=tour_counts.get(profile.partner_role_id, 0),
         )
-        for profile, full_name in result.all()
+        for profile, full_name in rows
     ]
 
 

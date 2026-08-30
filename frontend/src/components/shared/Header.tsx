@@ -37,11 +37,17 @@ export function Header() {
         </Link>
         {user ? (
           <>
+            <Link href="/bookings" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+              My Bookings
+            </Link>
             <Link href="/dashboard/tours" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
               My Tours
             </Link>
             <Link href="/dashboard/properties" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
               My Properties
+            </Link>
+            <Link href="/dashboard/earnings" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+              Earnings
             </Link>
             <Link href="/dashboard/profile" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
               My Profile

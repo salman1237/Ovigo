@@ -4,14 +4,16 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-08-30 (Sprint 5-6 complete)_
+_Last updated: 2026-08-30 (Sprint 7-8 complete — Phase 1 MVP feature-complete pending Sprint 9 polish)_
 
 ## Infrastructure & deployment status
 
 | Item | Status | Notes |
 |---|---|---|
 | GitHub repo | Done | `salman1237/Ovigo`, connected |
-| NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 20 tables live (Sprint 1-4 set plus `local_expert_profiles`, `host_profiles`, `tours`, `tour_itineraries`, `tour_departures`, `tour_meals`, `tour_activities`, `tour_addons`, `tour_transport`, `tour_stays`, `properties`, `property_amenities`, `room_types`, `availability_calendars`) |
+| NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 30 tables live — see Sprint 5-6 (13 tables) and Sprint 7-8 (`bookings`, `booking_items`, `booking_guests`, `booking_status_history`, `payments`, `escrow_transactions`, `commissions`, `reviews`) additions below |
+| Cloudflare R2 | Done | `ovigo` bucket, S3-compatible credentials in `backend/.env` and on FastAPI Cloud — see Sprint 5-6 image storage notes |
+| SSLCommerz | Done | Sandbox store credentials in `backend/.env` and on FastAPI Cloud — see Sprint 7-8 payment notes |
 | Backend scaffold | Done | FastAPI app, config, async SQLAlchemy engine, Alembic wired to Neon |
 | Frontend scaffold | Done | Next.js 16 (App Router, Tailwind v4, TypeScript), builds clean |
 | Vercel project link + auto-deploy | Done | Project `ovigo` (`salman2033` team) linked, GitHub repo connected, production live at `ovigo.vercel.app`, built with `NEXT_PUBLIC_API_URL` pointing at the live backend (confirmed baked into the production JS bundle). |
@@ -83,15 +85,25 @@ Partner verification documents (Sprint 3-4) still use Postgres `bytea`, not R2 �
 
 | Task | Status |
 |---|---|
-| Booking engine (tour + stay) | Not started |
-| Unified booking with multiple service items | Not started |
-| Guest information management | Not started |
-| Payment integration (bKash/SSLCommerz) | Not started |
-| Basic escrow (hold until completion) | Not started |
-| Commission calculation (global + role-based) | Not started |
-| Verified review system (post-completion only) | Not started |
-| Booking status flow | Not started |
-| Basic partner dashboards (Expert, Host) | Not started |
+| Booking engine (tour + stay) | Done — inventory locked with `SELECT ... FOR UPDATE` inside the same transaction the booking is created in (MVP AC #8: a booking cannot exceed available inventory, verified including a concurrent-request-shaped negative test) |
+| Unified booking with multiple service items | Done — one booking can hold a tour departure item and a room-type item together, verified with a mixed booking |
+| Guest information management | Done — `booking_guests`, free-form name/age/id_document per booking |
+| Payment integration (bKash/SSLCommerz) | Done for SSLCommerz — real sandbox integration (session initiation + validation API), confirmed against the actual gateway, not just mocked. bKash not integrated — SSLCommerz already routes bKash/Nagad/cards/mobile banking through one gateway, so a separate direct bKash integration wasn't needed for MVP; revisit only if a bKash-specific feature (not available via SSLCommerz) is required |
+| Basic escrow (hold until completion) | Done — one `escrow_transactions` row per booking, HELD at payment confirmation; released is a status flag only (no real money movement — payout processing is Phase 2) |
+| Commission calculation (global + role-based) | Done — flat per-item-type rate (10% tours, 12% stays) computed per booking item at payment confirmation; PENDING until the booking completes, then PAYABLE. Configurable per-partner rules are explicitly Phase 2 ("Advanced commission engine") |
+| Verified review system (post-completion only) | Done — gated on the specific booking item being COMPLETED (MVP AC #12, verified: blocked before completion, allowed after, duplicate rejected) |
+| Booking status flow | Done — pending_payment → confirmed → checked_in → checked_out → completed, with cancellation releasing held inventory; full history in `booking_status_history` |
+| Basic partner dashboards (Expert, Host) | Done — `/dashboard/earnings` (commission summary, pending vs payable) |
+
+**Payment confirmation has two independent paths**, both converging on the same idempotent `_confirm_payment` function: SSLCommerz's IPN (server-to-server callback, the documented source of truth, but needs a publicly reachable URL and isn't guaranteed to arrive instantly) and the customer's browser redirect to `success_url` (which also carries `val_id` and independently calls the Validation API). This is more robust than relying on IPN alone — confirmation doesn't strictly depend on IPN delivery.
+
+**Frontend:** booking forms on `/tours/[id]` and `/stays/[id]` (create booking → initiate payment → redirect to SSLCommerz's hosted checkout), `/bookings` + `/bookings/[id]` (status, check-in/out, cancel, inline review submission on completed items), `/dashboard/earnings`, and a shared `ReviewsList` component on both public detail pages. One frontend simplification: each booking form creates a single-item booking (tour-only or stay-only) — the backend fully supports multi-item unified bookings (proven in the smoke test), but a cart-style "combine a tour and a stay into one checkout" UI is deferred; most real usage is single-item anyway.
+
+**Bug found and fixed during this sprint's own verification** (same root cause as the Sprint 5-6 finding, worth calling out again since it bit a different codepath): `app/main.py` imports each module's router in sequence, and `bookings/service.py` builds a module-level `selectinload(Booking.items)` tuple at import time — which forces SQLAlchemy to configure every relationship it can reach, including `BookingItem.reviews -> "Review"` by string name. Since `reviews_router` was imported *after* `bookings_router`, that name didn't exist yet and mapper configuration crashed with `KeyError: 'Review'`. Fixed by importing `app.all_models` (which loads every module's models up front) as the very first import in `main.py`, before any router — so router import order stops mattering at all, permanently, not just for this one pair of modules.
+
+**Verified:** a comprehensive smoke test against Neon and the real SSLCommerz sandbox — unified booking (tour + stay) with correct total; inventory correctly decremented for both seats and room-nights; overbooking rejected (409); a genuine SSLCommerz session-initiation call (not mocked) returning a real `GatewayPageURL`; payment confirmation (simulated at the internal-function level, since completing an actual hosted card payment needs a human browser — see below) correctly moving the booking to `confirmed`, creating escrow, and computing both partner commissions with the right rates; review blocked pre-completion (409); check-in → check-out → auto-complete with all items marked completed; commission transitioning `pending` → `payable` on completion; review creation, duplicate-rejection, and public listing; and cancelling a pending booking correctly releasing its held inventory.
+
+**What still needs a human:** the actual SSLCommerz hosted checkout page (entering a sandbox test card and completing payment) can't be driven from this environment — that needs a real browser. The session-initiation and validation APIs were both verified for real against the sandbox, and the confirmation logic they feed into was verified with a simulated payload, so the only untested link is SSLCommerz's own checkout UI and its IPN delivery to our `/api/v1/payments/ipn` endpoint. Worth one manual end-to-end test (real card, real redirect) before this goes anywhere near production traffic.
 
 ### Sprint 9 — MVP Polish & Launch Prep (Wk 17-18)
 
@@ -123,14 +135,14 @@ Not started. See technical document §8, Phase 4.
 | 2 | Admin can verify and approve each role separately | Done |
 | 3 | A Local Expert can create a fixed-date tour with all mandatory service details | Done |
 | 4 | A traveler can search tours using destination tags | Done |
-| 5 | A traveler can view the Expert's verified profile and successful-tour count | In progress — profile view works via `/api/v1/search/experts`; successful-tour count is stubbed at 0 until the booking engine (Sprint 7-8) can compute it from completed bookings |
+| 5 | A traveler can view the Expert's verified profile and successful-tour count | Done — `/api/v1/search/experts` now returns a real count of completed tour-departure bookings per expert, not a stub |
 | 6 | A Host can create a property, room inventory and availability calendar | Done |
-| 7 | A traveler can search and book a stay | In progress — search (with real date-availability filtering) is done; booking itself is Sprint 7-8 |
-| 8 | A booking cannot exceed available inventory | Pending |
-| 9 | A traveler can pay and receive confirmation | Pending |
-| 10 | Ovigo commission is calculated automatically | Pending |
-| 11 | Partner earnings appear in the correct dashboard | Pending |
-| 12 | Only completed bookings generate review eligibility | Pending |
+| 7 | A traveler can search and book a stay | Done |
+| 8 | A booking cannot exceed available inventory | Done — `SELECT ... FOR UPDATE` row locking, verified with an overbooking attempt correctly rejected |
+| 9 | A traveler can pay and receive confirmation | Done — real SSLCommerz sandbox integration; see Sprint 7-8 notes for what still needs a manual human test (the hosted checkout page itself) |
+| 10 | Ovigo commission is calculated automatically | Done |
+| 11 | Partner earnings appear in the correct dashboard | Done — `/dashboard/earnings` |
+| 12 | Only completed bookings generate review eligibility | Done |
 | 13 | A Local Expert can add a Guide under supervision | Pending |
 | 14 | A Local Expert can add a referred business | Pending |
 | 15 | Referral attribution is stored | Pending |

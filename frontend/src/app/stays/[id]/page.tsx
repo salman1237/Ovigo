@@ -2,8 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
+import { useState } from "react";
 
-import { apiClient } from "@/lib/api-client";
+import { ReviewsList } from "@/components/shared/ReviewsList";
+import { apiClient, ApiError } from "@/lib/api-client";
+import { useAuthStore } from "@/stores/auth-store";
+import type { Booking } from "@/types/booking";
 import { AMENITY_LABELS, PROPERTY_TYPE_LABELS, type Property } from "@/types/stay";
 
 export default function StayDetailPage() {
@@ -63,6 +67,129 @@ export default function StayDetailPage() {
           </dl>
         </div>
       )}
+
+      {property.room_types.length > 0 && <BookStaySection property={property} />}
+
+      <div className="mt-10">
+        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Reviews</h2>
+        <div className="mt-2">
+          <ReviewsList propertyId={property.id} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BookStaySection({ property }: { property: Property }) {
+  const user = useAuthStore((s) => s.user);
+  const [roomTypeId, setRoomTypeId] = useState(property.room_types[0]?.id ?? "");
+  const [checkIn, setCheckIn] = useState("");
+  const [checkOut, setCheckOut] = useState("");
+  const [quantity, setQuantity] = useState(1);
+  const [guestNames, setGuestNames] = useState<string[]>([""]);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const roomType = property.room_types.find((r) => r.id === roomTypeId);
+  const nights = checkIn && checkOut ? Math.max(0, (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000) : 0;
+  const total = roomType ? (Number(roomType.base_price) * nights * quantity).toFixed(2) : "0.00";
+
+  const book = async () => {
+    setError(null);
+    setSubmitting(true);
+    try {
+      const booking = await apiClient.post<Booking>(
+        "/api/v1/bookings",
+        {
+          items: [{ item_type: "room_type", room_type_id: roomTypeId, check_in_date: checkIn, check_out_date: checkOut, quantity }],
+          guests: guestNames.filter((n) => n.trim()).map((full_name) => ({ full_name })),
+        },
+        { auth: true }
+      );
+      const payment = await apiClient.post<{ gateway_page_url: string }>(
+        "/api/v1/payments/initiate",
+        { booking_id: booking.id },
+        { auth: true }
+      );
+      window.location.href = payment.gateway_page_url;
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to start booking");
+      setSubmitting(false);
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="mt-10 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <a href="/account/login" className="font-medium underline">Sign in</a> to book this stay.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-10 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Book this stay</h2>
+      <div className="mt-3 flex flex-col gap-3">
+        <div>
+          <label className="block text-xs font-medium text-zinc-500">Room type</label>
+          <select
+            value={roomTypeId}
+            onChange={(e) => setRoomTypeId(e.target.value)}
+            className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          >
+            {property.room_types.map((rt) => (
+              <option key={rt.id} value={rt.id}>{rt.name} — ${rt.base_price}/night</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex gap-2">
+          <div>
+            <label className="block text-xs font-medium text-zinc-500">Check-in</label>
+            <input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-500">Check-out</label>
+            <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-500">Rooms</label>
+            <input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} className="mt-1 w-20 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          {guestNames.map((name, i) => (
+            <input
+              key={i}
+              value={name}
+              onChange={(e) => setGuestNames((prev) => prev.map((n, idx) => (idx === i ? e.target.value : n)))}
+              placeholder={`Guest ${i + 1} full name`}
+              className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            />
+          ))}
+          <button
+            type="button"
+            onClick={() => setGuestNames((prev) => [...prev, ""])}
+            className="self-start text-xs text-zinc-500 underline"
+          >
+            + add another guest
+          </button>
+        </div>
+        {nights > 0 && (
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            {nights} night(s) × {quantity} room(s) — Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">${total}</span>
+          </p>
+        )}
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <button
+          onClick={book}
+          disabled={submitting || !roomTypeId || nights <= 0}
+          className="self-start rounded-full bg-zinc-900 px-6 py-2.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
+        >
+          {submitting ? "Redirecting to payment…" : "Book & Pay"}
+        </button>
+      </div>
     </div>
   );
 }
