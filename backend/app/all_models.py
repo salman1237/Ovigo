@@ -9,6 +9,7 @@ transitively), so this only matters for standalone entry points: Alembic
 in both.
 """
 from app.modules.admin import models as _admin_models  # noqa: F401
+from app.modules.bidding import models as _bidding_models  # noqa: F401
 from app.modules.bookings import models as _bookings_models  # noqa: F401
 from app.modules.commissions import models as _commissions_models  # noqa: F401
 from app.modules.disputes import models as _disputes_models  # noqa: F401

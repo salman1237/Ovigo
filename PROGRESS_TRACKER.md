@@ -4,14 +4,14 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-08-30 (Sprint 9 complete — Phase 1 MVP fully built)_
+_Last updated: 2026-08-30 (Sprint 10-11 complete — Phase 2 underway)_
 
 ## Infrastructure & deployment status
 
 | Item | Status | Notes |
 |---|---|---|
 | GitHub repo | Done | `salman1237/Ovigo`, connected |
-| NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 30 tables live — see Sprint 5-6 (13 tables) and Sprint 7-8 (`bookings`, `booking_items`, `booking_guests`, `booking_status_history`, `payments`, `escrow_transactions`, `commissions`, `reviews`) additions below |
+| NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 34 tables live — see Sprint 5-6 (13 tables), Sprint 7-8 (`bookings`, `booking_items`, `booking_guests`, `booking_status_history`, `payments`, `escrow_transactions`, `commissions`, `reviews`), Sprint 9 (`notifications`, `disputes`) and Sprint 10-11 (`custom_tour_requests`, `tour_bids`) additions below |
 | Cloudflare R2 | Done | `ovigo` bucket, S3-compatible credentials in `backend/.env` and on FastAPI Cloud — see Sprint 5-6 image storage notes |
 | SSLCommerz | Done | Sandbox store credentials in `backend/.env` and on FastAPI Cloud — see Sprint 7-8 payment notes |
 | Backend scaffold | Done | FastAPI app, config, async SQLAlchemy engine, Alembic wired to Neon |
@@ -120,9 +120,31 @@ Partner verification documents (Sprint 3-4) still use Postgres `bytea`, not R2 �
 
 **Verified:** every new backend piece was smoke-tested against the real Neon DB (not just unit-style mocks) — notifications: full CRUD/mark-read/mark-all-read cycle directly, plus an end-to-end HTTP flow (register → admin rejects a partner role application → applicant's `/api/v1/notifications` shows the correctly-worded notification). Disputes: open → duplicate-open-rejected (409) → admin lists it → admin resolves with refund → escrow flips to `REFUNDED` → traveler notified → re-resolving an already-resolved dispute correctly rejected (409); plus HTTP-level auth/ownership checks (404 on someone else's booking, 403 on the admin endpoint without an admin role). Admin overview: real booking+payment rows created directly in Neon, fetched through `/api/v1/admin/bookings` and `/admin/payments` with status filters, fields match. Rate limiting: hammered `/api/v1/auth/register` 12 times in a row — first 10 succeeded (201), 11th and 12th correctly got 429. Security headers: confirmed present on a plain `/health` response. Caching: confirmed both dramatic latency drop on cache hit and immediate invalidation after an admin location write (no stale-tree window). Frontend: `npm run lint` and `npm run build` both clean with all new pages (`/admin/bookings`, `/admin/payments`, `/admin/disputes`) and the notification bell included in the production build. All test data (throwaway users/bookings/payments) cleaned up from Neon after each check — nothing left behind in production data.
 
+**Post-deploy production bugs found via real user testing (fixed same day):**
+1. SSLCommerz redirects the customer's browser to `success_url`/`fail_url`/`cancel_url` via an auto-submitting POST form (full transaction payload in the POST body, same as the IPN payload) — the callback endpoints only accepted GET, so real checkouts hit a 405 and were never confirmed via the redirect path. Fixed by accepting both GET and POST and reading `tran_id`/`val_id` from whichever of query params or form body is present. Verified with a real SSLCommerz sandbox bKash payment end-to-end after the fix: booking correctly moved to `confirmed`.
+2. Every price on the frontend was hardcoded with a `$` prefix despite the platform being BDT-only. Added a shared `formatMoney()` helper (`frontend/src/lib/format.ts`) showing `৳` and applied it everywhere a price is displayed.
+
 ## Phase 2 — Customization & Network
 
-Not started. See technical document §8, Phase 2.
+### Sprint 10-11 — Custom Tour Bidding (Wk 19-22)
+
+| Task | Status |
+|---|---|
+| Custom tour request form | Done — traveler posts destination, dates, group size, optional budget range |
+| Expert eligibility engine | Done — an approved Local Expert is eligible if any of their tagged locations is the request's tagged location or one of its ancestors (a "Chittagong" tag covers a "Cox's Bazar" request, mirroring how destination search already treats a country tag as covering its cities) |
+| Bid submission with full itinerary | Done — price, message, day-by-day itinerary |
+| Bid comparison view | Done — traveler sees all bids on their request sorted by price |
+| Bid status workflow | Done — pending → accepted/rejected/withdrawn; accepting one bid auto-rejects every other pending bid on the same request and closes the request |
+| Bid-to-booking conversion | Done — accepting a bid creates a real `Booking` with a new `BookingItemType.CUSTOM_BID` item at the bid's server-side price, reusing the entire existing payment/commission/escrow/notification pipeline rather than a parallel one |
+| Bidding controls (limits, fees, penalties) | Partial — one bid per expert per request (unique constraint), one open dispute-style accept flow. No bid fees or late-withdrawal penalties: there's no partner wallet/payout system yet for either to charge against (that's Sprint 14-15 "Financial Engine") |
+
+**Design decisions:** bid itineraries are stored as JSONB on the bid row, not a relational child table like `TourItineraryDay` — a bid's itinerary is a point-in-time snapshot never queried independently, so a table would only add migration overhead. Custom-bid bookings are created server-side only (`bookings/service.py`'s `create_booking_from_bid`, called from `bidding/service.py`'s `accept_bid`) — the generic `POST /api/v1/bookings` endpoint explicitly rejects `item_type: custom_bid` in its request schema, so a client can never construct a custom-bid booking with a self-chosen price; the price always comes from the accepted bid. Commission rate for custom bids is 10%, same as published tours (expert-delivered work either way).
+
+**New tables:** `custom_tour_requests`, `tour_bids`. **Enum extensions:** `TaggableEntityType.CUSTOM_TOUR_REQUEST`, `BookingItemType.CUSTOM_BID`, three new `NotificationType` values (`new_bid`, `bid_accepted`, `bid_rejected`). One migration, applied to Neon.
+
+**Frontend:** `/custom-requests` (post + list own requests), `/custom-requests/[id]` (bid comparison + accept, redirects straight into the existing `/bookings/[id]` payment flow on accept), `/dashboard/bids` (eligible open requests + bid submission form for experts, plus a "my bids" tab with withdraw).
+
+**Verified:** a full scripted smoke test against Neon — 3 experts tagged to different locations (exact match, ancestor match, unrelated) confirm the eligibility engine correctly includes the first two and excludes the third; an ineligible bid attempt correctly rejected (403); a duplicate bid from the same expert on the same request correctly rejected (409); accepting one bid correctly rejects the other pending bid and closes the request, with both experts and the traveler notified correctly; the resulting booking carries the exact bid price through the standard payment confirmation → commission calculation pipeline (10% rate, correct partner attribution) with no code changes needed in either module; re-accepting on a closed request and withdrawing an already-accepted bid both correctly rejected. Also verified at the HTTP layer end-to-end (register → apply → approve → tag → create request → bid → accept → fetch the resulting booking through the ordinary `/api/v1/bookings/{id}` endpoint) to confirm every response shape matches the frontend's TypeScript types exactly. Frontend `npm run lint` and `npm run build` both clean.
 
 ## Phase 3 — Growth & Monetization
 

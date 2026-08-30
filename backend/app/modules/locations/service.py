@@ -45,6 +45,22 @@ async def has_tags(db: AsyncSession, entity_type: TaggableEntityType, entity_id:
     return len(await get_tags(db, entity_type, entity_id)) > 0
 
 
+async def get_ancestor_ids(db: AsyncSession, location_id: uuid.UUID) -> list[uuid.UUID]:
+    """The reverse of resolve_slug_to_subtree_ids: given one location, return its own id
+    plus every ancestor's id, walking up via parent_id. Used by the bidding module's
+    expert-eligibility check — an expert tagged to 'Chittagong' should be eligible for a
+    request tagged to 'Cox's Bazar' underneath it, not just an exact location match."""
+    result = await db.execute(select(Location))
+    by_id = {loc.id: loc for loc in result.scalars().all()}
+
+    ids: list[uuid.UUID] = []
+    current_id: uuid.UUID | None = location_id
+    while current_id is not None and current_id in by_id:
+        ids.append(current_id)
+        current_id = by_id[current_id].parent_id
+    return ids
+
+
 async def resolve_slug_to_subtree_ids(db: AsyncSession, slug: str) -> list[uuid.UUID] | None:
     """A destination search for e.g. 'bangladesh' should also surface listings tagged to
     'coxs-bazar' underneath it. Walks the small in-memory location tree (data volumes are

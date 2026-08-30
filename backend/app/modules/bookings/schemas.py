@@ -25,6 +25,11 @@ class BookingItemCreate(BaseModel):
                 raise ValueError("room_type_id, check_in_date and check_out_date are required for a room_type item")
             if self.check_out_date <= self.check_in_date:
                 raise ValueError("check_out_date must be after check_in_date")
+        elif self.item_type == BookingItemType.CUSTOM_BID:
+            # Custom-bid bookings are created server-side by bidding.service.accept_bid,
+            # never through this generic endpoint — the price has to come from the
+            # accepted bid, not from client input, so this path is deliberately closed.
+            raise ValueError("Custom bid bookings are created by accepting a bid, not directly")
         return self
 
 
@@ -47,6 +52,7 @@ class BookingItemRead(BaseModel):
     status: BookingItemStatus
     tour_departure_id: uuid.UUID | None
     room_type_id: uuid.UUID | None
+    custom_bid_id: uuid.UUID | None
     check_in_date: date | None
     check_out_date: date | None
     quantity: int

@@ -19,6 +19,8 @@ from app.core.exceptions import register_exception_handlers
 from app.core.rate_limit import limiter
 from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
+from app.modules.bidding.router import bids_router as bidding_bids_router
+from app.modules.bidding.router import router as bidding_router
 from app.modules.bookings.router import router as bookings_router
 from app.modules.commissions.router import router as commissions_router
 from app.modules.disputes.router import admin_router as disputes_admin_router
@@ -74,6 +76,8 @@ register_exception_handlers(app)
 
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(bidding_router)
+app.include_router(bidding_bids_router)
 app.include_router(locations_router)
 app.include_router(partners_router)
 app.include_router(profiles_router)

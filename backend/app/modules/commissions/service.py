@@ -3,6 +3,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.bidding.models import TourBid
 from app.modules.bookings.models import Booking, BookingItem, BookingItemStatus, BookingItemType
 from app.modules.commissions.models import Commission, CommissionStatus
 from app.modules.commissions.schemas import EarningsSummary
@@ -11,10 +12,12 @@ from app.modules.tours.models import Tour, TourDeparture
 from app.modules.users.models import PartnerRole
 
 # Flat global-by-item-type rates — see models.py docstring for why this isn't a
-# configurable rules table yet.
+# configurable rules table yet. Custom bids are expert-delivered work just like a
+# published tour, so they share its rate.
 COMMISSION_RATES: dict[BookingItemType, Decimal] = {
     BookingItemType.TOUR_DEPARTURE: Decimal("0.10"),
     BookingItemType.ROOM_TYPE: Decimal("0.12"),
+    BookingItemType.CUSTOM_BID: Decimal("0.10"),
 }
 
 
@@ -32,6 +35,9 @@ async def _partner_role_for_item(db: AsyncSession, item: BookingItem) -> str | N
             .join(RoomType, RoomType.property_id == Property.id)
             .where(RoomType.id == item.room_type_id)
         )
+        return result.scalar_one_or_none()
+    if item.item_type == BookingItemType.CUSTOM_BID and item.custom_bid_id:
+        result = await db.execute(select(TourBid.local_expert_role_id).where(TourBid.id == item.custom_bid_id))
         return result.scalar_one_or_none()
     return None
 

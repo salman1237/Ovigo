@@ -29,6 +29,9 @@ class NotificationType(str, enum.Enum):
     NEW_REVIEW = "new_review"
     DISPUTE_OPENED = "dispute_opened"
     DISPUTE_RESOLVED = "dispute_resolved"
+    NEW_BID = "new_bid"
+    BID_ACCEPTED = "bid_accepted"
+    BID_REJECTED = "bid_rejected"
 
 
 class Notification(Base):

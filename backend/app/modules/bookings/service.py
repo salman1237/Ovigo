@@ -147,6 +147,38 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
     return await get_own_booking_or_404(db, user, booking.id)
 
 
+async def create_booking_from_bid(
+    db: AsyncSession, user: User, bid_id: uuid.UUID, price: Decimal
+) -> Booking:
+    """Converts an accepted custom-tour bid straight into a real booking, so the
+    entire existing payment/commission/escrow/notification pipeline applies to
+    custom tours for free. Deliberately takes `price` as a plain argument rather
+    than importing the bidding module's TourBid model — the caller
+    (bidding/service.py) already has the bid loaded and re-validated as ACCEPTED
+    before calling this, and passing the price explicitly avoids a
+    bookings <-> bidding import cycle. No inventory to reserve here: a custom
+    bid isn't drawn from a fixed departure or room pool, it's a one-off
+    arrangement the expert already committed to when they placed the bid.
+    """
+    booking = Booking(user_id=user.id, total_amount=price)
+    db.add(booking)
+    await db.flush()
+
+    db.add(
+        BookingItem(
+            booking_id=booking.id,
+            item_type=BookingItemType.CUSTOM_BID,
+            custom_bid_id=bid_id,
+            quantity=1,
+            unit_price=price,
+            subtotal=price,
+        )
+    )
+    db.add(BookingStatusHistory(booking_id=booking.id, to_status=BookingStatus.PENDING_PAYMENT.value))
+    await db.commit()
+    return await get_own_booking_or_404(db, user, booking.id)
+
+
 async def get_own_booking_or_404(db: AsyncSession, user: User, booking_id: uuid.UUID) -> Booking:
     result = await db.execute(
         select(Booking)
