@@ -77,6 +77,8 @@ _Last updated: 2026-08-30 (Sprint 5-6 complete)_
 
 Partner verification documents (Sprint 3-4) still use Postgres `bytea`, not R2 — low-value to migrate today (small volume, private/admin-only access, no CDN benefit), but the same `storage.py` helper would apply if it's worth doing later.
 
+**New known tech debt:** deleting a user cascades through `partner_accounts` → `partner_roles` → `local_expert_profiles`/`tour_images`/`property_images` at the DB level, but nothing deletes the corresponding R2 objects — a hard-deleted user (or, later, a hard-deleted tour/property) leaves orphaned files in the bucket. Same category of issue as the `location_tags` orphan gap already noted. Not urgent (soft-delete is the norm elsewhere, and storage cost at this scale is negligible), but worth a cleanup hook — e.g. a SQLAlchemy `before_delete` event, or a periodic reconciliation job — before this matters at real scale.
+
 ### Sprint 7-8 — Booking, Payment & Reviews (Wk 13-16)
 
 | Task | Status |
