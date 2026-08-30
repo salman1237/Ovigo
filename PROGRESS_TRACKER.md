@@ -14,8 +14,8 @@ _Last updated: 2026-08-30_
 | NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 4 tables live (`users`, `partner_accounts`, `partner_roles`, `locations`) |
 | Backend scaffold | Done | FastAPI app, config, async SQLAlchemy engine, Alembic wired to Neon |
 | Frontend scaffold | Done | Next.js 16 (App Router, Tailwind v4, TypeScript), builds clean |
-| Vercel project link + auto-deploy | Partial | Project `salman2033/frontend` linked, GitHub repo connected, first preview deploy live at `frontend-7efbln4h6-salman2033.vercel.app`. **User action needed:** set Project Settings → General → Root Directory to `frontend` in the Vercel dashboard so git-push auto-deploys build the right subfolder (CLI deploys already target it correctly). |
-| FastAPI Cloud project + auto-deploy | Not started | `fastapi login` opens an interactive browser flow tied to the user's account — cannot be completed from this session. **User action needed:** run `fastapi login` from `backend/` once, then either `fastapi deploy` or connect the GitHub repo (root directory `backend`) in the FastAPI Cloud dashboard for auto-deploy. |
+| Vercel project link + auto-deploy | Done | Project `ovigo` (`salman2033` team) linked, GitHub repo connected, production live at `ovigo.vercel.app`. |
+| FastAPI Cloud project + auto-deploy | Blocked on user | User logged in, created the app, and connected GitHub. Build failed: "Could not find a default file to run" — the app was deployed from the repo root, but the FastAPI app lives in `backend/`. Fixed on our side: added `backend/main.py` (shim re-exporting `app.main:app`) and a full `pyproject.toml` (`tool.uv package = false`, verified with a clean `uv`-resolved venv), pushed in commit `c917df7`. **User action needed:** in the FastAPI Cloud dashboard → app settings → Application Directory, set it to `backend`, then redeploy (push already happened, so a new push or manual redeploy trigger should pick it up). |
 | CI (GitHub Actions) | Done | `.github/workflows/ci.yml` — backend pytest + frontend lint/build on push/PR to `main` |
 
 ## Phase 1 — Core Marketplace (MVP)
