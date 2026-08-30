@@ -14,8 +14,8 @@ _Last updated: 2026-08-30_
 | NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 4 tables live (`users`, `partner_accounts`, `partner_roles`, `locations`) |
 | Backend scaffold | Done | FastAPI app, config, async SQLAlchemy engine, Alembic wired to Neon |
 | Frontend scaffold | Done | Next.js 16 (App Router, Tailwind v4, TypeScript), builds clean |
-| Vercel project link + auto-deploy | Not started | Vercel CLI is authenticated (`salman1237`) locally; needs `vercel link` + `vercel git connect` |
-| FastAPI Cloud project + auto-deploy | Not started | Requires a one-time browser `fastapi login`, or connecting the GitHub repo from the FastAPI Cloud dashboard — needs the user |
+| Vercel project link + auto-deploy | Partial | Project `salman2033/frontend` linked, GitHub repo connected, first preview deploy live at `frontend-7efbln4h6-salman2033.vercel.app`. **User action needed:** set Project Settings → General → Root Directory to `frontend` in the Vercel dashboard so git-push auto-deploys build the right subfolder (CLI deploys already target it correctly). |
+| FastAPI Cloud project + auto-deploy | Not started | `fastapi login` opens an interactive browser flow tied to the user's account — cannot be completed from this session. **User action needed:** run `fastapi login` from `backend/` once, then either `fastapi deploy` or connect the GitHub repo (root directory `backend`) in the FastAPI Cloud dashboard for auto-deploy. |
 | CI (GitHub Actions) | Done | `.github/workflows/ci.yml` — backend pytest + frontend lint/build on push/PR to `main` |
 
 ## Phase 1 — Core Marketplace (MVP)
