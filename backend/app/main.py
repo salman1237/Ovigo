@@ -22,9 +22,12 @@ from app.modules.auth.router import router as auth_router
 from app.modules.bidding.router import bids_router as bidding_bids_router
 from app.modules.bidding.router import router as bidding_router
 from app.modules.bookings.router import router as bookings_router
+from app.modules.business_network.router import admin_router as business_network_admin_router
+from app.modules.business_network.router import router as business_network_router
 from app.modules.commissions.router import router as commissions_router
 from app.modules.disputes.router import admin_router as disputes_admin_router
 from app.modules.disputes.router import router as disputes_router
+from app.modules.guides.router import router as guides_router
 from app.modules.locations.router import router as locations_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.partners.router import router as partners_router
@@ -78,6 +81,9 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(bidding_router)
 app.include_router(bidding_bids_router)
+app.include_router(guides_router)
+app.include_router(business_network_router)
+app.include_router(business_network_admin_router)
 app.include_router(locations_router)
 app.include_router(partners_router)
 app.include_router(profiles_router)

@@ -53,6 +53,15 @@ export function Header() {
             <Link href="/dashboard/bids" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
               Bid Requests
             </Link>
+            <Link href="/dashboard/guides" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+              My Guides
+            </Link>
+            <Link href="/dashboard/guide" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+              Guide Dashboard
+            </Link>
+            <Link href="/dashboard/business-network" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+              Business Network
+            </Link>
             <Link href="/dashboard/earnings" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
               Earnings
             </Link>

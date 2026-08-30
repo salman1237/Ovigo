@@ -62,3 +62,31 @@ def require_approved_role(*role_types: PartnerRoleType):
         return role
 
     return dependency
+
+
+def require_role(*role_types: PartnerRoleType):
+    """Like require_approved_role, but doesn't require PartnerRoleStatus.APPROVED —
+    for the handful of self-service actions that have to work *before* admin approval,
+    like a Guide invite (guides/service.py's invite_guide creates the PartnerRole as
+    PENDING; the guide accepting the invite is a separate, earlier step than admin
+    approving the role — requiring approval first would deadlock the invite flow)."""
+
+    async def dependency(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> PartnerRole:
+        result = await db.execute(
+            select(PartnerRole)
+            .join(PartnerAccount, PartnerRole.partner_account_id == PartnerAccount.id)
+            .where(PartnerAccount.user_id == current_user.id, PartnerRole.role_type.in_(role_types))
+        )
+        role = result.scalars().first()
+        if role is None:
+            allowed = ", ".join(rt.value for rt in role_types)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Requires a partner role of type: {allowed}",
+            )
+        return role
+
+    return dependency

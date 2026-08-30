@@ -32,6 +32,12 @@ class NotificationType(str, enum.Enum):
     NEW_BID = "new_bid"
     BID_ACCEPTED = "bid_accepted"
     BID_REJECTED = "bid_rejected"
+    GUIDE_INVITE = "guide_invite"
+    GUIDE_SUPERVISION_ACCEPTED = "guide_supervision_accepted"
+    GUIDE_SUPERVISION_ENDED = "guide_supervision_ended"
+    GUIDE_ASSIGNED = "guide_assigned"
+    REFERRAL_APPROVED = "referral_approved"
+    REFERRAL_REJECTED = "referral_rejected"
 
 
 class Notification(Base):

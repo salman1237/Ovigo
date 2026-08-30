@@ -4,14 +4,14 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-08-30 (Sprint 10-11 complete — Phase 2 underway)_
+_Last updated: 2026-08-30 (Sprint 12-13 complete — Phase 2 underway)_
 
 ## Infrastructure & deployment status
 
 | Item | Status | Notes |
 |---|---|---|
 | GitHub repo | Done | `salman1237/Ovigo`, connected |
-| NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 34 tables live — see Sprint 5-6 (13 tables), Sprint 7-8 (`bookings`, `booking_items`, `booking_guests`, `booking_status_history`, `payments`, `escrow_transactions`, `commissions`, `reviews`), Sprint 9 (`notifications`, `disputes`) and Sprint 10-11 (`custom_tour_requests`, `tour_bids`) additions below |
+| NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 38 tables live — see Sprint 5-6 (13 tables), Sprint 7-8 (`bookings`, `booking_items`, `booking_guests`, `booking_status_history`, `payments`, `escrow_transactions`, `commissions`, `reviews`), Sprint 9 (`notifications`, `disputes`), Sprint 10-11 (`custom_tour_requests`, `tour_bids`) and Sprint 12-13 (`guide_supervision`, `guide_assignments`, `guide_availability`, `business_referrals`) additions below |
 | Cloudflare R2 | Done | `ovigo` bucket, S3-compatible credentials in `backend/.env` and on FastAPI Cloud — see Sprint 5-6 image storage notes |
 | SSLCommerz | Done | Sandbox store credentials in `backend/.env` and on FastAPI Cloud — see Sprint 7-8 payment notes |
 | Backend scaffold | Done | FastAPI app, config, async SQLAlchemy engine, Alembic wired to Neon |
@@ -146,6 +146,33 @@ Partner verification documents (Sprint 3-4) still use Postgres `bytea`, not R2 �
 
 **Verified:** a full scripted smoke test against Neon — 3 experts tagged to different locations (exact match, ancestor match, unrelated) confirm the eligibility engine correctly includes the first two and excludes the third; an ineligible bid attempt correctly rejected (403); a duplicate bid from the same expert on the same request correctly rejected (409); accepting one bid correctly rejects the other pending bid and closes the request, with both experts and the traveler notified correctly; the resulting booking carries the exact bid price through the standard payment confirmation → commission calculation pipeline (10% rate, correct partner attribution) with no code changes needed in either module; re-accepting on a closed request and withdrawing an already-accepted bid both correctly rejected. Also verified at the HTTP layer end-to-end (register → apply → approve → tag → create request → bid → accept → fetch the resulting booking through the ordinary `/api/v1/bookings/{id}` endpoint) to confirm every response shape matches the frontend's TypeScript types exactly. Frontend `npm run lint` and `npm run build` both clean.
 
+### Sprint 12-13 — Guide Supervision & Business Network (Wk 23-26)
+
+| Task | Status |
+|---|---|
+| Guide registration & verification | Done — reuses the existing generic `PartnerRole`/admin-approval flow from Sprint 1-2 unchanged; a Guide role is a `PartnerRoleType.GUIDE` row like any other, admin-approved through the same `/api/v1/admin/partners/roles` endpoints |
+| Expert-Guide supervision relationships | Done — a Local Expert invites an existing Ovigo user by email; a `PartnerAccount`/`PartnerRole(GUIDE)` is created for them if they don't have one, and a `GuideSupervision` row (PENDING) links them. The invited person accepts or declines. A Guide is supervised by at most one Expert at a time (DB-level unique constraint on `guide_role_id`) |
+| Guide assignment workflow | Done — an Expert assigns their (accepted + admin-approved) Guide to one of their own tour departures, with an optional fee. Assignment lifecycle: assigned → checked_in → completed, or cancelled by the expert |
+| Guide dashboard (availability, assignments, check-in/out, earnings) | Done — `/dashboard/guide`: accept/decline/end supervision, a simple date-blockout availability calendar (60-day window), assignment list with check-in/complete actions, and an earnings total (sum of completed-assignment fees) |
+| Business referral system (add, invite, ownership types) | Done — a Local Expert adds a business they know, marking it `owned` (they own/co-own it) or `referred` (pure referral). No "invite" step for the business itself — v1 is a one-way attributed listing, not a two-sided connection like Guide supervision |
+| Business approval workflow | Done — admin approve/reject with a reason, reusing the same `RejectRequest` shape as tours/properties; audit-logged |
+| Attribution & referral commission tracking | Partial — attribution is fully stored (`referring_expert_role_id` on every referral, satisfies MVP AC #15). Commission *tracking* against a referred business's actual activity isn't implemented — see the scope note below |
+| Network commission engine | Not implemented this sprint — see scope note |
+
+**Scope note (Business Network commission engine):** a referred business isn't necessarily a bookable partner on Ovigo at all — it might just be a trusted local recommendation with no account of its own. There's no booking activity to calculate a referral commission against unless and until a referred business itself registers as an actual partner (Hotel, Rent-a-Car, ...). Building a real "network commission engine" now would mean guessing at a connection that doesn't exist yet. This is deliberately left for the technical document's own Sprint 14-15 ("Advanced commission engine — category, partner-specific, referral, network"), which is exactly where that connection belongs once there's real activity to attribute.
+
+**Design decisions:** Guide "earnings" shown on the dashboard are informational only — a per-assignment fee the supervising Expert enters, summed for completed assignments. It's a private arrangement between Expert and Guide, not an Ovigo commission; no real payout or ledger entry is created, the same flag-only treatment given to every other financial feature ahead of Phase 2's later Financial Engine sprint (escrow release, dispute refunds, and now this). Guide availability is advisory, not enforced — assigning a guide to a departure doesn't check or block on their marked-unavailable dates; the doc calls for an availability *display*, not a hard scheduling conflict system, and enforcing it well would need to handle a guide holding assignments from only one expert at a time anyway (already true, since a guide has one active supervisor) so the collision surface is naturally small.
+
+**Bug found and fixed during this sprint's own HTTP-level verification** (not caught by the service-level smoke test, because of session/identity-map behavior masking it there — worth calling out for that reason): two real bugs surfaced only when driving the flow over real HTTP requests, each with its own fresh DB session, rather than through direct service-layer calls sharing one session:
+1. A Guide couldn't accept their own supervision invite — the endpoint required an *already-approved* Guide role, but approval naturally comes *after* acceptance in the intended flow (invite → accept → admin approves the role). Fixed by adding a new `require_role()` permission dependency (checks a partner role exists, without requiring `APPROVED` status) alongside the existing `require_approved_role()`, and switching every Guide-side self-service endpoint (respond to invite, view own supervision, assignments, check-in/complete, availability, earnings) to use it — approval is still enforced exactly once, at the point that actually matters: assignment creation.
+2. Assigning a guide crashed with `MissingGreenlet` — `_active_supervision_for()`'s query was missing the eager-load options on `GuideSupervision.guide_role`, so accessing `.guide_role.status` a few lines later triggered a lazy-load outside FastAPI's async context. Fixed by adding the same eager-load tuple already used elsewhere in the module. This is the same root-cause *pattern* as the Sprint 5-6 locations-hierarchy bug and the Sprint 7-8 stale-relationship bug — async SQLAlchemy relationship access always needs to be eager-loaded up front, there's no safe lazy fallback — but a distinct instance of it, not a repeat of either fix.
+
+**New tables:** `guide_supervision`, `guide_assignments`, `guide_availability`, `business_referrals`. **Enum extensions:** 6 new `NotificationType` values (guide invite/accepted/ended/assigned, referral approved/rejected). One migration, applied to Neon.
+
+**Frontend:** `/dashboard/guides` (Expert: invite, list guides, assign to a departure, cancel assignments), `/dashboard/guide` (Guide: respond to invites, availability, assignments, earnings), `/dashboard/business-network` (Expert: add + list referrals), `/admin/business-network` (admin approve/reject).
+
+**Verified:** a full scripted smoke test against Neon covering the entire guide lifecycle (invite → duplicate-invite-rejected → accept → assign-before-approval-rejected → admin-approves-role → assign → check-in → complete → earnings-correct → second-assignment-cancelled-by-expert → availability-set-and-listed → supervision-terminated-by-guide → assign-after-termination-rejected-403) and the full business-network lifecycle (create → list-mine → admin-lists-pending → approve-with-notification → reject-with-reason-and-notification → re-approve-already-processed-rejected). Additionally verified at the HTTP layer end-to-end with fresh per-request sessions (the level that caught both bugs above), confirming every response shape matches the frontend's TypeScript types exactly, including the nested `guide`/`expert`/`departure` summary objects. Frontend `npm run lint` and `npm run build` both clean.
+
 ## Phase 3 — Growth & Monetization
 
 Not started. See technical document §8, Phase 3.
@@ -170,11 +197,11 @@ Not started. See technical document §8, Phase 4.
 | 10 | Ovigo commission is calculated automatically | Done |
 | 11 | Partner earnings appear in the correct dashboard | Done — `/dashboard/earnings` |
 | 12 | Only completed bookings generate review eligibility | Done |
-| 13 | A Local Expert can add a Guide under supervision | Pending |
-| 14 | A Local Expert can add a referred business | Pending |
-| 15 | Referral attribution is stored | Pending |
+| 13 | A Local Expert can add a Guide under supervision | Done — invite by email, guide accepts, admin approves the role, one supervisor per guide enforced at the DB level |
+| 14 | A Local Expert can add a referred business | Done — `owned` or `referred` ownership types, admin approval workflow |
+| 15 | Referral attribution is stored | Done — every `BusinessReferral` row carries `referring_expert_role_id` |
 | 16 | Admin can manage disputes, refunds and payout holds | Done (basic) — a traveler opens a dispute, an admin resolves it as refunded (flips escrow to `REFUNDED`) or rejected with a note. No payout-hold mechanism yet since there's no payout/disbursement system at all in Phase 1 (that's Phase 2 "Financial Engine") — nothing to "hold" against. |
 | 17 | Partners can purchase featured placement | Pending |
 | 18 | Sponsored results are visibly labelled | Pending |
-| 19 | All important Admin actions are audit logged | Done — role approve/reject, document verify/reject, tour/property approve/reject, dispute resolve. Extend as each new admin action lands |
+| 19 | All important Admin actions are audit logged | Done — role approve/reject, document verify/reject, tour/property approve/reject, dispute resolve, business referral approve/reject. Extend as each new admin action lands |
 | 20 | Tour, stay and partner profiles cannot be published without location tags | Done — enforced server-side at submit time for both tours and properties (verified: submitting without a tag returns 409); partner-role profiles don't have a separate "publish" gate yet since they're not publicly browsable pages on their own outside search results |
