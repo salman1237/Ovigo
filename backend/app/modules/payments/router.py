@@ -54,8 +54,29 @@ async def sslcommerz_ipn(request: Request, db: AsyncSession = Depends(get_db)):
     return {"received": True}
 
 
-@router.get("/callback/success")
-async def payment_success(tran_id: str, val_id: str | None = None, db: AsyncSession = Depends(get_db)):
+async def _callback_params(request: Request) -> dict:
+    """SSLCommerz redirects the customer's browser to success_url/fail_url/cancel_url
+    via an auto-submitting HTML form using POST, not a GET redirect — the full
+    transaction payload (val_id, status, amount, ...) rides in the POST body,
+    exactly like the IPN payload does. Query params (just `tran_id`, which we
+    appended ourselves when building the URL) are merged in as a fallback."""
+    params = dict(request.query_params)
+    if request.method == "POST":
+        form = await request.form()
+        for key, value in form.items():
+            params.setdefault(key, value)
+    return params
+
+
+@router.api_route("/callback/success", methods=["GET", "POST"])
+async def payment_success(request: Request, db: AsyncSession = Depends(get_db)):
+    params = await _callback_params(request)
+    tran_id = params.get("tran_id")
+    val_id = params.get("val_id")
+
+    if not tran_id:
+        return RedirectResponse(f"{settings.frontend_url}/bookings?payment=unknown")
+
     if val_id:
         payment = await service.confirm_via_redirect(db, tran_id, val_id)
         booking_id = payment.booking_id
@@ -71,13 +92,19 @@ async def payment_success(tran_id: str, val_id: str | None = None, db: AsyncSess
     return RedirectResponse(f"{settings.frontend_url}/bookings/{booking_id}?payment=success")
 
 
-@router.get("/callback/fail")
-async def payment_fail(tran_id: str, db: AsyncSession = Depends(get_db)):
-    await service.handle_fail_or_cancel(db, tran_id, "fail")
+@router.api_route("/callback/fail", methods=["GET", "POST"])
+async def payment_fail(request: Request, db: AsyncSession = Depends(get_db)):
+    params = await _callback_params(request)
+    tran_id = params.get("tran_id")
+    if tran_id:
+        await service.handle_fail_or_cancel(db, tran_id, "fail")
     return RedirectResponse(f"{settings.frontend_url}/bookings?payment=failed")
 
 
-@router.get("/callback/cancel")
-async def payment_cancel(tran_id: str, db: AsyncSession = Depends(get_db)):
-    await service.handle_fail_or_cancel(db, tran_id, "cancel")
+@router.api_route("/callback/cancel", methods=["GET", "POST"])
+async def payment_cancel(request: Request, db: AsyncSession = Depends(get_db)):
+    params = await _callback_params(request)
+    tran_id = params.get("tran_id")
+    if tran_id:
+        await service.handle_fail_or_cancel(db, tran_id, "cancel")
     return RedirectResponse(f"{settings.frontend_url}/bookings?payment=cancelled")
