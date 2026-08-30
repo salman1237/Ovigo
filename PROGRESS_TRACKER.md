@@ -4,14 +4,14 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-08-30_
+_Last updated: 2026-08-30 (Sprint 3-4 complete)_
 
 ## Infrastructure & deployment status
 
 | Item | Status | Notes |
 |---|---|---|
 | GitHub repo | Done | `salman1237/Ovigo`, connected |
-| NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 4 tables live (`users`, `partner_accounts`, `partner_roles`, `locations`) |
+| NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 8 tables live (`users`, `partner_accounts`, `partner_roles`, `locations`, `partner_role_applications`, `partner_documents`, `location_tags`, `audit_logs`) |
 | Backend scaffold | Done | FastAPI app, config, async SQLAlchemy engine, Alembic wired to Neon |
 | Frontend scaffold | Done | Next.js 16 (App Router, Tailwind v4, TypeScript), builds clean |
 | Vercel project link + auto-deploy | Done | Project `ovigo` (`salman2033` team) linked, GitHub repo connected, production live at `ovigo.vercel.app`, built with `NEXT_PUBLIC_API_URL` pointing at the live backend (confirmed baked into the production JS bundle). |
@@ -36,13 +36,19 @@ _Last updated: 2026-08-30_
 
 | Task | Status |
 |---|---|
-| Partner registration with dynamic role selection | Not started |
-| Multi-role account system | Not started |
-| Verification document upload & status tracking | Not started |
-| Role approval workflow | Not started |
-| Location hierarchy CRUD (Country → Attraction) | Not started |
-| Location tagging system | Not started |
-| Basic Admin panel: partner approvals, location mgmt | Not started |
+| Partner registration with dynamic role selection | Done — `POST /api/v1/partners/roles`, frontend form at `/account/partner` (role dropdown disables already-applied types) |
+| Multi-role account system | Done — `PartnerAccount` holds N `PartnerRole`s; re-applying after rejection is supported. Active-role switching (for per-role dashboards) deferred to Sprint 5-6 when there's a dashboard to switch into |
+| Verification document upload & status tracking | Done — multipart upload, stored as `bytea` in Postgres (not S3/R2 — no credential configured yet, and FastAPI Cloud's container disk is ephemeral anyway; see `partners/models.py` docstring). 5MB cap |
+| Role approval workflow | Done — admin approve/reject with reason, document verify/reject, all audit-logged |
+| Location hierarchy CRUD (Country → Attraction) | Done — full CRUD, `/hierarchy` tree endpoint, `/search` autocomplete (ILIKE for now; upgrades to pg_trgm/full-text in the Search module) |
+| Location tagging system | Done — generic `location_tags` junction (`TaggableEntityType`), wired up for partner roles; tours/properties become new consumers in Sprint 5-6 |
+| Basic Admin panel: partner approvals, location mgmt | Done — `/admin/partners` (tabs by status, approve/reject, document review) and `/admin/locations` (tree view, create/delete) |
+
+**Bootstrap tooling:** `backend/scripts/set_admin.py` (promote a user to admin/super_admin — there's no self-serve admin signup by design) and `backend/scripts/seed_locations.py` (starter Bangladesh location tree for testing).
+
+**Verified:** Full flow smoke-tested end-to-end against Neon — register applicant → apply for role → tag location → upload document → promote admin via script → admin lists pending → verifies document → approves role → applicant sees `approved` status → audit log shows both actions → non-admin gets 403 on admin routes. Cleaned up test data after.
+
+**Known tech debt (non-blocking, noted for later):** (1) SQLAlchemy's `Enum` type stores Python enum *names* (e.g. `ADMIN`) rather than `.value` (`admin`) at the DB column level — the ORM round-trips this transparently so the API is unaffected, but raw SQL/reporting against these columns needs to match on the uppercase name. Worth a `values_callable` fix before Phase 3 analytics does raw SQL. (2) `location_tags.entity_id` has no real FK (it's generic across entity types), so deleting a tagged entity (e.g. a partner role) leaves an orphaned tag row — harmless today, but each future entity type's delete path should clean up its own tags.
 
 ### Sprint 5-6 — Tour & Stay Listings (Wk 9-12)
 
@@ -99,8 +105,8 @@ Not started. See technical document §8, Phase 4.
 
 | # | Criteria | Status |
 |---|---|---|
-| 1 | A partner can register and select a role | Pending |
-| 2 | Admin can verify and approve each role separately | Pending |
+| 1 | A partner can register and select a role | Done |
+| 2 | Admin can verify and approve each role separately | Done |
 | 3 | A Local Expert can create a fixed-date tour with all mandatory service details | Pending |
 | 4 | A traveler can search tours using destination tags | Pending |
 | 5 | A traveler can view the Expert's verified profile and successful-tour count | Pending |
@@ -117,5 +123,5 @@ Not started. See technical document §8, Phase 4.
 | 16 | Admin can manage disputes, refunds and payout holds | Pending |
 | 17 | Partners can purchase featured placement | Pending |
 | 18 | Sponsored results are visibly labelled | Pending |
-| 19 | All important Admin actions are audit logged | Pending |
-| 20 | Tour, stay and partner profiles cannot be published without location tags | Pending |
+| 19 | All important Admin actions are audit logged | Done so far (role approve/reject, document verify/reject) — extend as each new admin action lands |
+| 20 | Tour, stay and partner profiles cannot be published without location tags | In progress — tagging mechanism exists (`location_tags`) and is wired to partner roles; the actual publish-gate enforcement lands once there's a "publish" action to gate (tours/stays/profiles, Sprint 5-6) |

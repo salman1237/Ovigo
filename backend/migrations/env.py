@@ -6,9 +6,7 @@ from sqlalchemy import engine_from_config, pool
 from app.config import get_settings
 from app.database import Base
 
-# Import all module models so they register on Base.metadata for autogenerate.
-from app.modules.locations import models as locations_models  # noqa: F401
-from app.modules.users import models as users_models  # noqa: F401
+import app.all_models  # noqa: F401 — registers every module's models on Base.metadata
 
 config = context.config
 if config.config_file_name is not None:

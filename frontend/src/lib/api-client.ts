@@ -17,7 +17,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const { auth = false, headers, ...rest } = options;
 
   const finalHeaders = new Headers(headers);
-  finalHeaders.set("Content-Type", "application/json");
+  // Let the browser set Content-Type (with boundary) for multipart/form-data bodies.
+  if (!(rest.body instanceof FormData)) {
+    finalHeaders.set("Content-Type", "application/json");
+  }
 
   if (auth) {
     const token = useAuthStore.getState().accessToken;
@@ -41,10 +44,26 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return (await response.json()) as T;
 }
 
+async function getBlob(path: string, options: RequestOptions = {}): Promise<Blob> {
+  const { auth = false, headers, ...rest } = options;
+  const finalHeaders = new Headers(headers);
+  if (auth) {
+    const token = useAuthStore.getState().accessToken;
+    if (token) finalHeaders.set("Authorization", `Bearer ${token}`);
+  }
+  const response = await fetch(`${API_URL}${path}`, { ...rest, method: "GET", headers: finalHeaders });
+  if (!response.ok) throw new ApiError(response.status, response.statusText);
+  return response.blob();
+}
+
 export const apiClient = {
   get: <T>(path: string, options?: RequestOptions) => request<T>(path, { ...options, method: "GET" }),
+  getBlob,
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: "POST", body: body ? JSON.stringify(body) : undefined }),
   put: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: "PUT", body: body ? JSON.stringify(body) : undefined }),
+  postForm: <T>(path: string, formData: FormData, options?: RequestOptions) =>
+    request<T>(path, { ...options, method: "POST", body: formData }),
+  delete: <T>(path: string, options?: RequestOptions) => request<T>(path, { ...options, method: "DELETE" }),
 };

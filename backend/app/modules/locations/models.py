@@ -1,14 +1,16 @@
-"""Location hierarchy: Country -> Region -> City -> Attraction.
+"""Location hierarchy: Country -> Region -> City -> Attraction, plus generic location tagging.
 
-Sprint 1-2 scope: base self-referential table only. Full CRUD, search/autocomplete and the
-location-tagging junction table (linking tours/stays/profiles to locations) are built in
-Sprint 3-4 alongside partner onboarding, which is the first consumer of location tagging.
+Sprint 1-2 scope was the base self-referential table only. Sprint 3-4 adds full CRUD,
+search, and `location_tags` — a generic junction so any future entity (partner role,
+tour, property, ...) can be tagged to one or more locations without a new table per
+entity type. Partner roles are the first consumer (§3.5 "Publishing Restriction" — a
+role's public profile can't go live without at least one tagged location).
 """
 import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Numeric, String, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Numeric, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -20,6 +22,13 @@ class LocationType(str, enum.Enum):
     REGION = "region"
     CITY = "city"
     ATTRACTION = "attraction"
+
+
+class TaggableEntityType(str, enum.Enum):
+    """Entity kinds that can be tagged to a location. Extend as new modules land
+    (TOUR, PROPERTY, ... in Sprint 5-6)."""
+
+    PARTNER_ROLE = "partner_role"
 
 
 class Location(Base):
@@ -45,3 +54,20 @@ class Location(Base):
     parent: Mapped["Location | None"] = relationship(
         "Location", back_populates="children", remote_side=[id]
     )
+
+
+class LocationTag(Base):
+    __tablename__ = "location_tags"
+    __table_args__ = (
+        UniqueConstraint("entity_type", "entity_id", "location_id", name="uq_location_tag"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    entity_type: Mapped[TaggableEntityType] = mapped_column(Enum(TaggableEntityType, name="taggable_entity_type"))
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    location_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("locations.id", ondelete="CASCADE")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    location: Mapped["Location"] = relationship("Location")

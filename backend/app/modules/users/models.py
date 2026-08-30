@@ -113,3 +113,13 @@ class PartnerRole(TimestampMixin, Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     partner_account: Mapped["PartnerAccount"] = relationship(back_populates="roles")
+    applications: Mapped[list["PartnerRoleApplication"]] = relationship(  # noqa: F821
+        back_populates="partner_role",
+        order_by="PartnerRoleApplication.created_at.desc()",
+        cascade="all, delete-orphan",
+    )
+    documents: Mapped[list["PartnerDocument"]] = relationship(  # noqa: F821
+        back_populates="partner_role",
+        order_by="PartnerDocument.created_at.desc()",
+        cascade="all, delete-orphan",
+    )
