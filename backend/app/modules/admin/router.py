@@ -11,13 +11,17 @@ from app.database import get_db
 from app.modules.admin import service
 from app.modules.admin.models import AuditLog
 from app.modules.admin.schemas import (
+    AdminBookingRead,
     AdminPartnerRoleRead,
+    AdminPaymentRead,
     AdminPropertyRead,
     AdminTourRead,
     AuditLogRead,
     RejectRequest,
 )
+from app.modules.bookings.models import BookingStatus
 from app.modules.partners.models import PartnerDocument
+from app.modules.payments.models import PaymentStatus
 from app.modules.stays.models import PropertyStatus
 from app.modules.tours.models import TourStatus
 from app.modules.users.models import PartnerRoleStatus, User
@@ -130,3 +134,13 @@ async def reject_property(
     db: AsyncSession = Depends(get_db),
 ):
     return await service.reject_property(db, current_user, property_id, payload.reason)
+
+
+@router.get("/bookings", response_model=list[AdminBookingRead])
+async def list_bookings(status: BookingStatus | None = None, db: AsyncSession = Depends(get_db)):
+    return await service.list_bookings(db, status)
+
+
+@router.get("/payments", response_model=list[AdminPaymentRead])
+async def list_payments(status: PaymentStatus | None = None, db: AsyncSession = Depends(get_db)):
+    return await service.list_payments(db, status)

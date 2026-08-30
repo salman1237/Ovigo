@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { apiClient } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
+import { NotificationBell } from "@/components/shared/NotificationBell";
 
 export function Header() {
   const user = useAuthStore((s) => s.user);
@@ -60,6 +61,7 @@ export function Header() {
                 Admin
               </Link>
             )}
+            <NotificationBell />
             <span className="text-zinc-400">{user.full_name}</span>
             <button onClick={handleLogout} className="font-medium text-zinc-900 dark:text-zinc-50">
               Sign out

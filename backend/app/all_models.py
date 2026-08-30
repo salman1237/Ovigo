@@ -11,7 +11,9 @@ in both.
 from app.modules.admin import models as _admin_models  # noqa: F401
 from app.modules.bookings import models as _bookings_models  # noqa: F401
 from app.modules.commissions import models as _commissions_models  # noqa: F401
+from app.modules.disputes import models as _disputes_models  # noqa: F401
 from app.modules.locations import models as _locations_models  # noqa: F401
+from app.modules.notifications import models as _notifications_models  # noqa: F401
 from app.modules.partners import models as _partners_models  # noqa: F401
 from app.modules.payments import models as _payments_models  # noqa: F401
 from app.modules.profiles import models as _profiles_models  # noqa: F401

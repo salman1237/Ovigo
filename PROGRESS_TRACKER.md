@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-08-30 (Sprint 7-8 complete — Phase 1 MVP feature-complete pending Sprint 9 polish)_
+_Last updated: 2026-08-30 (Sprint 9 complete — Phase 1 MVP fully built)_
 
 ## Infrastructure & deployment status
 
@@ -109,11 +109,16 @@ Partner verification documents (Sprint 3-4) still use Postgres `bytea`, not R2 �
 
 | Task | Status |
 |---|---|
-| Super Admin dashboard: bookings, payments, disputes overview | Not started |
-| Basic notification system (email + in-app) | Not started |
-| Security hardening, rate limiting, input validation | Not started |
-| Performance optimization, caching | Not started |
-| UAT, bug fixes, deployment | Not started |
+| Super Admin dashboard: bookings, payments, disputes overview | Done — `GET /api/v1/admin/bookings` and `/admin/payments` (status-filterable, 200-row cap), plus a full disputes module (see below); frontend `/admin/bookings`, `/admin/payments`, `/admin/disputes` |
+| Basic dispute system (MVP AC #16) | Done — new `disputes` module: a traveler opens a dispute against their own booking (one open dispute per booking at a time), an admin resolves it as refunded or rejected with a note. A refund resolution flips the booking's `EscrowTransaction` to `REFUNDED` (a bookkeeping flag, same trade-off as escrow release generally — no real payout integration yet, that's Phase 2). Both the raising traveler and every admin get a notification. Frontend: a "Report a problem" section on `/bookings/[id]`, admin resolve UI on `/admin/disputes`. |
+| Basic notification system (email + in-app) | In-app done — new `notifications` module (13 event types) wired into ~10 real call sites: role/document approve+reject, tour/property approve+reject, booking confirmed/cancelled/completed, payment failed, new review, dispute opened/resolved. Bell icon + dropdown in the header (`NotificationBell`, polls unread count every 30s). Email/SMS delivery deferred — no provider credential (SendGrid/SES/Twilio) available; `notifications/service.py`'s `notify()` is written so adding a delivery branch later doesn't touch any of the call sites. |
+| Security hardening, rate limiting, input validation | Done — `slowapi` rate limiting on auth endpoints (register/login: 10/min, OTP request: 5/min, keyed by IP, in-memory store) with a proper 429 response; baseline security headers middleware (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS in production) on every response. Input validation was already Pydantic-enforced throughout since Sprint 1-2. |
+| Performance optimization, caching | Done — added `index=True` to 10 previously-unindexed hot FK columns (`bookings.user_id`, `booking_items.booking_id`, `payments.booking_id`, `reviews.tour_id`/`property_id`, `commissions.partner_role_id`, `locations.parent_id`, `location_tags.location_id`, `tour_departures.tour_id`, `room_types.property_id`); a minimal in-process TTL cache (`app/core/cache.py`) on `/locations/hierarchy` (5 min, invalidated on any admin location write) and `/search/destinations` (2 min, TTL-only) — measured 2.37s → 7.5ms and 1.15s → 5.7ms respectively on cache hit. |
+| UAT, bug fixes, deployment | Done — see Verified section below |
+
+**New tables:** `notifications`, `disputes` (2 migrations). **New indexes:** 1 migration, 10 indexes, no schema shape change. All three applied to Neon and verified.
+
+**Verified:** every new backend piece was smoke-tested against the real Neon DB (not just unit-style mocks) — notifications: full CRUD/mark-read/mark-all-read cycle directly, plus an end-to-end HTTP flow (register → admin rejects a partner role application → applicant's `/api/v1/notifications` shows the correctly-worded notification). Disputes: open → duplicate-open-rejected (409) → admin lists it → admin resolves with refund → escrow flips to `REFUNDED` → traveler notified → re-resolving an already-resolved dispute correctly rejected (409); plus HTTP-level auth/ownership checks (404 on someone else's booking, 403 on the admin endpoint without an admin role). Admin overview: real booking+payment rows created directly in Neon, fetched through `/api/v1/admin/bookings` and `/admin/payments` with status filters, fields match. Rate limiting: hammered `/api/v1/auth/register` 12 times in a row — first 10 succeeded (201), 11th and 12th correctly got 429. Security headers: confirmed present on a plain `/health` response. Caching: confirmed both dramatic latency drop on cache hit and immediate invalidation after an admin location write (no stale-tree window). Frontend: `npm run lint` and `npm run build` both clean with all new pages (`/admin/bookings`, `/admin/payments`, `/admin/disputes`) and the notification bell included in the production build. All test data (throwaway users/bookings/payments) cleaned up from Neon after each check — nothing left behind in production data.
 
 ## Phase 2 — Customization & Network
 
@@ -146,8 +151,8 @@ Not started. See technical document §8, Phase 4.
 | 13 | A Local Expert can add a Guide under supervision | Pending |
 | 14 | A Local Expert can add a referred business | Pending |
 | 15 | Referral attribution is stored | Pending |
-| 16 | Admin can manage disputes, refunds and payout holds | Pending |
+| 16 | Admin can manage disputes, refunds and payout holds | Done (basic) — a traveler opens a dispute, an admin resolves it as refunded (flips escrow to `REFUNDED`) or rejected with a note. No payout-hold mechanism yet since there's no payout/disbursement system at all in Phase 1 (that's Phase 2 "Financial Engine") — nothing to "hold" against. |
 | 17 | Partners can purchase featured placement | Pending |
 | 18 | Sponsored results are visibly labelled | Pending |
-| 19 | All important Admin actions are audit logged | Done so far (role approve/reject, document verify/reject) — extend as each new admin action lands |
+| 19 | All important Admin actions are audit logged | Done — role approve/reject, document verify/reject, tour/property approve/reject, dispute resolve. Extend as each new admin action lands |
 | 20 | Tour, stay and partner profiles cannot be published without location tags | Done — enforced server-side at submit time for both tours and properties (verified: submitting without a tag returns 409); partner-role profiles don't have a separate "publish" gate yet since they're not publicly browsable pages on their own outside search results |

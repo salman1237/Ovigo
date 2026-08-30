@@ -33,7 +33,9 @@ class Commission(Base):
     booking_item_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("booking_items.id", ondelete="CASCADE"), unique=True
     )
-    partner_role_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("partner_roles.id", ondelete="CASCADE"))
+    partner_role_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("partner_roles.id", ondelete="CASCADE"), index=True
+    )
     gross_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     rate: Mapped[Decimal] = mapped_column(Numeric(5, 4))  # e.g. 0.1000 = 10%
     commission_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))

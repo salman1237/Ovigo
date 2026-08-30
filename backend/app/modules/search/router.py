@@ -3,6 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import cached
 from app.database import get_db
 from app.modules.locations import service as locations_service
 from app.modules.search import service
@@ -39,5 +40,11 @@ async def search_experts(location_slug: str | None = None, db: AsyncSession = De
 
 
 @router.get("/destinations", response_model=list[DestinationSummary])
+@cached("search:destinations", ttl_seconds=120)
 async def get_destinations(db: AsyncSession = Depends(get_db)):
+    """Cached for 2 minutes — listing counts here shift whenever a tour/property is
+    approved, more often than the locations tree changes, hence the shorter TTL
+    than /locations/hierarchy. No write-path invalidation hook (unlike locations):
+    approvals happen in the admin module, and there are enough of them that wiring
+    an invalidation call in wasn't worth it next to just waiting out 2 minutes."""
     return await service.get_destinations(db)

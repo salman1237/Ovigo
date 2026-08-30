@@ -40,7 +40,7 @@ class Location(Base):
     slug: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     type: Mapped[LocationType] = mapped_column(Enum(LocationType, name="location_type"))
     parent_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True
     )
     latitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
     longitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
@@ -67,7 +67,7 @@ class LocationTag(Base):
     entity_type: Mapped[TaggableEntityType] = mapped_column(Enum(TaggableEntityType, name="taggable_entity_type"))
     entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     location_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("locations.id", ondelete="CASCADE")
+        UUID(as_uuid=True), ForeignKey("locations.id", ondelete="CASCADE"), index=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

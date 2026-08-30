@@ -6,12 +6,23 @@ from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.bookings.models import Booking, BookingItem, BookingItemStatus
+from app.modules.notifications import service as notifications_service
+from app.modules.notifications.models import NotificationType
 from app.modules.reviews.models import Review
 from app.modules.reviews.schemas import ReviewCreate
-from app.modules.tours.models import TourDeparture
-from app.modules.users.models import User
+from app.modules.tours.models import Tour, TourDeparture
+from app.modules.users.models import PartnerAccount, PartnerRole, User
 
 _EAGER = (selectinload(Review.reviewer),)
+
+
+async def _user_id_for_partner_role(db: AsyncSession, partner_role_id: uuid.UUID) -> uuid.UUID | None:
+    result = await db.execute(
+        select(PartnerAccount.user_id)
+        .join(PartnerRole, PartnerRole.partner_account_id == PartnerAccount.id)
+        .where(PartnerRole.id == partner_role_id)
+    )
+    return result.scalar_one_or_none()
 
 
 async def create_review(db: AsyncSession, user: User, payload: ReviewCreate) -> Review:
@@ -32,14 +43,29 @@ async def create_review(db: AsyncSession, user: User, payload: ReviewCreate) -> 
 
     tour_id = None
     property_id = None
+    recipient_user_id = None
     if item.tour_departure_id:
-        dep_result = await db.execute(select(TourDeparture.tour_id).where(TourDeparture.id == item.tour_departure_id))
-        tour_id = dep_result.scalar_one_or_none()
+        dep_result = await db.execute(
+            select(TourDeparture.tour_id, Tour.local_expert_role_id, Tour.title)
+            .join(Tour, Tour.id == TourDeparture.tour_id)
+            .where(TourDeparture.id == item.tour_departure_id)
+        )
+        row = dep_result.one_or_none()
+        if row:
+            tour_id, local_expert_role_id, listing_title = row
+            recipient_user_id = await _user_id_for_partner_role(db, local_expert_role_id)
     if item.room_type_id:
-        from app.modules.stays.models import RoomType
+        from app.modules.stays.models import Property, RoomType
 
-        room_result = await db.execute(select(RoomType.property_id).where(RoomType.id == item.room_type_id))
-        property_id = room_result.scalar_one_or_none()
+        room_result = await db.execute(
+            select(RoomType.property_id, Property.host_role_id, Property.name)
+            .join(Property, Property.id == RoomType.property_id)
+            .where(RoomType.id == item.room_type_id)
+        )
+        row = room_result.one_or_none()
+        if row:
+            property_id, host_role_id, listing_title = row
+            recipient_user_id = await _user_id_for_partner_role(db, host_role_id)
 
     review = Review(
         booking_item_id=item.id,
@@ -50,6 +76,16 @@ async def create_review(db: AsyncSession, user: User, payload: ReviewCreate) -> 
         comment=payload.comment,
     )
     db.add(review)
+
+    if recipient_user_id:
+        await notifications_service.notify(
+            db,
+            user_id=recipient_user_id,
+            type=NotificationType.NEW_REVIEW,
+            title="New review received",
+            message=f'{user.full_name} left a {payload.rating}-star review on "{listing_title}".',
+        )
+
     await db.commit()
 
     result = await db.execute(select(Review).where(Review.id == review.id).options(*_EAGER))

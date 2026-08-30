@@ -89,7 +89,7 @@ class TourDeparture(Base):
     __tablename__ = "tour_departures"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tour_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tours.id", ondelete="CASCADE"))
+    tour_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tours.id", ondelete="CASCADE"), index=True)
     departure_date: Mapped[date] = mapped_column(Date)
     available_seats: Mapped[int] = mapped_column(Integer)
     price_override: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)

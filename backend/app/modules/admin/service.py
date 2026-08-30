@@ -7,13 +7,24 @@ from sqlalchemy.orm import selectinload
 
 from app.core import audit
 from app.core.exceptions import ConflictError, NotFoundError
-from app.modules.admin.schemas import AdminPartnerRoleRead, AdminPropertyRead, AdminTourRead, AdminUserSummary
+from app.modules.admin.schemas import (
+    AdminBookingRead,
+    AdminPartnerRoleRead,
+    AdminPaymentRead,
+    AdminPropertyRead,
+    AdminTourRead,
+    AdminUserSummary,
+)
+from app.modules.bookings.models import Booking, BookingStatus
+from app.modules.notifications import service as notifications_service
+from app.modules.notifications.models import NotificationType
 from app.modules.partners.models import (
     ApplicationStatus,
     DocumentStatus,
     PartnerDocument,
     PartnerRoleApplication,
 )
+from app.modules.payments.models import Payment, PaymentStatus
 from app.modules.stays.models import Property, PropertyStatus
 from app.modules.tours.models import Tour, TourStatus
 from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleStatus, User
@@ -74,6 +85,13 @@ async def approve_role(db: AsyncSession, admin: User, role_id: uuid.UUID) -> Adm
         latest_application.reviewed_by = admin.id
         latest_application.reviewed_at = datetime.now(timezone.utc)
 
+    await notifications_service.notify(
+        db,
+        user_id=role.partner_account.user_id,
+        type=NotificationType.ROLE_APPROVED,
+        title="Partner role approved",
+        message=f"Your {role.role_type.value.replace('_', ' ')} application has been approved.",
+    )
     await db.commit()
     await audit.record(
         db,
@@ -104,6 +122,13 @@ async def reject_role(
         latest_application.reviewed_at = datetime.now(timezone.utc)
         latest_application.rejection_reason = reason
 
+    await notifications_service.notify(
+        db,
+        user_id=role.partner_account.user_id,
+        type=NotificationType.ROLE_REJECTED,
+        title="Partner role application rejected",
+        message=f"Your {role.role_type.value.replace('_', ' ')} application was rejected: {reason}",
+    )
     await db.commit()
     await audit.record(
         db,
@@ -124,10 +149,27 @@ async def _get_document_or_404(db: AsyncSession, document_id: uuid.UUID) -> Part
     return document
 
 
+async def _get_document_owner_user_id(db: AsyncSession, partner_role_id: uuid.UUID) -> uuid.UUID:
+    result = await db.execute(
+        select(PartnerAccount.user_id)
+        .join(PartnerRole, PartnerRole.partner_account_id == PartnerAccount.id)
+        .where(PartnerRole.id == partner_role_id)
+    )
+    return result.scalar_one()
+
+
 async def verify_document(db: AsyncSession, admin: User, document_id: uuid.UUID) -> PartnerDocument:
     document = await _get_document_or_404(db, document_id)
     document.status = DocumentStatus.VERIFIED
     document.rejection_reason = None
+    owner_user_id = await _get_document_owner_user_id(db, document.partner_role_id)
+    await notifications_service.notify(
+        db,
+        user_id=owner_user_id,
+        type=NotificationType.DOCUMENT_VERIFIED,
+        title="Document verified",
+        message=f"Your {document.document_type.value.replace('_', ' ')} document has been verified.",
+    )
     await db.commit()
     await audit.record(
         db, actor_id=admin.id, action="partner_document.verify", entity_type="partner_document", entity_id=document.id
@@ -142,6 +184,14 @@ async def reject_document(
     document = await _get_document_or_404(db, document_id)
     document.status = DocumentStatus.REJECTED
     document.rejection_reason = reason
+    owner_user_id = await _get_document_owner_user_id(db, document.partner_role_id)
+    await notifications_service.notify(
+        db,
+        user_id=owner_user_id,
+        type=NotificationType.DOCUMENT_REJECTED,
+        title="Document rejected",
+        message=f"Your {document.document_type.value.replace('_', ' ')} document was rejected: {reason}",
+    )
     await db.commit()
     await audit.record(
         db,
@@ -202,6 +252,14 @@ async def approve_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID) -> Adm
     if tour.status != TourStatus.PENDING_REVIEW:
         raise ConflictError(f"Tour is {tour.status.value}, not pending review")
     tour.status = TourStatus.PUBLISHED
+    await notifications_service.notify(
+        db,
+        user_id=tour.local_expert_role.partner_account.user_id,
+        type=NotificationType.LISTING_APPROVED,
+        title="Tour approved",
+        message=f'Your tour "{tour.title}" has been approved and is now published.',
+        link=f"/tours/{tour.id}",
+    )
     await db.commit()
     await audit.record(db, actor_id=admin.id, action="tour.approve", entity_type="tour", entity_id=tour.id)
     return _to_admin_tour_read(tour)
@@ -213,6 +271,13 @@ async def reject_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID, reason:
         raise ConflictError(f"Tour is {tour.status.value}, not pending review")
     tour.status = TourStatus.REJECTED
     tour.rejection_reason = reason
+    await notifications_service.notify(
+        db,
+        user_id=tour.local_expert_role.partner_account.user_id,
+        type=NotificationType.LISTING_REJECTED,
+        title="Tour rejected",
+        message=f'Your tour "{tour.title}" was rejected: {reason}',
+    )
     await db.commit()
     await audit.record(
         db, actor_id=admin.id, action="tour.reject", entity_type="tour", entity_id=tour.id, extra={"reason": reason}
@@ -264,6 +329,14 @@ async def approve_property(db: AsyncSession, admin: User, property_id: uuid.UUID
     if prop.status != PropertyStatus.PENDING_REVIEW:
         raise ConflictError(f"Property is {prop.status.value}, not pending review")
     prop.status = PropertyStatus.PUBLISHED
+    await notifications_service.notify(
+        db,
+        user_id=prop.host_role.partner_account.user_id,
+        type=NotificationType.LISTING_APPROVED,
+        title="Property approved",
+        message=f'Your property "{prop.name}" has been approved and is now published.',
+        link=f"/stays/{prop.id}",
+    )
     await db.commit()
     await audit.record(db, actor_id=admin.id, action="property.approve", entity_type="property", entity_id=prop.id)
     return _to_admin_property_read(prop)
@@ -275,8 +348,43 @@ async def reject_property(db: AsyncSession, admin: User, property_id: uuid.UUID,
         raise ConflictError(f"Property is {prop.status.value}, not pending review")
     prop.status = PropertyStatus.REJECTED
     prop.rejection_reason = reason
+    await notifications_service.notify(
+        db,
+        user_id=prop.host_role.partner_account.user_id,
+        type=NotificationType.LISTING_REJECTED,
+        title="Property rejected",
+        message=f'Your property "{prop.name}" was rejected: {reason}',
+    )
     await db.commit()
     await audit.record(
         db, actor_id=admin.id, action="property.reject", entity_type="property", entity_id=prop.id, extra={"reason": reason}
     )
     return _to_admin_property_read(prop)
+
+
+def _to_admin_booking_read(booking: Booking) -> AdminBookingRead:
+    return AdminBookingRead(
+        id=booking.id,
+        status=booking.status,
+        total_amount=booking.total_amount,
+        currency=booking.currency,
+        created_at=booking.created_at,
+        traveler=AdminUserSummary.model_validate(booking.user),
+        item_count=len(booking.items),
+    )
+
+
+async def list_bookings(db: AsyncSession, status: BookingStatus | None) -> list[AdminBookingRead]:
+    query = select(Booking).options(selectinload(Booking.user), selectinload(Booking.items))
+    if status is not None:
+        query = query.where(Booking.status == status)
+    result = await db.execute(query.order_by(Booking.created_at.desc()).limit(200))
+    return [_to_admin_booking_read(booking) for booking in result.scalars().all()]
+
+
+async def list_payments(db: AsyncSession, status: PaymentStatus | None) -> list[Payment]:
+    query = select(Payment)
+    if status is not None:
+        query = query.where(Payment.status == status)
+    result = await db.execute(query.order_by(Payment.created_at.desc()).limit(200))
+    return list(result.scalars().all())

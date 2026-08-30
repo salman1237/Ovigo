@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.rate_limit import limiter
 from app.core.security import TokenType, create_access_token, decode_token
 from app.database import get_db
 from app.modules.auth import service
@@ -20,14 +21,16 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=TokenPair, status_code=status.HTTP_201_CREATED)
-async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)) -> TokenPair:
+@limiter.limit("10/minute")
+async def register(request: Request, payload: RegisterRequest, db: AsyncSession = Depends(get_db)) -> TokenPair:
     user = await service.register_user(db, payload)
     access_token, refresh_token = service.issue_token_pair(user)
     return TokenPair(access_token=access_token, refresh_token=refresh_token, user=user)
 
 
 @router.post("/login", response_model=TokenPair)
-async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenPair:
+@limiter.limit("10/minute")
+async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenPair:
     user = await service.authenticate_user(db, payload.identifier, payload.password)
     access_token, refresh_token = service.issue_token_pair(user)
     return TokenPair(access_token=access_token, refresh_token=refresh_token, user=user)
@@ -50,7 +53,10 @@ async def logout(current_user: User = Depends(get_current_user)) -> None:
 
 
 @router.post("/verify-email/request")
-async def request_email_otp(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def request_email_otp(
+    request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
     code = await service.generate_otp(db, current_user)
     return {"message": "Verification code generated", "dev_code": code}
 
@@ -66,7 +72,10 @@ async def confirm_email_otp(
 
 
 @router.post("/verify-phone/request")
-async def request_phone_otp(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def request_phone_otp(
+    request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
     code = await service.generate_otp(db, current_user)
     return {"message": "Verification code generated", "dev_code": code}
 

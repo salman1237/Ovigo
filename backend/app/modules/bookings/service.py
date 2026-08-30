@@ -29,6 +29,8 @@ from app.modules.bookings.models import (
     BookingStatusHistory,
 )
 from app.modules.bookings.schemas import BookingCreate, BookingItemCreate
+from app.modules.notifications import service as notifications_service
+from app.modules.notifications.models import NotificationType
 from app.modules.stays.models import AvailabilityCalendar, Property, PropertyStatus, RoomType
 from app.modules.tours.models import Tour, TourDeparture, TourStatus
 from app.modules.users.models import User
@@ -193,6 +195,14 @@ async def _release_and_cancel(db: AsyncSession, booking: Booking, note: str | No
 
     await _add_status_history(db, booking, BookingStatus.CANCELLED, note=note)
     booking.status = BookingStatus.CANCELLED
+    await notifications_service.notify(
+        db,
+        user_id=booking.user_id,
+        type=NotificationType.BOOKING_CANCELLED,
+        title="Booking cancelled",
+        message=note or "Your booking has been cancelled.",
+        link=f"/bookings/{booking.id}",
+    )
 
 
 async def cancel_booking_by_id(db: AsyncSession, booking_id: uuid.UUID, note: str | None = None) -> None:
@@ -239,5 +249,13 @@ async def check_out(db: AsyncSession, user: User, booking_id: uuid.UUID) -> Book
     await _add_status_history(db, booking, BookingStatus.COMPLETED, note="Auto-completed on checkout")
     booking.status = BookingStatus.COMPLETED
     await commissions_service.mark_payable_for_booking(db, booking)
+    await notifications_service.notify(
+        db,
+        user_id=booking.user_id,
+        type=NotificationType.BOOKING_COMPLETED,
+        title="Booking completed",
+        message="Your booking is complete. We'd love to hear about your experience — leave a review!",
+        link=f"/bookings/{booking.id}",
+    )
     await db.commit()
     return await get_own_booking_or_404(db, user, booking_id)

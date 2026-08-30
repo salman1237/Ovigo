@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 
 import { apiClient, ApiError } from "@/lib/api-client";
 import { BOOKING_STATUS_LABELS, type Booking, type BookingItem } from "@/types/booking";
+import type { Dispute } from "@/types/dispute";
 
 export default function BookingDetailPage() {
   return (
@@ -115,6 +116,97 @@ function BookingDetailContent() {
             {booking.guests.map((g) => <li key={g.id}>{g.full_name}{g.age ? ` (${g.age})` : ""}</li>)}
           </ul>
         </div>
+      )}
+
+      {booking.status !== "pending_payment" && <DisputeSection bookingId={booking.id} />}
+    </div>
+  );
+}
+
+function DisputeSection({ bookingId }: { bookingId: string }) {
+  const queryClient = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const { data: disputes } = useQuery({
+    queryKey: ["disputes", "mine"],
+    queryFn: () => apiClient.get<Dispute[]>("/api/v1/disputes", { auth: true }),
+  });
+
+  const dispute = disputes?.find((d) => d.booking_id === bookingId);
+
+  const submit = async () => {
+    if (reason.trim().length < 10) {
+      setError("Please describe the problem in at least 10 characters.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await apiClient.post("/api/v1/disputes", { booking_id: bookingId, reason }, { auth: true });
+      setShowForm(false);
+      setReason("");
+      queryClient.invalidateQueries({ queryKey: ["disputes"] });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to submit dispute");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-6 border-t border-zinc-200 pt-6 dark:border-zinc-800">
+      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Problem with this booking?</h2>
+
+      {dispute ? (
+        <div className="mt-2 rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+          <p className="font-medium text-zinc-900 dark:text-zinc-50">
+            {dispute.status === "open" ? "Dispute under review" : "Dispute resolved"}
+          </p>
+          <p className="mt-1 text-zinc-500">{dispute.reason}</p>
+          {dispute.status === "resolved" && (
+            <p className="mt-2 text-xs text-zinc-500">
+              Outcome: <span className="capitalize font-medium">{dispute.resolution}</span> — {dispute.resolution_note}
+            </p>
+          )}
+        </div>
+      ) : (
+        <>
+          {!showForm && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="mt-2 rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium dark:border-zinc-700"
+            >
+              Report a problem
+            </button>
+          )}
+          {showForm && (
+            <div className="mt-2 flex flex-col gap-2">
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Describe what went wrong with this booking…"
+                rows={3}
+                className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              />
+              {error && <p className="text-xs text-red-600">{error}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={submit}
+                  disabled={busy}
+                  className="rounded-full bg-zinc-900 px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
+                >
+                  Submit
+                </button>
+                <button onClick={() => setShowForm(false)} className="text-xs text-zinc-500">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -1,6 +1,9 @@
 """FastAPI application entrypoint."""
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 import app.all_models  # noqa: F401 — see its docstring: must load before any router.
 # Several service modules build a module-level `selectinload(...)` tuple at import
@@ -13,11 +16,15 @@ import app.all_models  # noqa: F401 — see its docstring: must load before any 
 # router import order stops mattering.
 from app.config import get_settings
 from app.core.exceptions import register_exception_handlers
+from app.core.rate_limit import limiter
 from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
 from app.modules.bookings.router import router as bookings_router
 from app.modules.commissions.router import router as commissions_router
+from app.modules.disputes.router import admin_router as disputes_admin_router
+from app.modules.disputes.router import router as disputes_router
 from app.modules.locations.router import router as locations_router
+from app.modules.notifications.router import router as notifications_router
 from app.modules.partners.router import router as partners_router
 from app.modules.payments.router import router as payments_router
 from app.modules.profiles.router import router as profiles_router
@@ -34,6 +41,26 @@ app = FastAPI(
     description="Local Expert, Host & Stay Booking Platform — backend API",
     version="0.1.0",
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Baseline security headers on every response. This is a browser-facing API
+    consumed by the Next.js frontend, not a page-rendering server, so there's no
+    CSP here — a strict CSP is Next.js's job on its own responses."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    if settings.environment == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    return response
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -57,6 +84,9 @@ app.include_router(bookings_router)
 app.include_router(payments_router)
 app.include_router(commissions_router)
 app.include_router(reviews_router)
+app.include_router(notifications_router)
+app.include_router(disputes_router)
+app.include_router(disputes_admin_router)
 app.include_router(admin_router)
 
 

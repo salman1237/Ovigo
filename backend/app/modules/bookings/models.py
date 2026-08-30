@@ -45,7 +45,7 @@ class Booking(Base):
     __tablename__ = "bookings"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     status: Mapped[BookingStatus] = mapped_column(
         Enum(BookingStatus, name="booking_status"), default=BookingStatus.PENDING_PAYMENT
     )
@@ -57,6 +57,7 @@ class Booking(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    user: Mapped["User"] = relationship()  # noqa: F821
     items: Mapped[list["BookingItem"]] = relationship(back_populates="booking", cascade="all, delete-orphan")
     guests: Mapped[list["BookingGuest"]] = relationship(back_populates="booking", cascade="all, delete-orphan")
     status_history: Mapped[list["BookingStatusHistory"]] = relationship(
@@ -68,7 +69,9 @@ class BookingItem(Base):
     __tablename__ = "booking_items"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    booking_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("bookings.id", ondelete="CASCADE"))
+    booking_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("bookings.id", ondelete="CASCADE"), index=True
+    )
     item_type: Mapped[BookingItemType] = mapped_column(Enum(BookingItemType, name="booking_item_type"))
     status: Mapped[BookingItemStatus] = mapped_column(
         Enum(BookingItemStatus, name="booking_item_status"), default=BookingItemStatus.CONFIRMED

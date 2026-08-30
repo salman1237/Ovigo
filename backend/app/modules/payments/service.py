@@ -22,6 +22,8 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.bookings import service as bookings_service
 from app.modules.bookings.models import Booking, BookingStatus, BookingStatusHistory
 from app.modules.commissions import service as commissions_service
+from app.modules.notifications import service as notifications_service
+from app.modules.notifications.models import NotificationType
 from app.modules.payments.models import EscrowTransaction, Payment, PaymentStatus
 from app.modules.users.models import User
 
@@ -96,6 +98,14 @@ async def _confirm_payment(db: AsyncSession, payment: Payment, val_id: str, vali
     booking.status = BookingStatus.CONFIRMED
     db.add(EscrowTransaction(booking_id=booking.id, amount=booking.total_amount))
     await commissions_service.create_commissions_for_booking(db, booking)
+    await notifications_service.notify(
+        db,
+        user_id=booking.user_id,
+        type=NotificationType.BOOKING_CONFIRMED,
+        title="Booking confirmed",
+        message="Your payment was successful and your booking is now confirmed.",
+        link=f"/bookings/{booking.id}",
+    )
     await db.commit()
 
 
@@ -111,6 +121,14 @@ async def handle_ipn(db: AsyncSession, form: dict) -> None:
         raise NotFoundError("Unknown transaction")
 
     if status not in ("VALID", "VALIDATED") or not val_id:
+        await notifications_service.notify(
+            db,
+            user_id=payment.booking.user_id,
+            type=NotificationType.PAYMENT_FAILED,
+            title="Payment unsuccessful",
+            message="Your payment could not be confirmed and the booking hold has been released.",
+            link=f"/bookings/{payment.booking_id}",
+        )
         await bookings_service.cancel_booking_by_id(db, payment.booking_id, note=f"Payment {status or 'failed'} (IPN)")
         payment.status = PaymentStatus.FAILED
         await db.commit()
@@ -140,5 +158,13 @@ async def handle_fail_or_cancel(db: AsyncSession, tran_id: str, reason: str) -> 
     if payment.status == PaymentStatus.VALIDATED:
         return  # already confirmed via another path — don't cancel a paid booking
     payment.status = PaymentStatus.FAILED if reason == "fail" else PaymentStatus.CANCELLED
+    await notifications_service.notify(
+        db,
+        user_id=payment.booking.user_id,
+        type=NotificationType.PAYMENT_FAILED,
+        title="Payment unsuccessful",
+        message=f"Your payment was {reason}ed and the booking hold has been released.",
+        link=f"/bookings/{payment.booking_id}",
+    )
     await bookings_service.cancel_booking_by_id(db, payment.booking_id, note=f"Payment {reason}")
     await db.commit()

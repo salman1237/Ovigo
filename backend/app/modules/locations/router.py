@@ -4,11 +4,14 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import cached, invalidate
 from app.core.exceptions import NotFoundError
 from app.core.permissions import require_admin
 from app.database import get_db
 from app.modules.locations.models import Location
 from app.modules.locations.schemas import LocationCreate, LocationNode, LocationRead, LocationUpdate
+
+_HIERARCHY_CACHE_KEY = "locations:hierarchy"
 
 router = APIRouter(prefix="/api/v1/locations", tags=["locations"])
 
@@ -32,6 +35,7 @@ async def list_locations(
 
 
 @router.get("/hierarchy", response_model=list[LocationNode])
+@cached(_HIERARCHY_CACHE_KEY, ttl_seconds=300)
 async def get_hierarchy(db: AsyncSession = Depends(get_db)) -> list[LocationNode]:
     """Full location tree, rooted at every top-level (parent-less) location.
 
@@ -39,6 +43,12 @@ async def get_hierarchy(db: AsyncSession = Depends(get_db)) -> list[LocationNode
     directly — writing to that ORM relationship attribute triggers SQLAlchemy's lazy-load
     machinery (to diff the current collection state) even when just overwriting it, which
     fails outside an active async greenlet.
+
+    Cached for 5 minutes (see app/core/cache.py) — this walks the entire locations
+    table on every call and is hit on effectively every page load (destination
+    pickers, search filters), but locations change at admin-edit frequency, not
+    per-request frequency. Admin writes below also invalidate it immediately so
+    edits don't wait out the TTL.
     """
     result = await db.execute(select(Location))
     all_locations = list(result.scalars().all())
@@ -73,6 +83,7 @@ async def create_location(payload: LocationCreate, db: AsyncSession = Depends(ge
     db.add(location)
     await db.commit()
     await db.refresh(location)
+    invalidate(_HIERARCHY_CACHE_KEY)
     return location
 
 
@@ -90,6 +101,7 @@ async def update_location(
         setattr(location, field, value)
     await db.commit()
     await db.refresh(location)
+    invalidate(_HIERARCHY_CACHE_KEY)
     return location
 
 
@@ -98,6 +110,7 @@ async def delete_location(location_id: uuid.UUID, db: AsyncSession = Depends(get
     location = await _get_location_or_404(db, location_id)
     await db.delete(location)
     await db.commit()
+    invalidate(_HIERARCHY_CACHE_KEY)
 
 
 @router.get("/{location_id}/children", response_model=list[LocationRead])
