@@ -32,22 +32,28 @@ async def list_locations(
 
 
 @router.get("/hierarchy", response_model=list[LocationNode])
-async def get_hierarchy(db: AsyncSession = Depends(get_db)) -> list[Location]:
-    """Full location tree, rooted at every top-level (parent-less) location."""
+async def get_hierarchy(db: AsyncSession = Depends(get_db)) -> list[LocationNode]:
+    """Full location tree, rooted at every top-level (parent-less) location.
+
+    Builds plain LocationNode objects rather than assigning into `Location.children`
+    directly — writing to that ORM relationship attribute triggers SQLAlchemy's lazy-load
+    machinery (to diff the current collection state) even when just overwriting it, which
+    fails outside an active async greenlet.
+    """
     result = await db.execute(select(Location))
     all_locations = list(result.scalars().all())
     by_parent: dict[uuid.UUID | None, list[Location]] = {}
     for loc in all_locations:
         by_parent.setdefault(loc.parent_id, []).append(loc)
 
-    def attach_children(loc: Location) -> Location:
-        loc.children = by_parent.get(loc.id, [])
-        for child in loc.children:
-            attach_children(child)
-        return loc
+    def build_node(loc: Location) -> LocationNode:
+        return LocationNode(
+            **LocationRead.model_validate(loc).model_dump(),
+            children=[build_node(child) for child in by_parent.get(loc.id, [])],
+        )
 
     roots = by_parent.get(None, [])
-    return [attach_children(root) for root in roots]
+    return [build_node(root) for root in roots]
 
 
 @router.get("/search", response_model=list[LocationRead])
