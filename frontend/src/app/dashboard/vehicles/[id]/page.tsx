@@ -5,6 +5,11 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 
 import { LocationPicker } from "@/components/shared/LocationPicker";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import type { Location } from "@/types/location";
@@ -37,7 +42,7 @@ export default function VehicleEditPage() {
     }
   };
 
-  if (isLoading || !vehicle) return <p className="px-6 py-12 text-sm text-zinc-400">Loading…</p>;
+  if (isLoading || !vehicle) return <Spinner />;
 
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
@@ -47,33 +52,30 @@ export default function VehicleEditPage() {
           <p className="text-sm text-zinc-500">{VEHICLE_STATUS_LABELS[vehicle.status]} · {formatMoney(vehicle.price_per_day)}/day</p>
         </div>
         {(vehicle.status === "draft" || vehicle.status === "rejected") && (
-          <button
-            onClick={() => run(() => apiClient.post(`/api/v1/vehicles/${id}/submit`, undefined, { auth: true }))}
-            className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-          >
+          <Button onClick={() => run(() => apiClient.post(`/api/v1/vehicles/${id}/submit`, undefined, { auth: true }))}>
             Submit for review
-          </button>
+          </Button>
         )}
       </div>
 
       {vehicle.rejection_reason && (
-        <p className="mt-2 rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        <p className="mt-2 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           Rejected: {vehicle.rejection_reason}
         </p>
       )}
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
       <Section title="Assigned Driver">
-        <select
+        <Select
           value={vehicle.assigned_driver_id ?? ""}
           onChange={(e) => run(() => apiClient.put(`/api/v1/vehicles/${id}`, { assigned_driver_id: e.target.value || null }, { auth: true }))}
-          className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          className="w-auto"
         >
           <option value="">No driver assigned</option>
           {(drivers ?? []).map((d) => (
             <option key={d.id} value={d.id}>{d.full_name} — {d.license_number}</option>
           ))}
-        </select>
+        </Select>
         <p className="mt-1 text-xs text-zinc-500">
           Manage your driver roster from the &quot;My Drivers&quot; page.
         </p>
@@ -92,10 +94,10 @@ export default function VehicleEditPage() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <Card className="mt-6">
       <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{title}</h2>
       <div className="mt-3">{children}</div>
-    </div>
+    </Card>
   );
 }
 
@@ -104,17 +106,19 @@ function LocationsSection({ vehicleId, run }: { vehicleId: string; run: (fn: () 
   return (
     <>
       <LocationPicker selected={locations} onChange={setLocations} />
-      <button
+      <Button
+        size="sm"
+        variant="secondary"
         onClick={() =>
           run(() =>
             apiClient.post(`/api/v1/vehicles/${vehicleId}/locations`, { location_ids: locations.map((l) => l.id) }, { auth: true })
           )
         }
         disabled={locations.length === 0}
-        className="mt-2 rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
+        className="mt-2"
       >
         Save destinations
-      </button>
+      </Button>
     </>
   );
 }
@@ -126,13 +130,15 @@ function AvailabilitySection({ vehicleId, run }: { vehicleId: string; run: (fn: 
 
   return (
     <div className="flex flex-wrap items-end gap-2">
-      <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-      <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-      <select value={isAvailable ? "yes" : "no"} onChange={(e) => setIsAvailable(e.target.value === "yes")} className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+      <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+      <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+      <Select value={isAvailable ? "yes" : "no"} onChange={(e) => setIsAvailable(e.target.value === "yes")} className="w-auto">
         <option value="yes">Available</option>
         <option value="no">Unavailable</option>
-      </select>
-      <button
+      </Select>
+      <Button
+        size="sm"
+        variant="secondary"
         onClick={() =>
           run(() =>
             apiClient.put(
@@ -143,10 +149,9 @@ function AvailabilitySection({ vehicleId, run }: { vehicleId: string; run: (fn: 
           )
         }
         disabled={!startDate || !endDate}
-        className="rounded-full border border-zinc-300 px-3 py-1 text-xs disabled:opacity-50 dark:border-zinc-700"
       >
         Set availability
-      </button>
+      </Button>
     </div>
   );
 }

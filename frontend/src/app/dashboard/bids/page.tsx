@@ -3,6 +3,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
+import { Spinner } from "@/components/ui/Spinner";
+import { Textarea } from "@/components/ui/Textarea";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { BID_STATUS_LABELS, CustomTourRequest, ItineraryDay, TourBid } from "@/types/bidding";
@@ -55,7 +61,7 @@ export default function ExpertBidsPage() {
             onClick={() => setTab(t)}
             className={`rounded-full px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
               tab === t
-                ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                ? "bg-gradient-to-r from-primary-600 to-indigo-600 text-white shadow-md shadow-primary-600/20"
                 : "border border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
             }`}
           >
@@ -66,9 +72,9 @@ export default function ExpertBidsPage() {
 
       {tab === "eligible" && (
         <div className="mt-6 flex flex-col gap-4">
-          {eligibleLoading && <p className="text-sm text-zinc-400">Loading…</p>}
+          {eligibleLoading && <Spinner />}
           {!eligibleLoading && (eligible ?? []).length === 0 && (
-            <p className="text-sm text-zinc-400">No open requests match your tagged destinations right now.</p>
+            <EmptyState title="No open requests" description="No requests match your tagged destinations right now." />
           )}
           {(eligible ?? []).map((r) => (
             <RequestCard key={r.id} request={r} onBidSubmitted={refetch} />
@@ -78,9 +84,9 @@ export default function ExpertBidsPage() {
 
       {tab === "mine" && (
         <div className="mt-6 flex flex-col gap-3">
-          {myBidsLoading && <p className="text-sm text-zinc-400">Loading…</p>}
+          {myBidsLoading && <Spinner />}
           {!myBidsLoading && (myBids ?? []).length === 0 && (
-            <p className="text-sm text-zinc-400">You haven&apos;t placed any bids yet.</p>
+            <EmptyState title="No bids yet" description="You haven't placed any bids yet." />
           )}
           {(myBids ?? []).map((bid) => (
             <MyBidCard key={bid.id} bid={bid} onChange={refetch} />
@@ -128,7 +134,7 @@ function RequestCard({ request, onBidSubmitted }: { request: CustomTourRequest; 
   };
 
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <Card>
       <h3 className="font-medium text-zinc-900 dark:text-zinc-50">{request.title}</h3>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{request.description}</p>
       <p className="mt-1 text-xs text-zinc-500">
@@ -139,67 +145,38 @@ function RequestCard({ request, onBidSubmitted }: { request: CustomTourRequest; 
       </p>
 
       {!showForm && (
-        <button
-          onClick={() => setShowForm(true)}
-          className="mt-3 rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium dark:border-zinc-700"
-        >
+        <Button size="sm" variant="secondary" onClick={() => setShowForm(true)} className="mt-3">
           Place a bid
-        </button>
+        </Button>
       )}
 
       {showForm && (
         <div className="mt-3 flex flex-col gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-          <input
-            type="number"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            placeholder="Your price (৳)"
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          />
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Message to the traveler (optional)"
-            rows={2}
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          />
+          <Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Your price (৳)" />
+          <Textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Message to the traveler (optional)" rows={2} />
           <p className="text-xs font-medium text-zinc-500">Itinerary</p>
           {itinerary.map((day, i) => (
             <div key={i} className="flex gap-2">
               <span className="mt-2 text-xs text-zinc-400">Day {day.day_number}</span>
-              <input
-                value={day.title}
-                onChange={(e) => updateDay(i, "title", e.target.value)}
-                placeholder="Title"
-                className="flex-1 rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-              />
-              <input
-                value={day.description ?? ""}
-                onChange={(e) => updateDay(i, "description", e.target.value)}
-                placeholder="Details (optional)"
-                className="flex-1 rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-              />
+              <Input value={day.title} onChange={(e) => updateDay(i, "title", e.target.value)} placeholder="Title" className="flex-1" />
+              <Input value={day.description ?? ""} onChange={(e) => updateDay(i, "description", e.target.value)} placeholder="Details (optional)" className="flex-1" />
             </div>
           ))}
-          <button onClick={addDay} type="button" className="self-start text-xs text-zinc-500 underline">
+          <button onClick={addDay} type="button" className="self-start text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
             + Add another day
           </button>
           {error && <p className="text-xs text-red-600">{error}</p>}
           <div className="flex gap-2">
-            <button
-              onClick={submit}
-              disabled={busy}
-              className="rounded-full bg-zinc-900 px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
-            >
+            <Button size="sm" onClick={submit} loading={busy}>
               Submit bid
-            </button>
-            <button onClick={() => setShowForm(false)} className="text-xs text-zinc-500">
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setShowForm(false)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -221,22 +198,18 @@ function MyBidCard({ bid, onChange }: { bid: TourBid; onChange: () => void }) {
   };
 
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <Card>
       <div className="flex items-center justify-between">
-        <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(bid.price)}</span>
+        <span className="text-lg font-semibold text-primary-600 dark:text-primary-400">{formatMoney(bid.price)}</span>
         <span className="text-xs capitalize text-zinc-500">{BID_STATUS_LABELS[bid.status]}</span>
       </div>
       {bid.message && <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{bid.message}</p>}
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
       {bid.status === "pending" && (
-        <button
-          onClick={withdraw}
-          disabled={busy}
-          className="mt-2 rounded-full border border-red-300 px-3 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400"
-        >
+        <Button size="sm" variant="destructive" onClick={withdraw} loading={busy} className="mt-2">
           Withdraw
-        </button>
+        </Button>
       )}
-    </div>
+    </Card>
   );
 }

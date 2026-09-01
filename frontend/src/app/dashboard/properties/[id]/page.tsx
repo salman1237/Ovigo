@@ -7,6 +7,12 @@ import { useState } from "react";
 import { BadgeApplications } from "@/components/shared/BadgeApplications";
 import { ImageGallery } from "@/components/shared/ImageGallery";
 import { LocationPicker } from "@/components/shared/LocationPicker";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import type { Location } from "@/types/location";
@@ -36,27 +42,24 @@ export default function PropertyEditPage() {
     }
   };
 
-  if (isLoading || !property) return <p className="px-6 py-12 text-sm text-zinc-400">Loading…</p>;
+  if (isLoading || !property) return <Spinner />;
 
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{property.name}</h1>
-          <p className="text-sm text-zinc-500">{property.status.replace("_", " ")}</p>
+          <p className="text-sm capitalize text-zinc-500">{property.status.replace("_", " ")}</p>
         </div>
         {(property.status === "draft" || property.status === "rejected") && (
-          <button
-            onClick={() => run(() => apiClient.post(`/api/v1/properties/${id}/submit`, undefined, { auth: true }))}
-            className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-          >
+          <Button onClick={() => run(() => apiClient.post(`/api/v1/properties/${id}/submit`, undefined, { auth: true }))}>
             Submit for review
-          </button>
+          </Button>
         )}
       </div>
 
       {property.rejection_reason && (
-        <p className="mt-2 rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        <p className="mt-2 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           Rejected: {property.rejection_reason}
         </p>
       )}
@@ -96,10 +99,10 @@ export default function PropertyEditPage() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <Card className="mt-6">
       <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{title}</h2>
       <div className="mt-3">{children}</div>
-    </div>
+    </Card>
   );
 }
 
@@ -108,17 +111,19 @@ function LocationsSection({ propertyId, run }: { propertyId: string; run: (fn: (
   return (
     <>
       <LocationPicker selected={locations} onChange={setLocations} />
-      <button
+      <Button
+        size="sm"
+        variant="secondary"
         onClick={() =>
           run(() =>
             apiClient.post(`/api/v1/properties/${propertyId}/locations`, { location_ids: locations.map((l) => l.id) }, { auth: true })
           )
         }
         disabled={locations.length === 0}
-        className="mt-2 rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
+        className="mt-2"
       >
         Save destinations
-      </button>
+      </Button>
     </>
   );
 }
@@ -141,26 +146,19 @@ function AmenitiesSection({ property, run }: { property: Property; run: (fn: () 
     <>
       <div className="flex flex-wrap gap-2">
         {ALL_AMENITIES.map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => toggle(key)}
-            className={`rounded-full border px-3 py-1 text-xs ${
-              selected.has(key)
-                ? "border-emerald-600 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-                : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
-            }`}
-          >
-            {AMENITY_LABELS[key]}
+          <button key={key} type="button" onClick={() => toggle(key)}>
+            <Badge variant={selected.has(key) ? "success" : "neutral"}>{AMENITY_LABELS[key]}</Badge>
           </button>
         ))}
       </div>
-      <button
+      <Button
+        size="sm"
+        variant="secondary"
         onClick={() => run(() => apiClient.put(`/api/v1/properties/${property.id}/amenities`, { amenities: Array.from(selected) }, { auth: true }))}
-        className="mt-2 rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium dark:border-zinc-700"
+        className="mt-2"
       >
         Save amenities
-      </button>
+      </Button>
     </>
   );
 }
@@ -179,7 +177,7 @@ function RoomTypesSection({ property, run }: { property: Property; run: (fn: () 
             <span>{rt.name} — up to {rt.max_occupancy} guests, {formatMoney(rt.base_price)}/night, {rt.total_units} unit(s)</span>
             <button
               onClick={() => run(() => apiClient.delete(`/api/v1/properties/${property.id}/room-types/${rt.id}`, { auth: true }))}
-              className="text-xs text-red-600"
+              className="text-xs font-medium text-red-600 hover:text-red-700"
             >
               Remove
             </button>
@@ -187,11 +185,13 @@ function RoomTypesSection({ property, run }: { property: Property; run: (fn: () 
         ))}
       </ul>
       <div className="mt-2 flex flex-wrap gap-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Room name" className="flex-1 rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-        <input type="number" min={1} value={maxOccupancy} onChange={(e) => setMaxOccupancy(Number(e.target.value))} placeholder="Max guests" className="w-24 rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-        <input value={basePrice} onChange={(e) => setBasePrice(e.target.value)} placeholder="Price/night" className="w-24 rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-        <input type="number" min={1} value={totalUnits} onChange={(e) => setTotalUnits(Number(e.target.value))} placeholder="Units" className="w-20 rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-        <button
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Room name" className="flex-1" />
+        <Input type="number" min={1} value={maxOccupancy} onChange={(e) => setMaxOccupancy(Number(e.target.value))} placeholder="Max guests" className="w-28" />
+        <Input value={basePrice} onChange={(e) => setBasePrice(e.target.value)} placeholder="Price/night" className="w-28" />
+        <Input type="number" min={1} value={totalUnits} onChange={(e) => setTotalUnits(Number(e.target.value))} placeholder="Units" className="w-24" />
+        <Button
+          size="sm"
+          variant="secondary"
           onClick={() => {
             run(() =>
               apiClient.post(
@@ -204,10 +204,9 @@ function RoomTypesSection({ property, run }: { property: Property; run: (fn: () 
             setBasePrice("");
           }}
           disabled={!name || !basePrice}
-          className="rounded-full border border-zinc-300 px-3 py-1 text-xs disabled:opacity-50 dark:border-zinc-700"
         >
           Add
-        </button>
+        </Button>
       </div>
     </>
   );
@@ -225,15 +224,17 @@ function CalendarSection({ property, run }: { property: Property; run: (fn: () =
 
   return (
     <div className="flex flex-wrap items-end gap-2">
-      <select value={roomTypeId} onChange={(e) => setRoomTypeId(e.target.value)} className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+      <Select value={roomTypeId} onChange={(e) => setRoomTypeId(e.target.value)} className="w-auto">
         {property.room_types.map((rt) => (
           <option key={rt.id} value={rt.id}>{rt.name}</option>
         ))}
-      </select>
-      <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-      <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-      <input type="number" min={0} value={units} onChange={(e) => setUnits(Number(e.target.value))} placeholder="Units available" className="w-32 rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-      <button
+      </Select>
+      <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+      <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+      <Input type="number" min={0} value={units} onChange={(e) => setUnits(Number(e.target.value))} placeholder="Units available" className="w-36" />
+      <Button
+        size="sm"
+        variant="secondary"
         onClick={() =>
           run(() =>
             apiClient.put(
@@ -244,10 +245,9 @@ function CalendarSection({ property, run }: { property: Property; run: (fn: () =
           )
         }
         disabled={!startDate || !endDate}
-        className="rounded-full border border-zinc-300 px-3 py-1 text-xs disabled:opacity-50 dark:border-zinc-700"
       >
         Set availability
-      </button>
+      </Button>
     </div>
   );
 }
