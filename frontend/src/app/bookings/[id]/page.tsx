@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams, useParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
+import { MessageButton } from "@/components/shared/MessageButton";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { BOOKING_STATUS_LABELS, type Booking, type BookingItem } from "@/types/booking";
@@ -237,6 +238,17 @@ function BookingItemCard({ item }: { item: BookingItem }) {
         {item.check_in_date && ` · ${item.check_in_date} → ${item.check_out_date}`}
       </p>
       <p className="mt-1 text-xs capitalize text-zinc-400">{item.status.replace("_", " ")}</p>
+
+      {item.status !== "cancelled" && (
+        <div className="mt-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+          <MessageButton
+            contextType="booking_item"
+            contextId={item.id}
+            label="Message about this"
+            className="rounded-full border border-zinc-300 px-4 py-1 text-xs dark:border-zinc-700"
+          />
+        </div>
+      )}
 
       {item.status === "completed" && !submitted && (
         <div className="mt-2 flex flex-col gap-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">

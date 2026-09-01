@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
+import { MessageButton } from "@/components/shared/MessageButton";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
@@ -32,6 +33,10 @@ export default function VehicleDetailPage() {
         {vehicle.with_driver && " · comes with a driver"}
       </p>
       {vehicle.description && <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">{vehicle.description}</p>}
+
+      <div className="mt-3">
+        <MessageButton contextType="vehicle" contextId={vehicle.id} label="Message this Rent-a-Car partner" className="rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium dark:border-zinc-700" />
+      </div>
 
       <BookVehicleSection vehicle={vehicle} />
     </div>

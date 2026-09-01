@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import Link from "next/link";
 
+import { MessageButton } from "@/components/shared/MessageButton";
 import { ReviewsList } from "@/components/shared/ReviewsList";
 import { TrustBadges } from "@/components/shared/TrustBadges";
 import { apiClient, ApiError } from "@/lib/api-client";
@@ -31,8 +32,9 @@ export default function StayDetailPage() {
     <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
       <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{property.name}</h1>
       <p className="mt-1 text-sm text-zinc-500">{PROPERTY_TYPE_LABELS[property.property_type]}</p>
-      <div className="mt-3">
+      <div className="mt-3 flex items-center gap-3">
         <TrustBadges entityType="property" entityId={property.id} />
+        <MessageButton contextType="property" contextId={property.id} label="Message this Host" className="rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium dark:border-zinc-700" />
       </div>
       {property.description && <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">{property.description}</p>}
 

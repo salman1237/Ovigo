@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -7,12 +8,21 @@ import { apiClient } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCartStore } from "@/stores/cart-store";
 import { NotificationBell } from "@/components/shared/NotificationBell";
+import type { ChatThread } from "@/types/chat";
 
 export function Header() {
   const user = useAuthStore((s) => s.user);
   const clearSession = useAuthStore((s) => s.clearSession);
   const cartCount = useCartStore((s) => s.items.length);
   const router = useRouter();
+
+  const { data: chatThreads } = useQuery({
+    queryKey: ["chat", "threads"],
+    queryFn: () => apiClient.get<ChatThread[]>("/api/v1/chat/threads", { auth: true }),
+    enabled: !!user,
+    refetchInterval: 30_000,
+  });
+  const unreadChatCount = (chatThreads ?? []).reduce((sum, t) => sum + t.unread_count, 0);
 
   const isAdmin = user?.system_role === "admin" || user?.system_role === "super_admin";
 
@@ -48,6 +58,9 @@ export function Header() {
             </Link>
             <Link href="/cart" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
               Cart{cartCount > 0 && ` (${cartCount})`}
+            </Link>
+            <Link href="/chat" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+              Messages{unreadChatCount > 0 && ` (${unreadChatCount})`}
             </Link>
             <Link href="/custom-requests" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
               Custom Trip

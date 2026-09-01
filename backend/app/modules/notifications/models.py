@@ -42,6 +42,8 @@ class NotificationType(str, enum.Enum):
     BADGE_APPROVED = "badge_approved"
     BADGE_REJECTED = "badge_rejected"
     BADGE_AUTO_AWARDED = "badge_auto_awarded"
+    NEW_CHAT_MESSAGE = "new_chat_message"
+    CHAT_MESSAGE_REPORTED = "chat_message_reported"
 
 
 class Notification(Base):

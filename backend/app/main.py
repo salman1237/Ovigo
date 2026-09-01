@@ -26,6 +26,8 @@ from app.modules.bidding.router import router as bidding_router
 from app.modules.bookings.router import router as bookings_router
 from app.modules.business_network.router import admin_router as business_network_admin_router
 from app.modules.business_network.router import router as business_network_router
+from app.modules.chat.router import admin_router as chat_admin_router
+from app.modules.chat.router import router as chat_router
 from app.modules.commissions.router import admin_router as commissions_admin_router
 from app.modules.commissions.router import router as commissions_router
 from app.modules.disputes.router import admin_router as disputes_admin_router
@@ -109,6 +111,8 @@ app.include_router(badges_router)
 app.include_router(badges_admin_router)
 app.include_router(reviews_router)
 app.include_router(notifications_router)
+app.include_router(chat_router)
+app.include_router(chat_admin_router)
 app.include_router(disputes_router)
 app.include_router(disputes_admin_router)
 app.include_router(admin_router)
