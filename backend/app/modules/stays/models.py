@@ -1,14 +1,37 @@
-"""Properties (stays), room types, and per-date availability.
+"""Properties (stays), room types, per-date availability, and rate plans.
 
 Deliberate simplifications vs. the technical document's full schema (documented so
 they're easy to revisit): `property_policies` is embedded as columns on `properties`
 rather than a separate table — it's a genuine 1:1 relationship with no independent
 lifecycle, so splitting it buys nothing yet. `availability_calendars` doubles as the
 inventory ledger (`available_units` per room type per date) and carries an optional
-per-date `price_override` — a full separate `inventory` ledger and `pricing_rules`
-rate-plan engine (seasonal/weekend/corporate rates) are Phase 3 "Advanced Pricing
-Engine" work per the technical document's own phase plan; this is enough to search,
-display, and (in Sprint 7-8) book against.
+per-date `price_override`, which stays the single highest-priority override — a host
+who's manually set a specific date's price already gets exactly what they asked for,
+before any `RatePlan` is even considered.
+
+Sprint 19-20 ("Advanced Pricing Engine" in the technical document's own phase plan)
+adds `RatePlan`: named, conditional adjustments to `RoomType.base_price` (seasonal
+date ranges, weekend upcharges, early-bird and group discounts). Deliberate scope
+trims:
+- **One rate type field, generic conditions.** `rate_type` (seasonal/weekend/
+  corporate/group/early_bird) is a descriptive label for the host's own organization,
+  not something the resolution engine branches on — a plan qualifies for a given
+  night purely from its own conditions (date range, weekend flag, min-days-before-
+  check-in, min-quantity), so a "corporate" plan and a "seasonal" plan with the same
+  date-range condition behave identically. No corporate-account/coupon-code gating
+  exists (or is asked for) — "corporate" here just means "a plan a host applies to
+  a negotiated date range," same mechanism as "seasonal."
+- **Cheapest-applicable-plan wins**, not a fixed type-priority ladder. If multiple
+  plans qualify for the same night, the one giving the guest the lowest price is
+  used — simple, deterministic, and avoids inventing an arbitrary priority ordering
+  between "seasonal" and "early bird" that the technical document never specifies.
+- **"Min stay" is a hard `RoomType.min_stay_nights` constraint**, not a RatePlan
+  discount condition — a booking shorter than the minimum is rejected outright
+  (matching how real booking platforms treat it), separate from the plans that only
+  affect price.
+- **No traveler-facing "you got X% off" messaging** — the resolved nightly rate is
+  simply what's charged; which plan (if any) produced it isn't surfaced to the
+  guest in this pass, mirroring the trust-badge precedent of keeping v1 minimal.
 """
 import enum
 import uuid
@@ -48,6 +71,19 @@ class PropertyStatus(str, enum.Enum):
     REJECTED = "rejected"
 
 
+class RatePlanType(str, enum.Enum):
+    SEASONAL = "seasonal"
+    WEEKEND = "weekend"
+    CORPORATE = "corporate"
+    GROUP = "group"
+    EARLY_BIRD = "early_bird"
+
+
+class RatePlanAdjustmentType(str, enum.Enum):
+    PERCENTAGE = "percentage"  # adjustment_value is a % delta from base_price — negative discounts, positive surcharges
+    FIXED_PRICE = "fixed_price"  # adjustment_value replaces base_price outright on a matching night
+
+
 class AmenityKey(str, enum.Enum):
     WIFI = "wifi"
     POOL = "pool"
@@ -85,6 +121,14 @@ class Property(Base):
     children_allowed: Mapped[bool] = mapped_column(Boolean, default=True)
     pets_allowed: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Percentages (e.g. 15.00 = 15%), applied to a room booking's pre-tax subtotal at
+    # booking time — see bookings/service.py's create_booking. Kept out of
+    # BookingItem.subtotal itself (which stays pre-tax) since Commission.gross_amount
+    # is derived from subtotal — Ovigo doesn't take a commission cut of tax/service
+    # charges collected on the property's behalf.
+    tax_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    service_charge_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -121,6 +165,7 @@ class RoomType(Base):
     max_occupancy: Mapped[int] = mapped_column(Integer, default=2)
     base_price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     total_units: Mapped[int] = mapped_column(Integer, default=1)
+    min_stay_nights: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -128,6 +173,7 @@ class RoomType(Base):
     availability: Mapped[list["AvailabilityCalendar"]] = relationship(
         back_populates="room_type", cascade="all, delete-orphan"
     )
+    rate_plans: Mapped[list["RatePlan"]] = relationship(back_populates="room_type", cascade="all, delete-orphan")
 
 
 class AvailabilityCalendar(Base):
@@ -141,6 +187,39 @@ class AvailabilityCalendar(Base):
     price_override: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
 
     room_type: Mapped["RoomType"] = relationship(back_populates="availability")
+
+
+class RatePlan(Base):
+    __tablename__ = "rate_plans"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    room_type_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("room_types.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(255))
+    rate_type: Mapped[RatePlanType] = mapped_column(Enum(RatePlanType, name="rate_plan_type"))
+    adjustment_type: Mapped[RatePlanAdjustmentType] = mapped_column(
+        Enum(RatePlanAdjustmentType, name="rate_plan_adjustment_type")
+    )
+    adjustment_value: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+
+    # Qualifying conditions — a plan applies to a given night only if every condition
+    # it sets is satisfied (see stays/service.py::resolve_nightly_rate). At least one
+    # must be set (enforced in the Pydantic schema) so a plan can't silently apply to
+    # every night forever.
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    applies_to_weekends: Mapped[bool] = mapped_column(Boolean, default=False)
+    min_days_before_checkin: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    min_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    room_type: Mapped["RoomType"] = relationship(back_populates="rate_plans")
 
 
 class PropertyImage(Base):

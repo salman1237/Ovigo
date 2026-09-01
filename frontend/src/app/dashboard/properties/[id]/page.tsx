@@ -16,7 +16,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import type { Location } from "@/types/location";
-import { AMENITY_LABELS, AmenityKey, Property } from "@/types/stay";
+import { AMENITY_LABELS, AmenityKey, Property, RatePlan, RatePlanAdjustmentType, RatePlanType, RATE_PLAN_TYPE_LABELS } from "@/types/stay";
 
 const ALL_AMENITIES = Object.keys(AMENITY_LABELS) as AmenityKey[];
 
@@ -86,8 +86,16 @@ export default function PropertyEditPage() {
         <AmenitiesSection property={property} run={run} />
       </Section>
 
+      <Section title="Pricing & taxes">
+        <PricingSection property={property} run={run} />
+      </Section>
+
       <Section title="Room types">
         <RoomTypesSection property={property} run={run} />
+      </Section>
+
+      <Section title="Rate plans">
+        <RatePlansSection property={property} />
       </Section>
 
       <Section title="Availability calendar">
@@ -168,13 +176,17 @@ function RoomTypesSection({ property, run }: { property: Property; run: (fn: () 
   const [maxOccupancy, setMaxOccupancy] = useState(2);
   const [basePrice, setBasePrice] = useState("");
   const [totalUnits, setTotalUnits] = useState(1);
+  const [minStayNights, setMinStayNights] = useState("");
 
   return (
     <>
       <ul className="flex flex-col gap-1">
         {property.room_types.map((rt) => (
           <li key={rt.id} className="flex items-center justify-between text-sm">
-            <span>{rt.name} — up to {rt.max_occupancy} guests, {formatMoney(rt.base_price)}/night, {rt.total_units} unit(s)</span>
+            <span>
+              {rt.name} — up to {rt.max_occupancy} guests, {formatMoney(rt.base_price)}/night, {rt.total_units} unit(s)
+              {rt.min_stay_nights ? `, min ${rt.min_stay_nights} night(s)` : ""}
+            </span>
             <button
               onClick={() => run(() => apiClient.delete(`/api/v1/properties/${property.id}/room-types/${rt.id}`, { auth: true }))}
               className="text-xs font-medium text-red-600 hover:text-red-700"
@@ -189,6 +201,7 @@ function RoomTypesSection({ property, run }: { property: Property; run: (fn: () 
         <Input type="number" min={1} value={maxOccupancy} onChange={(e) => setMaxOccupancy(Number(e.target.value))} placeholder="Max guests" className="w-28" />
         <Input value={basePrice} onChange={(e) => setBasePrice(e.target.value)} placeholder="Price/night" className="w-28" />
         <Input type="number" min={1} value={totalUnits} onChange={(e) => setTotalUnits(Number(e.target.value))} placeholder="Units" className="w-24" />
+        <Input type="number" min={1} value={minStayNights} onChange={(e) => setMinStayNights(e.target.value)} placeholder="Min stay (nights)" className="w-36" />
         <Button
           size="sm"
           variant="secondary"
@@ -196,12 +209,19 @@ function RoomTypesSection({ property, run }: { property: Property; run: (fn: () 
             run(() =>
               apiClient.post(
                 `/api/v1/properties/${property.id}/room-types`,
-                { name, max_occupancy: maxOccupancy, base_price: basePrice, total_units: totalUnits },
+                {
+                  name,
+                  max_occupancy: maxOccupancy,
+                  base_price: basePrice,
+                  total_units: totalUnits,
+                  min_stay_nights: minStayNights ? Number(minStayNights) : undefined,
+                },
                 { auth: true }
               )
             );
             setName("");
             setBasePrice("");
+            setMinStayNights("");
           }}
           disabled={!name || !basePrice}
         >
@@ -209,6 +229,205 @@ function RoomTypesSection({ property, run }: { property: Property; run: (fn: () 
         </Button>
       </div>
     </>
+  );
+}
+
+function PricingSection({ property, run }: { property: Property; run: (fn: () => Promise<unknown>) => void }) {
+  const [taxRate, setTaxRate] = useState(property.tax_rate ?? "");
+  const [serviceChargeRate, setServiceChargeRate] = useState(property.service_charge_rate ?? "");
+
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <div>
+        <label className="mb-1 block text-xs text-zinc-500">Tax rate (%)</label>
+        <Input type="number" min={0} max={100} step="0.01" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} className="w-32" />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs text-zinc-500">Service charge (%)</label>
+        <Input type="number" min={0} max={100} step="0.01" value={serviceChargeRate} onChange={(e) => setServiceChargeRate(e.target.value)} className="w-32" />
+      </div>
+      <Button
+        size="sm"
+        variant="secondary"
+        onClick={() =>
+          run(() =>
+            apiClient.put(
+              `/api/v1/properties/${property.id}`,
+              { tax_rate: taxRate === "" ? null : taxRate, service_charge_rate: serviceChargeRate === "" ? null : serviceChargeRate },
+              { auth: true }
+            )
+          )
+        }
+      >
+        Save
+      </Button>
+      <p className="w-full text-xs text-zinc-400">Applied to every room booking&apos;s pre-tax total at checkout. Ovigo does not take a commission on this portion.</p>
+    </div>
+  );
+}
+
+function RatePlansSection({ property }: { property: Property }) {
+  const [roomTypeId, setRoomTypeId] = useState(property.room_types[0]?.id ?? "");
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+
+  const { data: plans, isLoading } = useQuery({
+    queryKey: ["rate-plans", roomTypeId],
+    queryFn: () => apiClient.get<RatePlan[]>(`/api/v1/properties/${property.id}/room-types/${roomTypeId}/rate-plans`, { auth: true }),
+    enabled: !!roomTypeId,
+  });
+
+  const refetch = () => queryClient.invalidateQueries({ queryKey: ["rate-plans", roomTypeId] });
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setError(null);
+    try {
+      await fn();
+      refetch();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong");
+    }
+  };
+
+  if (property.room_types.length === 0) {
+    return <p className="text-sm text-zinc-400">Add a room type first.</p>;
+  }
+
+  return (
+    <div>
+      <Select value={roomTypeId} onChange={(e) => setRoomTypeId(e.target.value)} className="w-auto">
+        {property.room_types.map((rt) => (
+          <option key={rt.id} value={rt.id}>{rt.name}</option>
+        ))}
+      </Select>
+
+      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+
+      {isLoading ? (
+        <Spinner />
+      ) : (
+        <ul className="mt-3 flex flex-col gap-1">
+          {(plans ?? []).map((plan) => (
+            <li key={plan.id} className="flex items-center justify-between text-sm">
+              <span>
+                {plan.name} ({RATE_PLAN_TYPE_LABELS[plan.rate_type]}) —{" "}
+                {plan.adjustment_type === "percentage" ? `${plan.adjustment_value}%` : formatMoney(plan.adjustment_value)}
+                {!plan.is_active && " · inactive"}
+              </span>
+              <span className="flex gap-2">
+                <button
+                  onClick={() =>
+                    run(() =>
+                      apiClient.put(
+                        `/api/v1/properties/${property.id}/room-types/${roomTypeId}/rate-plans/${plan.id}`,
+                        { is_active: !plan.is_active },
+                        { auth: true }
+                      )
+                    )
+                  }
+                  className="text-xs font-medium text-zinc-500 hover:text-zinc-700"
+                >
+                  {plan.is_active ? "Deactivate" : "Activate"}
+                </button>
+                <button
+                  onClick={() =>
+                    run(() =>
+                      apiClient.delete(`/api/v1/properties/${property.id}/room-types/${roomTypeId}/rate-plans/${plan.id}`, { auth: true })
+                    )
+                  }
+                  className="text-xs font-medium text-red-600 hover:text-red-700"
+                >
+                  Remove
+                </button>
+              </span>
+            </li>
+          ))}
+          {(plans ?? []).length === 0 && <p className="text-sm text-zinc-400">No rate plans yet.</p>}
+        </ul>
+      )}
+
+      <RatePlanForm propertyId={property.id} roomTypeId={roomTypeId} run={run} />
+    </div>
+  );
+}
+
+function RatePlanForm({ propertyId, roomTypeId, run }: { propertyId: string; roomTypeId: string; run: (fn: () => Promise<unknown>) => void }) {
+  const [name, setName] = useState("");
+  const [rateType, setRateType] = useState<RatePlanType>("seasonal");
+  const [adjustmentType, setAdjustmentType] = useState<RatePlanAdjustmentType>("percentage");
+  const [adjustmentValue, setAdjustmentValue] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [appliesToWeekends, setAppliesToWeekends] = useState(false);
+  const [minDaysBeforeCheckin, setMinDaysBeforeCheckin] = useState("");
+  const [minQuantity, setMinQuantity] = useState("");
+
+  const hasCondition = startDate || endDate || appliesToWeekends || minDaysBeforeCheckin || minQuantity;
+
+  const reset = () => {
+    setName("");
+    setAdjustmentValue("");
+    setStartDate("");
+    setEndDate("");
+    setAppliesToWeekends(false);
+    setMinDaysBeforeCheckin("");
+    setMinQuantity("");
+  };
+
+  return (
+    <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-zinc-100 pt-4 dark:border-zinc-900">
+      <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Plan name" className="w-40" />
+      <Select value={rateType} onChange={(e) => setRateType(e.target.value as RatePlanType)} className="w-auto">
+        {Object.entries(RATE_PLAN_TYPE_LABELS).map(([key, label]) => (
+          <option key={key} value={key}>{label}</option>
+        ))}
+      </Select>
+      <Select value={adjustmentType} onChange={(e) => setAdjustmentType(e.target.value as RatePlanAdjustmentType)} className="w-auto">
+        <option value="percentage">% adjustment</option>
+        <option value="fixed_price">Fixed price</option>
+      </Select>
+      <Input
+        value={adjustmentValue}
+        onChange={(e) => setAdjustmentValue(e.target.value)}
+        placeholder={adjustmentType === "percentage" ? "e.g. -15 or 20" : "Fixed price"}
+        className="w-32"
+      />
+      <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} title="Start date" />
+      <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} title="End date" />
+      <Input type="number" min={0} value={minDaysBeforeCheckin} onChange={(e) => setMinDaysBeforeCheckin(e.target.value)} placeholder="Min days before check-in" className="w-44" />
+      <Input type="number" min={1} value={minQuantity} onChange={(e) => setMinQuantity(e.target.value)} placeholder="Min rooms" className="w-28" />
+      <label className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400">
+        <input type="checkbox" checked={appliesToWeekends} onChange={(e) => setAppliesToWeekends(e.target.checked)} />
+        Weekends only
+      </label>
+      <Button
+        size="sm"
+        onClick={() => {
+          run(() =>
+            apiClient.post(
+              `/api/v1/properties/${propertyId}/room-types/${roomTypeId}/rate-plans`,
+              {
+                name,
+                rate_type: rateType,
+                adjustment_type: adjustmentType,
+                adjustment_value: adjustmentValue,
+                start_date: startDate || undefined,
+                end_date: endDate || undefined,
+                applies_to_weekends: appliesToWeekends,
+                min_days_before_checkin: minDaysBeforeCheckin ? Number(minDaysBeforeCheckin) : undefined,
+                min_quantity: minQuantity ? Number(minQuantity) : undefined,
+              },
+              { auth: true }
+            )
+          );
+          reset();
+        }}
+        disabled={!name || !adjustmentValue || !hasCondition}
+      >
+        Add rate plan
+      </Button>
+      {!hasCondition && <p className="w-full text-xs text-zinc-400">Set at least one condition (date range, weekends, min days before check-in, or min rooms).</p>}
+    </div>
   );
 }
 

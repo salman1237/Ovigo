@@ -63,6 +63,9 @@ function BookingDetailContent() {
         <Badge variant="primary">{BOOKING_STATUS_LABELS[booking.status]}</Badge>
       </div>
       <p className="mt-1 text-sm text-zinc-500">Total: {formatMoney(booking.total_amount)}</p>
+      {Number(booking.tax_service_amount) > 0 && (
+        <p className="text-xs text-zinc-400">Includes {formatMoney(booking.tax_service_amount)} tax &amp; service charge</p>
+      )}
 
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 

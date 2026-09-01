@@ -27,6 +27,7 @@ export interface Booking {
   user_id: string;
   status: BookingStatus;
   total_amount: string;
+  tax_service_amount: string;
   currency: string;
   created_at: string;
   items: BookingItem[];

@@ -32,6 +32,7 @@ from app.modules.bookings.schemas import BookingCreate, BookingItemCreate
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.models import NotificationType
 from app.modules.rentcar.models import Vehicle, VehicleAvailability, VehicleStatus
+from app.modules.stays import service as stays_service
 from app.modules.stays.models import AvailabilityCalendar, Property, PropertyStatus, RoomType
 from app.modules.tours.models import Tour, TourDeparture, TourStatus
 from app.modules.users.models import User
@@ -85,6 +86,9 @@ async def _reserve_room(db: AsyncSession, item: BookingItemCreate) -> tuple[Deci
         raise ConflictError("This property is not available for booking")
 
     nights = _date_range(item.check_in_date, item.check_out_date)
+    if room.min_stay_nights and len(nights) < room.min_stay_nights:
+        raise ConflictError(f"This room type requires a minimum stay of {room.min_stay_nights} night(s)")
+
     result = await db.execute(
         select(AvailabilityCalendar)
         .where(AvailabilityCalendar.room_type_id == item.room_type_id, AvailabilityCalendar.date.in_(nights))
@@ -98,14 +102,38 @@ async def _reserve_room(db: AsyncSession, item: BookingItemCreate) -> tuple[Deci
     if short:
         raise ConflictError(f"Not enough rooms available on {short[0].isoformat()}")
 
+    days_before_checkin = (item.check_in_date - date.today()).days
     subtotal = Decimal("0")
     for d in nights:
         row = rows[d]
-        nightly_rate = row.price_override or room.base_price
+        if row.price_override is not None:
+            nightly_rate = row.price_override
+        else:
+            nightly_rate = await stays_service.resolve_nightly_rate(
+                db, item.room_type_id, room.base_price, d, days_before_checkin, item.quantity
+            )
         subtotal += nightly_rate * item.quantity
         row.available_units -= item.quantity
 
     return room.base_price, subtotal
+
+
+async def _room_tax_and_service_charge(db: AsyncSession, room_type_id: uuid.UUID, subtotal: Decimal) -> Decimal:
+    """Computed on the room subtotal only (see stays/models.py docstring) — kept out of
+    BookingItem.subtotal since Commission.gross_amount is derived from it."""
+    result = await db.execute(
+        select(Property.tax_rate, Property.service_charge_rate)
+        .join(RoomType, RoomType.property_id == Property.id)
+        .where(RoomType.id == room_type_id)
+    )
+    row = result.one_or_none()
+    if row is None:
+        return Decimal("0")
+    tax_rate, service_charge_rate = row
+    rate = (tax_rate or Decimal("0")) + (service_charge_rate or Decimal("0"))
+    if rate == 0:
+        return Decimal("0")
+    return (subtotal * rate / Decimal("100")).quantize(Decimal("0.01"))
 
 
 async def _reserve_vehicle(db: AsyncSession, item: BookingItemCreate) -> tuple[Decimal, Decimal]:
@@ -151,12 +179,15 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
         raise ConflictError("A booking needs at least one item")
 
     total = Decimal("0")
+    tax_service_total = Decimal("0")
     prepared: list[tuple[BookingItemCreate, Decimal, Decimal]] = []
     for item in payload.items:
+        tax_service = Decimal("0")
         if item.item_type == BookingItemType.TOUR_DEPARTURE:
             unit_price, subtotal = await _reserve_tour_departure(db, item)
         elif item.item_type == BookingItemType.ROOM_TYPE:
             unit_price, subtotal = await _reserve_room(db, item)
+            tax_service = await _room_tax_and_service_charge(db, item.room_type_id, subtotal)
         elif item.item_type == BookingItemType.VEHICLE_RENTAL:
             unit_price, subtotal = await _reserve_vehicle(db, item)
         else:
@@ -165,9 +196,10 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
             # fails loudly instead of silently mis-dispatching.
             raise ConflictError(f"Cannot create a booking item of type {item.item_type.value} directly")
         prepared.append((item, unit_price, subtotal))
-        total += subtotal
+        total += subtotal + tax_service
+        tax_service_total += tax_service
 
-    booking = Booking(user_id=user.id, total_amount=total)
+    booking = Booking(user_id=user.id, total_amount=total, tax_service_amount=tax_service_total)
     db.add(booking)
     await db.flush()
 

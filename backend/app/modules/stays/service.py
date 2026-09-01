@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, timedelta
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -17,6 +18,8 @@ from app.modules.stays.models import (
     PropertyAmenity,
     PropertyImage,
     PropertyStatus,
+    RatePlan,
+    RatePlanAdjustmentType,
     RoomType,
 )
 from app.modules.stays.schemas import (
@@ -24,7 +27,10 @@ from app.modules.stays.schemas import (
     AvailabilityRangeSet,
     PropertyCreate,
     PropertyUpdate,
+    RatePlanCreate,
+    RatePlanUpdate,
     RoomTypeCreate,
+    RoomTypeUpdate,
 )
 from app.modules.users.models import PartnerRole
 
@@ -126,6 +132,21 @@ async def add_room_type(
     prop = await get_own_property_or_404(db, role, property_id)
     _require_editable(prop)
     db.add(RoomType(property_id=prop.id, **payload.model_dump()))
+    await db.commit()
+    return await get_own_property_or_404(db, role, property_id)
+
+
+async def update_room_type(
+    db: AsyncSession, role: PartnerRole, property_id: uuid.UUID, room_type_id: uuid.UUID, payload: RoomTypeUpdate
+) -> Property:
+    prop = await get_own_property_or_404(db, role, property_id)
+    _require_editable(prop)
+    result = await db.execute(select(RoomType).where(RoomType.id == room_type_id, RoomType.property_id == prop.id))
+    room_type = result.scalar_one_or_none()
+    if room_type is None:
+        raise NotFoundError("Room type not found")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(room_type, field, value)
     await db.commit()
     return await get_own_property_or_404(db, role, property_id)
 
@@ -268,3 +289,102 @@ async def submit_for_review(db: AsyncSession, role: PartnerRole, property_id: uu
     prop.rejection_reason = None
     await db.commit()
     return await get_own_property_or_404(db, role, property_id)
+
+
+async def create_rate_plan(
+    db: AsyncSession, role: PartnerRole, room_type_id: uuid.UUID, payload: RatePlanCreate
+) -> RatePlan:
+    await _assert_owns_room_type(db, role, room_type_id)
+    plan = RatePlan(room_type_id=room_type_id, **payload.model_dump())
+    db.add(plan)
+    await db.commit()
+    await db.refresh(plan)
+    return plan
+
+
+async def list_rate_plans(db: AsyncSession, role: PartnerRole, room_type_id: uuid.UUID) -> list[RatePlan]:
+    await _assert_owns_room_type(db, role, room_type_id)
+    result = await db.execute(
+        select(RatePlan).where(RatePlan.room_type_id == room_type_id).order_by(RatePlan.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def _get_own_rate_plan_or_404(
+    db: AsyncSession, role: PartnerRole, room_type_id: uuid.UUID, rate_plan_id: uuid.UUID
+) -> RatePlan:
+    await _assert_owns_room_type(db, role, room_type_id)
+    result = await db.execute(
+        select(RatePlan).where(RatePlan.id == rate_plan_id, RatePlan.room_type_id == room_type_id)
+    )
+    plan = result.scalar_one_or_none()
+    if plan is None:
+        raise NotFoundError("Rate plan not found")
+    return plan
+
+
+async def update_rate_plan(
+    db: AsyncSession, role: PartnerRole, room_type_id: uuid.UUID, rate_plan_id: uuid.UUID, payload: RatePlanUpdate
+) -> RatePlan:
+    plan = await _get_own_rate_plan_or_404(db, role, room_type_id, rate_plan_id)
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(plan, field, value)
+    await db.commit()
+    await db.refresh(plan)
+    return plan
+
+
+async def delete_rate_plan(db: AsyncSession, role: PartnerRole, room_type_id: uuid.UUID, rate_plan_id: uuid.UUID) -> None:
+    plan = await _get_own_rate_plan_or_404(db, role, room_type_id, rate_plan_id)
+    await db.delete(plan)
+    await db.commit()
+
+
+def _plan_applies(plan: RatePlan, night: date, days_before_checkin: int, quantity: int) -> bool:
+    if not plan.is_active:
+        return False
+    if plan.start_date and night < plan.start_date:
+        return False
+    if plan.end_date and night > plan.end_date:
+        return False
+    if plan.applies_to_weekends and night.weekday() not in (4, 5):  # weekend nights = Friday, Saturday (weekday() 4, 5)
+        return False
+    if plan.min_days_before_checkin is not None and days_before_checkin < plan.min_days_before_checkin:
+        return False
+    if plan.min_quantity is not None and quantity < plan.min_quantity:
+        return False
+    return True
+
+
+def _apply_adjustment(base_price: Decimal, plan: RatePlan) -> Decimal:
+    if plan.adjustment_type == RatePlanAdjustmentType.FIXED_PRICE:
+        return plan.adjustment_value
+    adjusted = base_price * (Decimal("1") + plan.adjustment_value / Decimal("100"))
+    return max(adjusted, Decimal("0"))
+
+
+async def resolve_nightly_rate(
+    db: AsyncSession,
+    room_type_id: uuid.UUID,
+    base_price: Decimal,
+    night: date,
+    days_before_checkin: int,
+    quantity: int,
+) -> Decimal:
+    """The price for one night of one room, after rate plans. Cheapest-applicable-plan-wins
+    (see stays/models.py module docstring) — callers should check
+    AvailabilityCalendar.price_override FIRST and skip this call entirely if one is set,
+    since a manual per-date override always outranks a rate plan.
+    """
+    result = await db.execute(
+        select(RatePlan).where(RatePlan.room_type_id == room_type_id, RatePlan.is_active.is_(True))
+    )
+    plans = result.scalars().all()
+    candidates = [
+        _apply_adjustment(base_price, plan)
+        for plan in plans
+        if _plan_applies(plan, night, days_before_checkin, quantity)
+    ]
+    if not candidates:
+        return base_price
+    return min(candidates)

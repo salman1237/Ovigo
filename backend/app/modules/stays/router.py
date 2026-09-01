@@ -22,7 +22,11 @@ from app.modules.stays.schemas import (
     PropertyRead,
     PropertySummary,
     PropertyUpdate,
+    RatePlanCreate,
+    RatePlanRead,
+    RatePlanUpdate,
     RoomTypeCreate,
+    RoomTypeUpdate,
 )
 from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleType, User
 
@@ -112,6 +116,17 @@ async def add_room_type(
     return await service.add_room_type(db, role, property_id, payload)
 
 
+@router.put("/{property_id}/room-types/{room_type_id}", response_model=PropertyRead)
+async def update_room_type(
+    property_id: uuid.UUID,
+    room_type_id: uuid.UUID,
+    payload: RoomTypeUpdate,
+    role: PartnerRole = Depends(require_host),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.update_room_type(db, role, property_id, room_type_id, payload)
+
+
 @router.delete("/{property_id}/room-types/{room_type_id}", response_model=PropertyRead)
 async def delete_room_type(
     property_id: uuid.UUID,
@@ -120,6 +135,50 @@ async def delete_room_type(
     db: AsyncSession = Depends(get_db),
 ):
     return await service.delete_room_type(db, role, property_id, room_type_id)
+
+
+@router.post("/{property_id}/room-types/{room_type_id}/rate-plans", response_model=RatePlanRead, status_code=201)
+async def create_rate_plan(
+    property_id: uuid.UUID,
+    room_type_id: uuid.UUID,
+    payload: RatePlanCreate,
+    role: PartnerRole = Depends(require_host),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.create_rate_plan(db, role, room_type_id, payload)
+
+
+@router.get("/{property_id}/room-types/{room_type_id}/rate-plans", response_model=list[RatePlanRead])
+async def list_rate_plans(
+    property_id: uuid.UUID,
+    room_type_id: uuid.UUID,
+    role: PartnerRole = Depends(require_host),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.list_rate_plans(db, role, room_type_id)
+
+
+@router.put("/{property_id}/room-types/{room_type_id}/rate-plans/{rate_plan_id}", response_model=RatePlanRead)
+async def update_rate_plan(
+    property_id: uuid.UUID,
+    room_type_id: uuid.UUID,
+    rate_plan_id: uuid.UUID,
+    payload: RatePlanUpdate,
+    role: PartnerRole = Depends(require_host),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.update_rate_plan(db, role, room_type_id, rate_plan_id, payload)
+
+
+@router.delete("/{property_id}/room-types/{room_type_id}/rate-plans/{rate_plan_id}", status_code=204)
+async def delete_rate_plan(
+    property_id: uuid.UUID,
+    room_type_id: uuid.UUID,
+    rate_plan_id: uuid.UUID,
+    role: PartnerRole = Depends(require_host),
+    db: AsyncSession = Depends(get_db),
+):
+    await service.delete_rate_plan(db, role, room_type_id, rate_plan_id)
 
 
 @router.put("/{property_id}/amenities", response_model=PropertyRead)

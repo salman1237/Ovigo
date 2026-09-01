@@ -52,6 +52,11 @@ class Booking(Base):
         Enum(BookingStatus, name="booking_status"), default=BookingStatus.PENDING_PAYMENT
     )
     total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    # Included in total_amount, broken out for display only — the portion of the total
+    # that's a property's tax/service charge on a room booking (Sprint 19-20), not
+    # room revenue. Deliberately not part of any BookingItem.subtotal since
+    # Commission.gross_amount is derived from subtotal (see stays/models.py docstring).
+    tax_service_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0"))
     currency: Mapped[str] = mapped_column(String(3), default="BDT")
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

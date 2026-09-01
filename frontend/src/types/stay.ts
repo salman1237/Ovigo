@@ -39,6 +39,34 @@ export interface RoomType {
   max_occupancy: number;
   base_price: string;
   total_units: number;
+  min_stay_nights: number | null;
+}
+
+export type RatePlanType = "seasonal" | "weekend" | "corporate" | "group" | "early_bird";
+export type RatePlanAdjustmentType = "percentage" | "fixed_price";
+
+export const RATE_PLAN_TYPE_LABELS: Record<RatePlanType, string> = {
+  seasonal: "Seasonal",
+  weekend: "Weekend",
+  corporate: "Corporate",
+  group: "Group",
+  early_bird: "Early Bird",
+};
+
+export interface RatePlan {
+  id: string;
+  room_type_id: string;
+  name: string;
+  rate_type: RatePlanType;
+  adjustment_type: RatePlanAdjustmentType;
+  adjustment_value: string;
+  start_date: string | null;
+  end_date: string | null;
+  applies_to_weekends: boolean;
+  min_days_before_checkin: number | null;
+  min_quantity: number | null;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface PropertyImage {
@@ -62,6 +90,8 @@ export interface Property {
   house_rules: string | null;
   children_allowed: boolean;
   pets_allowed: boolean;
+  tax_rate: string | null;
+  service_charge_rate: string | null;
   created_at: string;
   room_types: RoomType[];
   amenities: { amenity: AmenityKey }[];
