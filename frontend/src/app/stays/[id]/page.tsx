@@ -4,11 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
+import Link from "next/link";
+
 import { ReviewsList } from "@/components/shared/ReviewsList";
 import { TrustBadges } from "@/components/shared/TrustBadges";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
+import { useCartStore } from "@/stores/cart-store";
 import type { Booking } from "@/types/booking";
 import { AMENITY_LABELS, PROPERTY_TYPE_LABELS, type Property } from "@/types/stay";
 
@@ -87,6 +90,7 @@ export default function StayDetailPage() {
 
 function BookStaySection({ property }: { property: Property }) {
   const user = useAuthStore((s) => s.user);
+  const addToCart = useCartStore((s) => s.addItem);
   const [roomTypeId, setRoomTypeId] = useState(property.room_types[0]?.id ?? "");
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
@@ -94,10 +98,28 @@ function BookStaySection({ property }: { property: Property }) {
   const [guestNames, setGuestNames] = useState<string[]>([""]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [addedToCart, setAddedToCart] = useState(false);
 
   const roomType = property.room_types.find((r) => r.id === roomTypeId);
   const nights = checkIn && checkOut ? Math.max(0, (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000) : 0;
   const total = roomType ? (Number(roomType.base_price) * nights * quantity).toFixed(2) : "0.00";
+
+  const addStayToCart = () => {
+    if (!roomType || nights <= 0) return;
+    addToCart({
+      key: `stay-${roomTypeId}-${Date.now()}`,
+      item_type: "room_type",
+      title: `${property.name} — ${roomType.name}`,
+      subtitle: `${checkIn} → ${checkOut} · ${quantity} room(s)`,
+      unit_price: roomType.base_price,
+      quantity,
+      nights,
+      room_type_id: roomTypeId,
+      check_in_date: checkIn,
+      check_out_date: checkOut,
+    });
+    setAddedToCart(true);
+  };
 
   const book = async () => {
     setError(null);
@@ -187,13 +209,27 @@ function BookStaySection({ property }: { property: Property }) {
           </p>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          onClick={book}
-          disabled={submitting || !roomTypeId || nights <= 0}
-          className="self-start rounded-full bg-zinc-900 px-6 py-2.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
-        >
-          {submitting ? "Redirecting to payment…" : "Book & Pay"}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={book}
+            disabled={submitting || !roomTypeId || nights <= 0}
+            className="rounded-full bg-zinc-900 px-6 py-2.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
+          >
+            {submitting ? "Redirecting to payment…" : "Book & Pay"}
+          </button>
+          <button
+            onClick={addStayToCart}
+            disabled={!roomTypeId || nights <= 0}
+            className="rounded-full border border-zinc-300 px-6 py-2.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+          >
+            Add to cart
+          </button>
+          {addedToCart && (
+            <Link href="/cart" className="text-sm text-emerald-600 underline">
+              Added — combine with a tour in your cart →
+            </Link>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -14,6 +14,7 @@ from app.modules.admin.schemas import (
     AdminPropertyRead,
     AdminTourRead,
     AdminUserSummary,
+    AdminVehicleRead,
 )
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.notifications import service as notifications_service
@@ -25,6 +26,7 @@ from app.modules.partners.models import (
     PartnerRoleApplication,
 )
 from app.modules.payments.models import Payment, PaymentStatus
+from app.modules.rentcar.models import Vehicle, VehicleStatus
 from app.modules.stays.models import Property, PropertyStatus
 from app.modules.tours.models import Tour, TourStatus
 from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleStatus, User
@@ -388,3 +390,78 @@ async def list_payments(db: AsyncSession, status: PaymentStatus | None) -> list[
         query = query.where(Payment.status == status)
     result = await db.execute(query.order_by(Payment.created_at.desc()).limit(200))
     return list(result.scalars().all())
+
+
+def _to_admin_vehicle_read(vehicle: Vehicle) -> AdminVehicleRead:
+    return AdminVehicleRead(
+        id=vehicle.id,
+        make=vehicle.make,
+        model=vehicle.model,
+        year=vehicle.year,
+        status=vehicle.status,
+        rejection_reason=vehicle.rejection_reason,
+        created_at=vehicle.created_at,
+        applicant=AdminUserSummary.model_validate(vehicle.rent_a_car_role.partner_account.user),
+    )
+
+
+async def list_vehicles(db: AsyncSession, status: VehicleStatus | None) -> list[AdminVehicleRead]:
+    query = select(Vehicle).options(
+        selectinload(Vehicle.rent_a_car_role).selectinload(PartnerRole.partner_account).selectinload(PartnerAccount.user)
+    )
+    if status is not None:
+        query = query.where(Vehicle.status == status)
+    result = await db.execute(query.order_by(Vehicle.created_at.desc()))
+    return [_to_admin_vehicle_read(v) for v in result.scalars().all()]
+
+
+async def _get_vehicle_with_relations(db: AsyncSession, vehicle_id: uuid.UUID) -> Vehicle:
+    result = await db.execute(
+        select(Vehicle)
+        .where(Vehicle.id == vehicle_id)
+        .options(
+            selectinload(Vehicle.rent_a_car_role).selectinload(PartnerRole.partner_account).selectinload(PartnerAccount.user)
+        )
+    )
+    vehicle = result.scalar_one_or_none()
+    if vehicle is None:
+        raise NotFoundError("Vehicle not found")
+    return vehicle
+
+
+async def approve_vehicle(db: AsyncSession, admin: User, vehicle_id: uuid.UUID) -> AdminVehicleRead:
+    vehicle = await _get_vehicle_with_relations(db, vehicle_id)
+    if vehicle.status != VehicleStatus.PENDING_REVIEW:
+        raise ConflictError(f"Vehicle is {vehicle.status.value}, not pending review")
+    vehicle.status = VehicleStatus.PUBLISHED
+    await notifications_service.notify(
+        db,
+        user_id=vehicle.rent_a_car_role.partner_account.user_id,
+        type=NotificationType.LISTING_APPROVED,
+        title="Vehicle approved",
+        message=f"Your {vehicle.make} {vehicle.model} has been approved and is now published.",
+        link=f"/rent-a-car/{vehicle.id}",
+    )
+    await db.commit()
+    await audit.record(db, actor_id=admin.id, action="vehicle.approve", entity_type="vehicle", entity_id=vehicle.id)
+    return _to_admin_vehicle_read(vehicle)
+
+
+async def reject_vehicle(db: AsyncSession, admin: User, vehicle_id: uuid.UUID, reason: str) -> AdminVehicleRead:
+    vehicle = await _get_vehicle_with_relations(db, vehicle_id)
+    if vehicle.status != VehicleStatus.PENDING_REVIEW:
+        raise ConflictError(f"Vehicle is {vehicle.status.value}, not pending review")
+    vehicle.status = VehicleStatus.REJECTED
+    vehicle.rejection_reason = reason
+    await notifications_service.notify(
+        db,
+        user_id=vehicle.rent_a_car_role.partner_account.user_id,
+        type=NotificationType.LISTING_REJECTED,
+        title="Vehicle rejected",
+        message=f"Your {vehicle.make} {vehicle.model} was rejected: {reason}",
+    )
+    await db.commit()
+    await audit.record(
+        db, actor_id=admin.id, action="vehicle.reject", entity_type="vehicle", entity_id=vehicle.id, extra={"reason": reason}
+    )
+    return _to_admin_vehicle_read(vehicle)

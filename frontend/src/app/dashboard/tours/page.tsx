@@ -98,7 +98,7 @@ export default function DashboardToursPage() {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-zinc-500">Base price (USD)</label>
+          <label className="block text-xs font-medium text-zinc-500">Base price (৳)</label>
           <input
             value={price}
             onChange={(e) => setPrice(e.target.value)}

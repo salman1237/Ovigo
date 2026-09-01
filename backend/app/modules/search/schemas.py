@@ -23,3 +23,4 @@ class DestinationSummary(BaseModel):
     type: str
     published_tour_count: int
     published_property_count: int
+    published_vehicle_count: int = 0

@@ -23,6 +23,7 @@ _LEGACY_DEFAULTS: dict[BookingItemType, Decimal] = {
     BookingItemType.TOUR_DEPARTURE: Decimal("0.10"),
     BookingItemType.ROOM_TYPE: Decimal("0.12"),
     BookingItemType.CUSTOM_BID: Decimal("0.10"),
+    BookingItemType.VEHICLE_RENTAL: Decimal("0.12"),
 }
 _DEFAULT_NETWORK_RATE = Decimal("0.02")
 
@@ -46,6 +47,11 @@ async def _partner_role_for_item(db: AsyncSession, item: BookingItem) -> uuid.UU
         from app.modules.bidding.models import TourBid
 
         result = await db.execute(select(TourBid.local_expert_role_id).where(TourBid.id == item.custom_bid_id))
+        return result.scalar_one_or_none()
+    if item.item_type == BookingItemType.VEHICLE_RENTAL and item.vehicle_id:
+        from app.modules.rentcar.models import Vehicle
+
+        result = await db.execute(select(Vehicle.rent_a_car_role_id).where(Vehicle.id == item.vehicle_id))
         return result.scalar_one_or_none()
     return None
 

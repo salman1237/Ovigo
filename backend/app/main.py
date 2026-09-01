@@ -38,6 +38,8 @@ from app.modules.payments.router import router as payments_router
 from app.modules.payouts.router import admin_router as payouts_admin_router
 from app.modules.payouts.router import router as payouts_router
 from app.modules.profiles.router import router as profiles_router
+from app.modules.rentcar.router import drivers_router as rentcar_drivers_router
+from app.modules.rentcar.router import router as rentcar_router
 from app.modules.reviews.router import router as reviews_router
 from app.modules.search.router import router as search_router
 from app.modules.stays.router import router as stays_router
@@ -94,6 +96,8 @@ app.include_router(partners_router)
 app.include_router(profiles_router)
 app.include_router(tours_router)
 app.include_router(stays_router)
+app.include_router(rentcar_router)
+app.include_router(rentcar_drivers_router)
 app.include_router(search_router)
 app.include_router(bookings_router)
 app.include_router(payments_router)

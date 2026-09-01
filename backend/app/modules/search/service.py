@@ -8,6 +8,8 @@ from sqlalchemy.orm import selectinload
 from app.modules.bookings.models import BookingItem, BookingItemStatus
 from app.modules.locations.models import Location, LocationTag, TaggableEntityType
 from app.modules.profiles.models import LocalExpertProfile
+from app.modules.rentcar import service as rentcar_service
+from app.modules.rentcar.models import Vehicle, VehicleStatus
 from app.modules.search.schemas import DestinationSummary, ExpertSearchResult
 from app.modules.stays import service as stays_service
 from app.modules.stays.models import Property, PropertyStatus
@@ -55,6 +57,33 @@ async def search_stays(
                 available.append(prop)
                 break
     return available
+
+
+async def _vehicle_covers_range(db: AsyncSession, vehicle_id: uuid.UUID, pickup: date, return_: date) -> bool:
+    days = (return_ - pickup).days
+    if days <= 0:
+        return False
+    rows = await rentcar_service.get_availability(db, vehicle_id, pickup, return_ - timedelta(days=1))
+    if len(rows) != days:
+        return False
+    return all(row.is_available for row in rows)
+
+
+async def search_vehicles(
+    db: AsyncSession, location_ids: list[uuid.UUID] | None, pickup: date | None, return_: date | None
+) -> list[Vehicle]:
+    query = select(Vehicle).where(Vehicle.status == VehicleStatus.PUBLISHED)
+    if location_ids is not None:
+        query = query.join(
+            LocationTag, (LocationTag.entity_id == Vehicle.id) & (LocationTag.entity_type == TaggableEntityType.VEHICLE)
+        ).where(LocationTag.location_id.in_(location_ids))
+    result = await db.execute(query.order_by(Vehicle.created_at.desc()).distinct())
+    vehicles = list(result.scalars().all())
+
+    if pickup is None or return_ is None:
+        return vehicles
+
+    return [v for v in vehicles if await _vehicle_covers_range(db, v.id, pickup, return_)]
 
 
 async def _successful_tour_counts(db: AsyncSession, role_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
@@ -131,8 +160,21 @@ async def get_destinations(db: AsyncSession) -> list[DestinationSummary]:
             )
         ).all()
     )
+    vehicle_counts = dict(
+        (
+            await db.execute(
+                select(LocationTag.location_id, func.count(Vehicle.id))
+                .join(
+                    Vehicle,
+                    (Vehicle.id == LocationTag.entity_id) & (LocationTag.entity_type == TaggableEntityType.VEHICLE),
+                )
+                .where(Vehicle.status == VehicleStatus.PUBLISHED)
+                .group_by(LocationTag.location_id)
+            )
+        ).all()
+    )
 
-    location_ids = set(tour_counts) | set(property_counts)
+    location_ids = set(tour_counts) | set(property_counts) | set(vehicle_counts)
     if not location_ids:
         return []
 
@@ -146,6 +188,7 @@ async def get_destinations(db: AsyncSession) -> list[DestinationSummary]:
             type=loc.type.value,
             published_tour_count=tour_counts.get(loc.id, 0),
             published_property_count=property_counts.get(loc.id, 0),
+            published_vehicle_count=vehicle_counts.get(loc.id, 0),
         )
         for loc in locations
     ]

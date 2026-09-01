@@ -31,6 +31,7 @@ class TaggableEntityType(str, enum.Enum):
     TOUR = "tour"
     PROPERTY = "property"
     CUSTOM_TOUR_REQUEST = "custom_tour_request"
+    VEHICLE = "vehicle"
 
 
 class Location(Base):

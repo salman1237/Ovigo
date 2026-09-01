@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from app.modules.bookings.models import BookingStatus
 from app.modules.partners.schemas import PartnerDocumentRead
 from app.modules.payments.models import EscrowStatus, PaymentProvider, PaymentStatus
+from app.modules.rentcar.models import VehicleStatus
 from app.modules.stays.models import PropertyStatus
 from app.modules.tours.models import TourStatus
 from app.modules.users.models import PartnerRoleStatus, PartnerRoleType
@@ -66,6 +67,22 @@ class AdminPropertyRead(BaseModel):
     slug: str
     description: str | None
     status: PropertyStatus
+    rejection_reason: str | None
+    created_at: datetime
+    applicant: AdminUserSummary
+
+
+class AdminVehicleRead(BaseModel):
+    """A vehicle as seen in the moderation queue — includes the submitting
+    rent-a-car partner's identity."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    make: str
+    model: str
+    year: int
+    status: VehicleStatus
     rejection_reason: str | None
     created_at: datetime
     applicant: AdminUserSummary

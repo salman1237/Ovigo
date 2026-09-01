@@ -32,6 +32,7 @@ class BookingItemType(str, enum.Enum):
     TOUR_DEPARTURE = "tour_departure"
     ROOM_TYPE = "room_type"
     CUSTOM_BID = "custom_bid"
+    VEHICLE_RENTAL = "vehicle_rental"
 
 
 class BookingItemStatus(str, enum.Enum):
@@ -87,6 +88,11 @@ class BookingItem(Base):
     custom_bid_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tour_bids.id", ondelete="SET NULL"), nullable=True
     )
+    vehicle_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="SET NULL"), nullable=True
+    )
+    # check_in_date/check_out_date double as pickup/return dates for a vehicle
+    # rental — same date-range shape as a stay, no need for separate columns.
     check_in_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     check_out_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 

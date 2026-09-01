@@ -31,6 +31,7 @@ from app.modules.bookings.models import (
 from app.modules.bookings.schemas import BookingCreate, BookingItemCreate
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.models import NotificationType
+from app.modules.rentcar.models import Vehicle, VehicleAvailability, VehicleStatus
 from app.modules.stays.models import AvailabilityCalendar, Property, PropertyStatus, RoomType
 from app.modules.tours.models import Tour, TourDeparture, TourStatus
 from app.modules.users.models import User
@@ -107,6 +108,44 @@ async def _reserve_room(db: AsyncSession, item: BookingItemCreate) -> tuple[Deci
     return room.base_price, subtotal
 
 
+async def _reserve_vehicle(db: AsyncSession, item: BookingItemCreate) -> tuple[Decimal, Decimal]:
+    vehicle_result = await db.execute(select(Vehicle).where(Vehicle.id == item.vehicle_id).with_for_update())
+    vehicle = vehicle_result.scalar_one_or_none()
+    if vehicle is None or vehicle.status != VehicleStatus.PUBLISHED:
+        raise ConflictError("This vehicle is not available for booking")
+
+    days = _date_range(item.check_in_date, item.check_out_date)
+    result = await db.execute(
+        select(VehicleAvailability)
+        .where(VehicleAvailability.vehicle_id == item.vehicle_id, VehicleAvailability.date.in_(days))
+        .with_for_update()
+    )
+    rows = {row.date: row for row in result.scalars().all()}
+    missing = [d for d in days if d not in rows]
+    if missing:
+        raise ConflictError(f"Availability not set for {missing[0].isoformat()} — ask the owner to open the calendar")
+    unavailable = [d for d in days if not rows[d].is_available]
+    if unavailable:
+        raise ConflictError(f"Vehicle is not available on {unavailable[0].isoformat()}")
+
+    for row in rows.values():
+        row.is_available = False
+
+    subtotal = vehicle.price_per_day * len(days)
+    return vehicle.price_per_day, subtotal
+
+
+async def _release_vehicle(db: AsyncSession, vehicle_id: uuid.UUID, check_in: date, check_out: date) -> None:
+    days = _date_range(check_in, check_out)
+    result = await db.execute(
+        select(VehicleAvailability)
+        .where(VehicleAvailability.vehicle_id == vehicle_id, VehicleAvailability.date.in_(days))
+        .with_for_update()
+    )
+    for row in result.scalars().all():
+        row.is_available = True
+
+
 async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -> Booking:
     if not payload.items:
         raise ConflictError("A booking needs at least one item")
@@ -116,8 +155,15 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
     for item in payload.items:
         if item.item_type == BookingItemType.TOUR_DEPARTURE:
             unit_price, subtotal = await _reserve_tour_departure(db, item)
-        else:
+        elif item.item_type == BookingItemType.ROOM_TYPE:
             unit_price, subtotal = await _reserve_room(db, item)
+        elif item.item_type == BookingItemType.VEHICLE_RENTAL:
+            unit_price, subtotal = await _reserve_vehicle(db, item)
+        else:
+            # CUSTOM_BID is rejected by BookingItemCreate's own validator before
+            # reaching here — this branch exists only so a future new item type
+            # fails loudly instead of silently mis-dispatching.
+            raise ConflictError(f"Cannot create a booking item of type {item.item_type.value} directly")
         prepared.append((item, unit_price, subtotal))
         total += subtotal
 
@@ -132,6 +178,7 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
                 item_type=item.item_type,
                 tour_departure_id=item.tour_departure_id,
                 room_type_id=item.room_type_id,
+                vehicle_id=item.vehicle_id,
                 check_in_date=item.check_in_date,
                 check_out_date=item.check_out_date,
                 quantity=item.quantity,
@@ -223,6 +270,8 @@ async def _release_and_cancel(db: AsyncSession, booking: Booking, note: str | No
             )
             for row in result.scalars().all():
                 row.available_units += item.quantity
+        elif item.item_type == BookingItemType.VEHICLE_RENTAL and item.vehicle_id and item.check_in_date and item.check_out_date:
+            await _release_vehicle(db, item.vehicle_id, item.check_in_date, item.check_out_date)
         item.status = BookingItemStatus.CANCELLED
 
     await _add_status_history(db, booking, BookingStatus.CANCELLED, note=note)

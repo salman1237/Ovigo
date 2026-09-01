@@ -16,12 +16,14 @@ from app.modules.admin.schemas import (
     AdminPaymentRead,
     AdminPropertyRead,
     AdminTourRead,
+    AdminVehicleRead,
     AuditLogRead,
     RejectRequest,
 )
 from app.modules.bookings.models import BookingStatus
 from app.modules.partners.models import PartnerDocument
 from app.modules.payments.models import PaymentStatus
+from app.modules.rentcar.models import VehicleStatus
 from app.modules.stays.models import PropertyStatus
 from app.modules.tours.models import TourStatus
 from app.modules.users.models import PartnerRoleStatus, User
@@ -144,3 +146,25 @@ async def list_bookings(status: BookingStatus | None = None, db: AsyncSession = 
 @router.get("/payments", response_model=list[AdminPaymentRead])
 async def list_payments(status: PaymentStatus | None = None, db: AsyncSession = Depends(get_db)):
     return await service.list_payments(db, status)
+
+
+@router.get("/vehicles", response_model=list[AdminVehicleRead])
+async def list_vehicles(status: VehicleStatus | None = None, db: AsyncSession = Depends(get_db)):
+    return await service.list_vehicles(db, status)
+
+
+@router.post("/vehicles/{vehicle_id}/approve", response_model=AdminVehicleRead)
+async def approve_vehicle(
+    vehicle_id: uuid.UUID, current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)
+):
+    return await service.approve_vehicle(db, current_user, vehicle_id)
+
+
+@router.post("/vehicles/{vehicle_id}/reject", response_model=AdminVehicleRead)
+async def reject_vehicle(
+    vehicle_id: uuid.UUID,
+    payload: RejectRequest,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.reject_vehicle(db, current_user, vehicle_id, payload.reason)

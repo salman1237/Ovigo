@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 
 import { apiClient } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
+import { useCartStore } from "@/stores/cart-store";
 import { NotificationBell } from "@/components/shared/NotificationBell";
 
 export function Header() {
   const user = useAuthStore((s) => s.user);
   const clearSession = useAuthStore((s) => s.clearSession);
+  const cartCount = useCartStore((s) => s.items.length);
   const router = useRouter();
 
   const isAdmin = user?.system_role === "admin" || user?.system_role === "super_admin";
@@ -36,10 +38,16 @@ export function Header() {
         <Link href="/stays" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
           Stays
         </Link>
+        <Link href="/rent-a-car" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+          Rent a Car
+        </Link>
         {user ? (
           <>
             <Link href="/bookings" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
               My Bookings
+            </Link>
+            <Link href="/cart" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+              Cart{cartCount > 0 && ` (${cartCount})`}
             </Link>
             <Link href="/custom-requests" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
               Custom Trip
@@ -49,6 +57,12 @@ export function Header() {
             </Link>
             <Link href="/dashboard/properties" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
               My Properties
+            </Link>
+            <Link href="/dashboard/vehicles" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+              My Vehicles
+            </Link>
+            <Link href="/dashboard/drivers" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+              My Drivers
             </Link>
             <Link href="/dashboard/bids" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
               Bid Requests

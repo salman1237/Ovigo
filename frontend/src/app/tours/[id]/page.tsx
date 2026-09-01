@@ -4,11 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
+import Link from "next/link";
+
 import { ReviewsList } from "@/components/shared/ReviewsList";
 import { TrustBadges } from "@/components/shared/TrustBadges";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
+import { useCartStore } from "@/stores/cart-store";
 import type { Booking } from "@/types/booking";
 import type { Tour } from "@/types/tour";
 
@@ -117,15 +120,31 @@ export default function TourDetailPage() {
 
 function BookTourSection({ tour }: { tour: Tour }) {
   const user = useAuthStore((s) => s.user);
+  const addToCart = useCartStore((s) => s.addItem);
   const [departureId, setDepartureId] = useState(tour.departures[0]?.id ?? "");
   const [quantity, setQuantity] = useState(1);
   const [guestNames, setGuestNames] = useState<string[]>([""]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [addedToCart, setAddedToCart] = useState(false);
 
   const departure = tour.departures.find((d) => d.id === departureId);
   const price = departure?.price_override ?? tour.base_price;
   const total = (Number(price) * quantity).toFixed(2);
+
+  const addTourToCart = () => {
+    if (!departure) return;
+    addToCart({
+      key: `tour-${departureId}-${Date.now()}`,
+      item_type: "tour_departure",
+      title: tour.title,
+      subtitle: `Departs ${departure.departure_date} · ${quantity} traveler(s)`,
+      unit_price: price,
+      quantity,
+      tour_departure_id: departureId,
+    });
+    setAddedToCart(true);
+  };
 
   const setGuestCount = (n: number) => {
     setQuantity(n);
@@ -212,13 +231,27 @@ function BookTourSection({ tour }: { tour: Tour }) {
         </div>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span></p>
         {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          onClick={book}
-          disabled={submitting || !departureId || (departure?.available_seats ?? 0) < quantity}
-          className="self-start rounded-full bg-zinc-900 px-6 py-2.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
-        >
-          {submitting ? "Redirecting to payment…" : "Book & Pay"}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={book}
+            disabled={submitting || !departureId || (departure?.available_seats ?? 0) < quantity}
+            className="rounded-full bg-zinc-900 px-6 py-2.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
+          >
+            {submitting ? "Redirecting to payment…" : "Book & Pay"}
+          </button>
+          <button
+            onClick={addTourToCart}
+            disabled={!departureId || (departure?.available_seats ?? 0) < quantity}
+            className="rounded-full border border-zinc-300 px-6 py-2.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+          >
+            Add to cart
+          </button>
+          {addedToCart && (
+            <Link href="/cart" className="text-sm text-emerald-600 underline">
+              Added — combine with a stay in your cart →
+            </Link>
+          )}
+        </div>
       </div>
     </div>
   );
