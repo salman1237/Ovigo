@@ -21,6 +21,7 @@ const NAV = [
   { href: "/admin/commission-rules", label: "Commission Rules" },
   { href: "/admin/payouts", label: "Payouts" },
   { href: "/admin/badges", label: "Trust Badges" },
+  { href: "/admin/ads", label: "Ad Campaigns" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

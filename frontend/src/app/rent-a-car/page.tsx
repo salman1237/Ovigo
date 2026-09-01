@@ -6,6 +6,7 @@ import { Car, Search } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { SponsoredResults } from "@/components/shared/SponsoredResults";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -49,6 +50,8 @@ export default function RentACarSearchPage() {
           Search
         </Button>
       </form>
+
+      {searchTerm && <div className="mt-8"><SponsoredResults locationSlug={searchTerm} entityType="vehicle" linkPrefix="/rent-a-car" /></div>}
 
       {isLoading && (
         <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">

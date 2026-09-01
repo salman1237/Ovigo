@@ -47,6 +47,7 @@ export function MobileMenu({
     { href: "/dashboard/guides", label: "My Guides" },
     { href: "/dashboard/guide", label: "Guide Dashboard" },
     { href: "/dashboard/business-network", label: "Business Network" },
+    { href: "/dashboard/ads", label: "Ad Campaigns" },
     { href: "/dashboard/earnings", label: "Earnings" },
     { href: "/dashboard/analytics", label: "Analytics" },
   ];
