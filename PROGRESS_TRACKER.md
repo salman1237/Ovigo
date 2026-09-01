@@ -4,14 +4,14 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-01 (Full-stack audit + complete visual redesign across every module, ahead of Phase 3 — see "Cross-Cutting: Audit & Redesign" below)_
+_Last updated: 2026-09-01 (Sprint 17-18 complete — Advertising Platform shipped, Phase 3 underway)_
 
 ## Infrastructure & deployment status
 
 | Item | Status | Notes |
 |---|---|---|
 | GitHub repo | Done | `salman1237/Ovigo`, connected |
-| NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 47 tables live — see Sprint 5-6 (13 tables), Sprint 7-8 (`bookings`, `booking_items`, `booking_guests`, `booking_status_history`, `payments`, `escrow_transactions`, `commissions`, `reviews`), Sprint 9 (`notifications`, `disputes`), Sprint 10-11 (`custom_tour_requests`, `tour_bids`), Sprint 12-13 (`guide_supervision`, `guide_assignments`, `guide_availability`, `business_referrals`), Sprint 14-15 Part 1 (`commission_rules`, `payouts`, `badges`), Sprint 14-15 Part 2 (`drivers`, `vehicles`, `vehicle_availability`) and Sprint 16 Part 1 (`chat_threads`, `chat_attachments`, `chat_messages`) additions below. Sprint 16 Part 2 (analytics + dispute payout holds) added no new tables — see that section |
+| NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 48 tables live — see Sprint 5-6 (13 tables), Sprint 7-8 (`bookings`, `booking_items`, `booking_guests`, `booking_status_history`, `payments`, `escrow_transactions`, `commissions`, `reviews`), Sprint 9 (`notifications`, `disputes`), Sprint 10-11 (`custom_tour_requests`, `tour_bids`), Sprint 12-13 (`guide_supervision`, `guide_assignments`, `guide_availability`, `business_referrals`), Sprint 14-15 Part 1 (`commission_rules`, `payouts`, `badges`), Sprint 14-15 Part 2 (`drivers`, `vehicles`, `vehicle_availability`), Sprint 16 Part 1 (`chat_threads`, `chat_attachments`, `chat_messages`) and Sprint 17-18 (`ad_campaigns`) additions below. Sprint 16 Part 2 (analytics + dispute payout holds) added no new tables — see that section |
 | Cloudflare R2 | Done | `ovigo` bucket, S3-compatible credentials in `backend/.env` and on FastAPI Cloud — see Sprint 5-6 image storage notes |
 | SSLCommerz | Done | Sandbox store credentials in `backend/.env` and on FastAPI Cloud — see Sprint 7-8 payment notes |
 | Backend scaffold | Done | FastAPI app, config, async SQLAlchemy engine, Alembic wired to Neon |
@@ -294,7 +294,25 @@ Requested by the project owner after Phase 2 wrapped: the navbar and overall UI 
 
 ## Phase 3 — Growth & Monetization
 
-Not started. See technical document §8, Phase 3.
+### Sprint 17-18 — Advertising Platform (Wk 33-36)
+
+| Task | Status |
+|---|---|
+| Ad product catalog (search, featured, banner, card, sponsored) | Done — `AdPlacementType` enum; a campaign picks one placement type as metadata, all placement types share the same underlying serving/billing mechanics |
+| Campaign creation & management | Done — a partner picks one of their own already-published listings (Tour/Property/Vehicle) to promote; draft → pending_review → active/rejected → paused/completed lifecycle, mirroring the tours/properties/vehicles approval pattern |
+| Location & audience targeting | Done for location — reuses the existing generic `location_tags` system via a new `TaggableEntityType.AD_CAMPAIGN` member rather than a new join table. No audience/demographic targeting — no traveler-profiling data model exists in this codebase to target against, and building one would be far outside this sprint's scope |
+| CPC and CPM billing models | Done — CPC charges the bid amount per click; CPM charges bid/1,000 per impression. A campaign auto-completes once spend reaches its budget; the exhausting click/impression is still honored in full (not partially charged) since it already happened, so a small overshoot past the budget is expected, not a bug |
+| Impression & click tracking | Done — aggregate counters (`impressions_count`/`clicks_count`) on the campaign row, not a per-event log, consistent with how commissions/payouts are running balances rather than transaction ledgers elsewhere in this codebase. Serving `GET /api/v1/ads/sponsored` for a destination *is* the impression — there's no separate client-side "mark as shown" call |
+| Ad creative approval workflow | Done — admin approves/rejects the campaign itself (bid, budget, targeting). There's no separate creative-asset upload/review: a campaign promotes an existing listing whose content was already vetted when it was published, so a second creative-review pipeline would be reviewing the same content twice |
+| Ad budget management & billing | Done, flag-only — `budget_total`/`budget_spent` are tracked internally, the same pattern already used for payouts and escrow release ("a payout is marked paid immediately"). No real payment-gateway integration for ad spend; a partner sets a budget and spend accrues against it, nothing moves money |
+| Ad reporting dashboard (impressions, CTR, ROAS) | Done except ROAS — `/dashboard/ads/[id]` shows impressions, clicks, CTR and spend. ROAS needs click-to-booking attribution, which doesn't exist anywhere in this codebase and would be a significant feature on its own, not a reporting nicety — deliberately left out rather than faked |
+| Sponsored result labeling in search | Done — a shared `SponsoredResults` component (highest-bid-first auction over active, in-window, under-budget campaigns for the searched destination) renders a labeled "Sponsored" section on the tours/stays/rent-a-car search pages, with click tracking, once a destination is searched |
+
+**Closes MVP Acceptance Criteria #17 and #18** (see below) — the two remaining `Pending` rows from Phase 1.
+
+**New table:** `ad_campaigns`. **Enum extension:** `TaggableEntityType` gained `AD_CAMPAIGN` via `ALTER TYPE ADD VALUE`. One migration, applied cleanly to Neon on the first attempt.
+
+**Verified:** a comprehensive scripted smoke test against Neon covering the full lifecycle — ownership checks (can't advertise someone else's listing), submit-without-targeting rejected, admin approve/reject, sponsored-result serving with correct impression tracking (and correctly excluding wrong entity types, unapproved, paused and budget-exhausted campaigns), CPC click billing and budget-exhaustion auto-completion, CPM impression billing, pause/resume, and a lowered-budget-below-spend guard. Also verified at the HTTP layer: all 13 routes registered, auth gating correct on partner/admin endpoints, and the public sponsored/click endpoints respond correctly unauthenticated. Frontend `npm run lint` and `npm run build` both pass clean, all 40 routes generated. Both FastAPI Cloud and Vercel confirmed live post-deploy.
 
 ## Phase 4 — Scale & Expansion
 
@@ -320,7 +338,7 @@ Not started. See technical document §8, Phase 4.
 | 14 | A Local Expert can add a referred business | Done — `owned` or `referred` ownership types, admin approval workflow |
 | 15 | Referral attribution is stored | Done — every `BusinessReferral` row carries `referring_expert_role_id` |
 | 16 | Admin can manage disputes, refunds and payout holds | Done — either party to a booking can open a dispute; an admin resolves it as refunded (flips escrow to `REFUNDED`, cancels the held commission) or rejected (releases the hold). Opening a dispute now actually freezes the relevant `Commission` row (`ON_HOLD`) so it can't be swept into a payout batch while unresolved — the payout-hold mechanism landed in Sprint 16 Part 2 once a real payout system existed to hold against. |
-| 17 | Partners can purchase featured placement | Pending |
-| 18 | Sponsored results are visibly labelled | Pending |
+| 17 | Partners can purchase featured placement | Done — "purchase" is flag-only (a partner sets a budget, spend accrues against it), not a real payment-gateway charge, consistent with how payouts/escrow already work in this codebase. See Sprint 17-18 |
+| 18 | Sponsored results are visibly labelled | Done — a "Sponsored" badge and section heading on the tours/stays/rent-a-car search pages. See Sprint 17-18 |
 | 19 | All important Admin actions are audit logged | Done — role approve/reject, document verify/reject, tour/property approve/reject, dispute resolve, business referral approve/reject. Extend as each new admin action lands |
 | 20 | Tour, stay and partner profiles cannot be published without location tags | Done — enforced server-side at submit time for both tours and properties (verified: submitting without a tag returns 409); partner-role profiles don't have a separate "publish" gate yet since they're not publicly browsable pages on their own outside search results |
