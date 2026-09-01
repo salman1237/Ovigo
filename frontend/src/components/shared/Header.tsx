@@ -1,20 +1,67 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import {
+  Briefcase,
+  Car,
+  ChevronDown,
+  Compass,
+  LayoutDashboard,
+  LogOut,
+  Map,
+  Menu,
+  MessageCircle,
+  ShieldCheck,
+  ShoppingCart,
+  Sparkles,
+  User as UserIcon,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 
+import { NotificationBell } from "@/components/shared/NotificationBell";
+import { MobileMenu } from "@/components/shared/MobileMenu";
+import { Popover } from "@/components/ui/Popover";
+import { buttonVariants } from "@/components/ui/Button";
 import { apiClient } from "@/lib/api-client";
+import { cn } from "@/lib/cn";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCartStore } from "@/stores/cart-store";
-import { NotificationBell } from "@/components/shared/NotificationBell";
 import type { ChatThread } from "@/types/chat";
+
+const PRIMARY_NAV = [
+  { href: "/tours", label: "Tours", icon: Map },
+  { href: "/stays", label: "Stays", icon: Compass },
+  { href: "/rent-a-car", label: "Rent a Car", icon: Car },
+];
+
+const PARTNER_LINKS = [
+  { href: "/dashboard/tours", label: "My Tours" },
+  { href: "/dashboard/properties", label: "My Properties" },
+  { href: "/dashboard/vehicles", label: "My Vehicles" },
+  { href: "/dashboard/drivers", label: "My Drivers" },
+  { href: "/dashboard/bids", label: "Bid Requests" },
+  { href: "/dashboard/guides", label: "My Guides" },
+  { href: "/dashboard/guide", label: "Guide Dashboard" },
+  { href: "/dashboard/business-network", label: "Business Network" },
+  { href: "/dashboard/earnings", label: "Earnings" },
+  { href: "/dashboard/analytics", label: "Analytics" },
+];
+
+const TRAVELER_LINKS = [
+  { href: "/bookings", label: "My Bookings" },
+  { href: "/custom-requests", label: "Custom Trip" },
+];
 
 export function Header() {
   const user = useAuthStore((s) => s.user);
   const clearSession = useAuthStore((s) => s.clearSession);
   const cartCount = useCartStore((s) => s.items.length);
   const router = useRouter();
+  const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const { data: chatThreads } = useQuery({
     queryKey: ["chat", "threads"],
@@ -37,92 +84,196 @@ export function Header() {
   };
 
   return (
-    <header className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
-      <Link href="/" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-        Ovigo
-      </Link>
-      <nav className="flex items-center gap-4 text-sm">
-        <Link href="/tours" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-          Tours
-        </Link>
-        <Link href="/stays" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-          Stays
-        </Link>
-        <Link href="/rent-a-car" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-          Rent a Car
-        </Link>
-        {user ? (
-          <>
-            <Link href="/bookings" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              My Bookings
-            </Link>
-            <Link href="/cart" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              Cart{cartCount > 0 && ` (${cartCount})`}
-            </Link>
-            <Link href="/chat" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              Messages{unreadChatCount > 0 && ` (${unreadChatCount})`}
-            </Link>
-            <Link href="/custom-requests" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              Custom Trip
-            </Link>
-            <Link href="/dashboard/tours" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              My Tours
-            </Link>
-            <Link href="/dashboard/properties" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              My Properties
-            </Link>
-            <Link href="/dashboard/vehicles" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              My Vehicles
-            </Link>
-            <Link href="/dashboard/drivers" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              My Drivers
-            </Link>
-            <Link href="/dashboard/bids" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              Bid Requests
-            </Link>
-            <Link href="/dashboard/guides" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              My Guides
-            </Link>
-            <Link href="/dashboard/guide" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              Guide Dashboard
-            </Link>
-            <Link href="/dashboard/business-network" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              Business Network
-            </Link>
-            <Link href="/dashboard/earnings" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              Earnings
-            </Link>
-            <Link href="/dashboard/analytics" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              Analytics
-            </Link>
-            <Link href="/dashboard/profile" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              My Profile
-            </Link>
-            <Link href="/account/partner" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              Become a Partner
-            </Link>
-            {isAdmin && (
-              <Link href="/admin/partners" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-                Admin
-              </Link>
+    <>
+      <header className="sticky top-0 z-30 border-b border-zinc-200/80 bg-white/80 backdrop-blur-md dark:border-zinc-800/80 dark:bg-zinc-950/80">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+          <Link href="/" className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-indigo-600 text-white shadow-md shadow-primary-600/30">
+              <Sparkles className="h-4 w-4" />
+            </span>
+            <span className="bg-gradient-to-r from-primary-600 to-indigo-600 bg-clip-text text-lg font-bold text-transparent">
+              Ovigo
+            </span>
+          </Link>
+
+          <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary">
+            {PRIMARY_NAV.map((item) => (
+              <NavLink
+                key={item.href}
+                href={item.href}
+                label={item.label}
+                icon={item.icon}
+                active={pathname?.startsWith(item.href)}
+              />
+            ))}
+
+            {user && (
+              <Popover
+                align="left"
+                trigger={({ toggle, open }) => (
+                  <button
+                    onClick={toggle}
+                    className={cn(
+                      "flex items-center gap-1 rounded-full px-3.5 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50",
+                      open && "bg-zinc-100 text-zinc-900 dark:bg-zinc-900 dark:text-zinc-50"
+                    )}
+                  >
+                    <LayoutDashboard className="h-4 w-4" />
+                    Dashboard
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              >
+                <DropdownSectionLabel>Traveler</DropdownSectionLabel>
+                {TRAVELER_LINKS.map((item) => (
+                  <DropdownLink key={item.href} href={item.href} label={item.label} />
+                ))}
+                <DropdownSectionLabel>Partner Tools</DropdownSectionLabel>
+                {PARTNER_LINKS.map((item) => (
+                  <DropdownLink key={item.href} href={item.href} label={item.label} />
+                ))}
+              </Popover>
             )}
-            <NotificationBell />
-            <span className="text-zinc-400">{user.full_name}</span>
-            <button onClick={handleLogout} className="font-medium text-zinc-900 dark:text-zinc-50">
-              Sign out
+          </nav>
+
+          <div className="flex items-center gap-1">
+            {user ? (
+              <>
+                <IconLink href="/cart" label="Cart" icon={ShoppingCart} count={cartCount} className="hidden sm:inline-flex" />
+                <IconLink href="/chat" label="Messages" icon={MessageCircle} count={unreadChatCount} className="hidden sm:inline-flex" />
+                <NotificationBell />
+
+                <Popover
+                  trigger={({ toggle, open }) => (
+                    <button
+                      onClick={toggle}
+                      className={cn(
+                        "ml-1 flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900",
+                        open && "bg-zinc-100 dark:bg-zinc-900"
+                      )}
+                    >
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-indigo-600 text-xs font-semibold text-white">
+                        {user.full_name.charAt(0).toUpperCase()}
+                      </span>
+                      <span className="hidden max-w-24 truncate md:inline">{user.full_name}</span>
+                      <ChevronDown className="hidden h-3.5 w-3.5 md:inline" />
+                    </button>
+                  )}
+                >
+                  <DropdownLink href="/dashboard/profile" label="My Profile" icon={UserIcon} />
+                  <DropdownLink href="/account/partner" label="Become a Partner" icon={Briefcase} />
+                  {isAdmin && <DropdownLink href="/admin/partners" label="Admin" icon={ShieldCheck} />}
+                  <div className="my-1 h-px bg-zinc-100 dark:bg-zinc-800" />
+                  <button
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Sign out
+                  </button>
+                </Popover>
+              </>
+            ) : (
+              <div className="hidden items-center gap-2 sm:flex">
+                <Link href="/account/login" className="rounded-full px-4 py-2 text-sm font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+                  Sign in
+                </Link>
+                <Link href="/account/register" className={buttonVariants({ size: "sm" })}>
+                  Create account
+                </Link>
+              </div>
+            )}
+
+            <button
+              onClick={() => setMobileOpen(true)}
+              aria-label="Open menu"
+              className="ml-1 rounded-full p-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900 lg:hidden"
+            >
+              <Menu className="h-5 w-5" />
             </button>
-          </>
-        ) : (
-          <>
-            <Link href="/account/login" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-              Sign in
-            </Link>
-            <Link href="/account/register" className="font-medium text-zinc-900 dark:text-zinc-50">
-              Create account
-            </Link>
-          </>
-        )}
-      </nav>
-    </header>
+          </div>
+        </div>
+      </header>
+
+      <MobileMenu
+        open={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        isLoggedIn={!!user}
+        isAdmin={isAdmin}
+        onLogout={handleLogout}
+      />
+    </>
+  );
+}
+
+function NavLink({
+  href,
+  label,
+  icon: Icon,
+  active,
+}: {
+  href: string;
+  label: string;
+  icon?: LucideIcon;
+  active?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium transition-colors",
+        active
+          ? "bg-primary-50 text-primary-700 dark:bg-primary-950/60 dark:text-primary-300"
+          : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
+      )}
+    >
+      {Icon && <Icon className="h-4 w-4" />}
+      {label}
+    </Link>
+  );
+}
+
+function IconLink({
+  href,
+  label,
+  icon: Icon,
+  count,
+  className,
+}: {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  count: number;
+  className?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      className={cn("relative rounded-full p-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900", className)}
+    >
+      <Icon className="h-5 w-5" />
+      {count > 0 && (
+        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-medium text-white">
+          {count > 9 ? "9+" : count}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+function DropdownSectionLabel({ children }: { children: React.ReactNode }) {
+  return <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{children}</p>;
+}
+
+function DropdownLink({ href, label, icon: Icon }: { href: string; label: string; icon?: LucideIcon }) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-700 hover:bg-primary-50 hover:text-primary-700 dark:text-zinc-300 dark:hover:bg-primary-950/40 dark:hover:text-primary-300"
+    >
+      {Icon && <Icon className="h-4 w-4" />}
+      {label}
+    </Link>
   );
 }

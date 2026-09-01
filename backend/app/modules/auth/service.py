@@ -57,10 +57,11 @@ def issue_token_pair(user: User) -> tuple[str, str]:
 
 
 async def generate_otp(db: AsyncSession, user: User) -> str:
-    """Dev-mode OTP: stored on the user row and returned to the caller.
-
-    Replace with a real SMS/email provider dispatch (no code in the response) before
-    any non-development deployment — tracked for the Sprint 9 / Phase 3 notification work.
+    """Stores the OTP on the user row and returns it to the caller. The router only
+    echoes this back in the response when `settings.environment != "production"` —
+    there's still no real SMS/email provider dispatch (tracked for the Sprint 9 /
+    Phase 3 notification work), so in production today the code goes nowhere at all
+    until that lands. Don't rely on this for a production launch as-is.
     """
     code = f"{random.randint(0, 999999):06d}"
     user.otp_code = code

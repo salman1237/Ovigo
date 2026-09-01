@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.core.rate_limit import limiter
 from app.core.security import TokenType, create_access_token, decode_token
 from app.database import get_db
@@ -18,6 +19,7 @@ from app.modules.users.models import User
 from app.core.exceptions import UnauthorizedError
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+settings = get_settings()
 
 
 @router.post("/register", response_model=TokenPair, status_code=status.HTTP_201_CREATED)
@@ -58,11 +60,16 @@ async def request_email_otp(
     request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     code = await service.generate_otp(db, current_user)
-    return {"message": "Verification code generated", "dev_code": code}
+    response = {"message": "Verification code generated"}
+    if settings.environment != "production":
+        response["dev_code"] = code
+    return response
 
 
 @router.post("/verify-email/confirm")
+@limiter.limit("10/minute")
 async def confirm_email_otp(
+    request: Request,
     payload: VerifyOtpRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -77,11 +84,16 @@ async def request_phone_otp(
     request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     code = await service.generate_otp(db, current_user)
-    return {"message": "Verification code generated", "dev_code": code}
+    response = {"message": "Verification code generated"}
+    if settings.environment != "production":
+        response["dev_code"] = code
+    return response
 
 
 @router.post("/verify-phone/confirm")
+@limiter.limit("10/minute")
 async def confirm_phone_otp(
+    request: Request,
     payload: VerifyOtpRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
