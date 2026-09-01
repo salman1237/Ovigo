@@ -167,7 +167,10 @@ async def mark_payable_for_booking(db: AsyncSession, booking: Booking) -> None:
         return
     result = await db.execute(select(Commission).where(Commission.booking_item_id.in_(item_ids)))
     for commission in result.scalars().all():
-        commission.status = CommissionStatus.PAYABLE
+        # ON_HOLD commissions are frozen by an open dispute — leave them alone until
+        # the dispute resolves (disputes/service.py releases or cancels the hold).
+        if commission.status == CommissionStatus.PENDING:
+            commission.status = CommissionStatus.PAYABLE
 
 
 async def get_earnings_for_role(db: AsyncSession, role: PartnerRole) -> EarningsSummary:
@@ -184,12 +187,16 @@ async def get_earnings_for_role(db: AsyncSession, role: PartnerRole) -> Earnings
         (c.partner_net_amount for c in commissions if c.status == CommissionStatus.PAYABLE), Decimal("0")
     )
     total_net_paid = sum((c.partner_net_amount for c in commissions if c.status == CommissionStatus.PAID), Decimal("0"))
+    total_net_on_hold = sum(
+        (c.partner_net_amount for c in commissions if c.status == CommissionStatus.ON_HOLD), Decimal("0")
+    )
     return EarningsSummary(
         total_gross=total_gross,
         total_commission=total_commission,
         total_net_pending=total_net_pending,
         total_net_payable=total_net_payable,
         total_net_paid=total_net_paid,
+        total_net_on_hold=total_net_on_hold,
         commissions=commissions,
     )
 

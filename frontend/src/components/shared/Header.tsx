@@ -92,6 +92,9 @@ export function Header() {
             <Link href="/dashboard/earnings" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
               Earnings
             </Link>
+            <Link href="/dashboard/analytics" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
+              Analytics
+            </Link>
             <Link href="/dashboard/profile" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
               My Profile
             </Link>

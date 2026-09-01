@@ -38,6 +38,8 @@ class CommissionStatus(str, enum.Enum):
     PENDING = "pending"  # booking item not yet completed
     PAYABLE = "payable"  # completed, owed to the partner
     PAID = "paid"  # swept into a payout batch
+    ON_HOLD = "on_hold"  # frozen by an open dispute on the booking — a payout hold
+    CANCELLED = "cancelled"  # the booking was refunded following a dispute; no commission is owed
 
 
 class CommissionSource(str, enum.Enum):

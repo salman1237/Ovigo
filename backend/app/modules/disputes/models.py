@@ -1,9 +1,22 @@
-"""Basic disputes: a traveler flags a problem with a booking, an admin resolves it
-with an optional refund. This satisfies MVP AC #16 ("Admin can manage disputes,
-refunds and payout holds") at the level Phase 1 needs — a refund here only flips
-the associated EscrowTransaction to REFUNDED (a bookkeeping flag, same as
-"release" does today); no money actually moves since there's no payout/refund
-API integration yet. Real gateway-side refunds are Phase 2+ scope.
+"""Disputes: either party to a booking — the traveler, or any partner serving one of
+its items — can flag a problem; an admin resolves it with a refund or a rejection.
+
+Sprint 16 Part 2 closed the "payout holds" half of MVP AC #16 ("Admin can manage
+disputes, refunds and payout holds"): opening a dispute now freezes every Commission
+tied to the booking (ON_HOLD, see commissions/models.py), so a partner can't get paid
+out while a dispute is unresolved. Resolving as REJECTED releases the hold back to
+PENDING/PAYABLE; resolving as REFUNDED cancels those commissions outright (CANCELLED)
+since the partner isn't owed anything on a refunded booking. A refund itself still
+only flips the associated EscrowTransaction to REFUNDED (a bookkeeping flag, same as
+"release" does today) — no money actually moves since there's no payout/refund
+gateway integration; that stays out of scope.
+
+Scope trim: resolution is still binary (full refund or rejected) — no partial-refund
+amount tracking, since escrow is a single HELD/REFUNDED flag per booking, not an
+amount-tracked ledger. There's also no dedicated "disputes I'm involved in" endpoint
+for partners yet (would need scanning bookings by resolved partner-role ownership) —
+partners are still notified in-app the moment a dispute opens or resolves on a
+booking of theirs, they just don't have a list view to browse history from.
 """
 import enum
 import uuid
@@ -48,3 +61,11 @@ class Dispute(Base):
 
     booking: Mapped["Booking"] = relationship()  # noqa: F821
     raised_by: Mapped["User"] = relationship(foreign_keys=[raised_by_id])  # noqa: F821
+
+    @property
+    def raised_by_role(self) -> str:
+        """"traveler" or "partner" — computed from the loaded `booking` relationship
+        rather than stored, since it's fully derived from who raised it vs. who the
+        booking belongs to. Callers must eager-load `booking` (see service.py's
+        `_EAGER`) or this raises a lazy-load error in an async context."""
+        return "traveler" if self.raised_by_id == self.booking.user_id else "partner"

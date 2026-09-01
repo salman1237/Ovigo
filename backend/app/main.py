@@ -18,6 +18,7 @@ from app.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.rate_limit import limiter
 from app.modules.admin.router import router as admin_router
+from app.modules.analytics.router import router as analytics_router
 from app.modules.auth.router import router as auth_router
 from app.modules.badges.router import admin_router as badges_admin_router
 from app.modules.badges.router import router as badges_router
@@ -107,6 +108,7 @@ app.include_router(payouts_router)
 app.include_router(payouts_admin_router)
 app.include_router(commissions_router)
 app.include_router(commissions_admin_router)
+app.include_router(analytics_router)
 app.include_router(badges_router)
 app.include_router(badges_admin_router)
 app.include_router(reviews_router)

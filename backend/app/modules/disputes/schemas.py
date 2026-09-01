@@ -30,6 +30,7 @@ class DisputeRead(BaseModel):
     id: uuid.UUID
     booking_id: uuid.UUID
     raised_by: DisputeRaisedBy
+    raised_by_role: str
     reason: str
     status: DisputeStatus
     resolution: DisputeResolution | None

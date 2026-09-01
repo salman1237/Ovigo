@@ -28,6 +28,7 @@ class EarningsSummary(BaseModel):
     total_net_pending: Decimal
     total_net_payable: Decimal
     total_net_paid: Decimal
+    total_net_on_hold: Decimal
     commissions: list[CommissionRead]
 
 

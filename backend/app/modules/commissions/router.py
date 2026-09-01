@@ -32,6 +32,14 @@ async def get_host_earnings(
     return await service.get_earnings_for_role(db, role)
 
 
+@router.get("/vehicles", response_model=EarningsSummary)
+async def get_rent_a_car_earnings(
+    role: PartnerRole = Depends(require_approved_role(PartnerRoleType.RENT_A_CAR)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_earnings_for_role(db, role)
+
+
 @admin_router.get("", response_model=list[CommissionRuleRead])
 async def list_commission_rules(db: AsyncSession = Depends(get_db)):
     return await service.list_rules(db)

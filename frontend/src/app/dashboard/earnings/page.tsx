@@ -26,6 +26,7 @@ export default function EarningsPage() {
       <div className="mt-6 flex flex-col gap-6">
         <EarningsCard title="As a Local Expert" endpoint="/api/v1/partners/earnings/expert" />
         <EarningsCard title="As a Host" endpoint="/api/v1/partners/earnings/host" />
+        <EarningsCard title="As a Rent-a-Car partner" endpoint="/api/v1/partners/earnings/vehicles" />
       </div>
 
       <div className="mt-8">
@@ -52,12 +53,13 @@ function EarningsCard({ title, endpoint }: { title: string; endpoint: string }) 
       {notEligible && <p className="mt-2 text-sm text-zinc-500">No approved role of this type yet.</p>}
       {data && (
         <>
-          <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
+          <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-6">
             <Stat label="Gross" value={data.total_gross} />
             <Stat label="Ovigo commission" value={data.total_commission} />
             <Stat label="Pending" value={data.total_net_pending} />
             <Stat label="Payable" value={data.total_net_payable} highlight />
             <Stat label="Paid out" value={data.total_net_paid} />
+            {Number(data.total_net_on_hold) > 0 && <Stat label="On hold (dispute)" value={data.total_net_on_hold} />}
           </div>
           <div className="mt-4 flex flex-col gap-1">
             {data.commissions.map((c) => (
@@ -66,8 +68,20 @@ function EarningsCard({ title, endpoint }: { title: string; endpoint: string }) 
                   {new Date(c.created_at).toLocaleDateString()} · {(Number(c.rate) * 100).toFixed(0)}% of {formatMoney(c.gross_amount)}
                   {c.source === "network" && <span className="ml-1 text-purple-500">(network)</span>}
                 </span>
-                <span className={c.status === "payable" ? "text-emerald-600" : c.status === "paid" ? "text-zinc-400" : "text-amber-600"}>
-                  {formatMoney(c.partner_net_amount)} · {c.status}
+                <span
+                  className={
+                    c.status === "payable"
+                      ? "text-emerald-600"
+                      : c.status === "paid"
+                        ? "text-zinc-400"
+                        : c.status === "cancelled"
+                          ? "text-red-600"
+                          : c.status === "on_hold"
+                            ? "text-orange-600"
+                            : "text-amber-600"
+                  }
+                >
+                  {formatMoney(c.partner_net_amount)} · {c.status.replace("_", " ")}
                 </span>
               </div>
             ))}

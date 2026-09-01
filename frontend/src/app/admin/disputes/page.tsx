@@ -82,7 +82,12 @@ function DisputeCard({ dispute, onChange }: { dispute: Dispute; onChange: () => 
     <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="font-medium text-zinc-900 dark:text-zinc-50">{dispute.raised_by.full_name}</h3>
+          <h3 className="font-medium text-zinc-900 dark:text-zinc-50">
+            {dispute.raised_by.full_name}
+            <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-normal capitalize text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+              {dispute.raised_by_role}
+            </span>
+          </h3>
           <p className="text-xs text-zinc-500">
             {dispute.raised_by.email} · Booking {dispute.booking_id.slice(0, 8)} ·{" "}
             {new Date(dispute.created_at).toLocaleString()}
