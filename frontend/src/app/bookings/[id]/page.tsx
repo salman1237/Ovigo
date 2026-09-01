@@ -5,6 +5,12 @@ import { useSearchParams, useParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 import { MessageButton } from "@/components/shared/MessageButton";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { Spinner } from "@/components/ui/Spinner";
+import { Textarea } from "@/components/ui/Textarea";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { BOOKING_STATUS_LABELS, type Booking, type BookingItem } from "@/types/booking";
@@ -12,7 +18,7 @@ import type { Dispute } from "@/types/dispute";
 
 export default function BookingDetailPage() {
   return (
-    <Suspense fallback={<p className="px-6 py-12 text-sm text-zinc-400">Loading…</p>}>
+    <Suspense fallback={<Spinner />}>
       <BookingDetailContent />
     </Suspense>
   );
@@ -42,21 +48,19 @@ function BookingDetailContent() {
     }
   };
 
-  if (isLoading || !booking) return <p className="px-6 py-12 text-sm text-zinc-400">Loading…</p>;
+  if (isLoading || !booking) return <Spinner />;
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
       {paymentResult === "success" && (
-        <p className="mb-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+        <p className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
           Payment successful! Your booking is confirmed.
         </p>
       )}
 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Booking</h1>
-        <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-          {BOOKING_STATUS_LABELS[booking.status]}
-        </span>
+        <Badge variant="primary">{BOOKING_STATUS_LABELS[booking.status]}</Badge>
       </div>
       <p className="mt-1 text-sm text-zinc-500">Total: {formatMoney(booking.total_amount)}</p>
 
@@ -64,41 +68,40 @@ function BookingDetailContent() {
 
       <div className="mt-6 flex flex-wrap gap-2">
         {booking.status === "pending_payment" && (
-          <button
+          <Button
             onClick={async () => {
               const payment = await apiClient.post<{ gateway_page_url: string }>(
                 "/api/v1/payments/initiate", { booking_id: booking.id }, { auth: true }
               );
               window.location.href = payment.gateway_page_url;
             }}
-            className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-medium text-white hover:bg-emerald-700"
           >
             Pay now
-          </button>
+          </Button>
         )}
         {(booking.status === "pending_payment" || booking.status === "confirmed") && (
-          <button
+          <Button
+            variant="destructive"
             onClick={() => run(() => apiClient.post(`/api/v1/bookings/${id}/cancel`, undefined, { auth: true }))}
-            className="rounded-full border border-red-300 px-5 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400"
           >
             Cancel booking
-          </button>
+          </Button>
         )}
         {booking.status === "confirmed" && (
-          <button
+          <Button
+            variant="secondary"
             onClick={() => run(() => apiClient.post(`/api/v1/bookings/${id}/check-in`, undefined, { auth: true }))}
-            className="rounded-full border border-zinc-300 px-5 py-2 text-sm font-medium dark:border-zinc-700"
           >
             Check in
-          </button>
+          </Button>
         )}
         {booking.status === "checked_in" && (
-          <button
+          <Button
+            variant="secondary"
             onClick={() => run(() => apiClient.post(`/api/v1/bookings/${id}/check-out`, undefined, { auth: true }))}
-            className="rounded-full border border-zinc-300 px-5 py-2 text-sm font-medium dark:border-zinc-700"
           >
             Check out
-          </button>
+          </Button>
         )}
       </div>
 
@@ -163,7 +166,7 @@ function DisputeSection({ bookingId }: { bookingId: string }) {
       <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Problem with this booking?</h2>
 
       {dispute ? (
-        <div className="mt-2 rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+        <Card className="mt-2 p-3 text-sm">
           <p className="font-medium text-zinc-900 dark:text-zinc-50">
             {dispute.status === "open" ? "Dispute under review" : "Dispute resolved"}
           </p>
@@ -173,38 +176,30 @@ function DisputeSection({ bookingId }: { bookingId: string }) {
               Outcome: <span className="capitalize font-medium">{dispute.resolution}</span> — {dispute.resolution_note}
             </p>
           )}
-        </div>
+        </Card>
       ) : (
         <>
           {!showForm && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="mt-2 rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium dark:border-zinc-700"
-            >
+            <Button variant="secondary" size="sm" onClick={() => setShowForm(true)} className="mt-2">
               Report a problem
-            </button>
+            </Button>
           )}
           {showForm && (
             <div className="mt-2 flex flex-col gap-2">
-              <textarea
+              <Textarea
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="Describe what went wrong with this booking…"
                 rows={3}
-                className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
               />
               {error && <p className="text-xs text-red-600">{error}</p>}
               <div className="flex gap-2">
-                <button
-                  onClick={submit}
-                  disabled={busy}
-                  className="rounded-full bg-zinc-900 px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
-                >
+                <Button size="sm" onClick={submit} loading={busy}>
                   Submit
-                </button>
-                <button onClick={() => setShowForm(false)} className="text-xs text-zinc-500">
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setShowForm(false)}>
                   Cancel
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -231,7 +226,7 @@ function BookingItemCard({ item }: { item: BookingItem }) {
   };
 
   return (
-    <div className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+    <Card className="p-3 text-sm">
       <p className="font-medium capitalize">{item.item_type.replace("_", " ")}</p>
       <p className="text-zinc-500">
         {item.quantity} × {formatMoney(item.unit_price)} = {formatMoney(item.subtotal)}
@@ -254,19 +249,14 @@ function BookingItemCard({ item }: { item: BookingItem }) {
               </button>
             ))}
           </div>
-          <input
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Leave a comment (optional)"
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          />
+          <Input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Leave a comment (optional)" />
           {error && <p className="text-xs text-red-600">{error}</p>}
-          <button onClick={submitReview} className="self-start rounded-full border border-zinc-300 px-4 py-1 text-xs dark:border-zinc-700">
+          <Button size="sm" variant="secondary" onClick={submitReview} className="self-start">
             Submit review
-          </button>
+          </Button>
         </div>
       )}
       {submitted && <p className="mt-2 text-xs text-emerald-600">Thanks for your review!</p>}
-    </div>
+    </Card>
   );
 }
