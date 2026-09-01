@@ -62,8 +62,29 @@ export default function AdminBusinessNetworkPage() {
 function ReferralCard({ referral, onChange }: { referral: AdminBusinessReferral; onChange: () => void }) {
   const [rejectReason, setRejectReason] = useState("");
   const [showReject, setShowReject] = useState(false);
+  const [showLink, setShowLink] = useState(false);
+  const [partnerRoleId, setPartnerRoleId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const linkPartner = async () => {
+    if (!partnerRoleId.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiClient.post(
+        `/api/v1/admin/business-network/${referral.id}/link-partner`,
+        { partner_role_id: partnerRoleId },
+        { auth: true }
+      );
+      setShowLink(false);
+      onChange();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to link partner");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const approve = async () => {
     setBusy(true);
@@ -131,6 +152,36 @@ function ReferralCard({ referral, onChange }: { referral: AdminBusinessReferral;
         <p className="mt-1 text-xs text-zinc-500">
           {referral.contact_phone} {referral.contact_phone && referral.contact_email && "·"} {referral.contact_email}
         </p>
+      )}
+
+      {referral.status === "approved" && (
+        <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+          {referral.linked_partner_role_id ? (
+            <p className="text-xs text-emerald-600">
+              Linked to partner {referral.linked_partner_role_id.slice(0, 8)} — network commission active
+            </p>
+          ) : !showLink ? (
+            <button onClick={() => setShowLink(true)} className="text-xs font-medium text-zinc-900 underline dark:text-zinc-50">
+              Link to a registered partner
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                value={partnerRoleId}
+                onChange={(e) => setPartnerRoleId(e.target.value)}
+                placeholder="Partner role ID"
+                className="flex-1 rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              />
+              <button
+                onClick={linkPartner}
+                disabled={busy || !partnerRoleId.trim()}
+                className="rounded-full bg-zinc-900 px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
+              >
+                Link
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {showReject && (

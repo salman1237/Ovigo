@@ -88,6 +88,17 @@ async def create_review(db: AsyncSession, user: User, payload: ReviewCreate) -> 
 
     await db.commit()
 
+    if tour_id is not None:
+        from app.modules.badges import service as badges_service
+        from app.modules.locations.models import TaggableEntityType
+
+        await badges_service.recompute_top_rated(db, TaggableEntityType.TOUR, tour_id)
+    if property_id is not None:
+        from app.modules.badges import service as badges_service
+        from app.modules.locations.models import TaggableEntityType
+
+        await badges_service.recompute_top_rated(db, TaggableEntityType.PROPERTY, property_id)
+
     result = await db.execute(select(Review).where(Review.id == review.id).options(*_EAGER))
     return result.scalar_one()
 

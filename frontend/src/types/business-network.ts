@@ -11,6 +11,7 @@ export interface BusinessReferral {
   ownership_type: OwnershipType;
   status: ReferralStatus;
   rejection_reason: string | null;
+  linked_partner_role_id: string | null;
   created_at: string;
 }
 

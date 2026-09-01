@@ -54,6 +54,14 @@ class BusinessReferral(Base):
         Enum(ReferralStatus, name="referral_status"), default=ReferralStatus.PENDING
     )
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Set by an admin once the referred business itself registers as an actual Ovigo
+    # partner — only from that point on does this referral generate a real NETWORK
+    # commission (commissions/service.py) for the referring expert, since before that
+    # there's no booking activity from the referred business to take a cut of.
+    linked_partner_role_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("partner_roles.id", ondelete="SET NULL"), nullable=True, unique=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    referring_expert_role: Mapped["PartnerRole"] = relationship()  # noqa: F821
+    referring_expert_role: Mapped["PartnerRole"] = relationship(foreign_keys=[referring_expert_role_id])  # noqa: F821
+    linked_partner_role: Mapped["PartnerRole | None"] = relationship(foreign_keys=[linked_partner_role_id])  # noqa: F821

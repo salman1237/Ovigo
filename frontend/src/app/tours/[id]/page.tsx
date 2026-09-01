@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 
 import { ReviewsList } from "@/components/shared/ReviewsList";
+import { TrustBadges } from "@/components/shared/TrustBadges";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
@@ -27,6 +28,9 @@ export default function TourDetailPage() {
     <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
       <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{tour.title}</h1>
       <p className="mt-1 text-sm text-zinc-500">{tour.duration_days} days · from {formatMoney(tour.base_price)} · up to {tour.max_group_size} people</p>
+      <div className="mt-3">
+        <TrustBadges entityType="tour" entityId={tour.id} />
+      </div>
       {tour.description && <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">{tour.description}</p>}
 
       {tour.itinerary.length > 0 && (

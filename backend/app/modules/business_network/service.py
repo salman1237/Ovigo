@@ -85,6 +85,26 @@ async def approve_referral(db: AsyncSession, admin: User, referral_id: uuid.UUID
     return await _get_referral_or_404(db, referral_id)
 
 
+async def link_partner(db: AsyncSession, admin: User, referral_id: uuid.UUID, partner_role_id: uuid.UUID) -> BusinessReferral:
+    """Admin action once the referred business itself signs up as an actual Ovigo
+    partner — from this point on, commissions/service.py credits the referring
+    expert a NETWORK-scope cut whenever the linked partner earns a DIRECT commission."""
+    referral = await _get_referral_or_404(db, referral_id)
+    if referral.status != ReferralStatus.APPROVED:
+        raise ConflictError("Only an approved referral can be linked to a partner")
+    referral.linked_partner_role_id = partner_role_id
+    await db.commit()
+    await audit.record(
+        db,
+        actor_id=admin.id,
+        action="business_referral.link_partner",
+        entity_type="business_referral",
+        entity_id=referral.id,
+        extra={"partner_role_id": str(partner_role_id)},
+    )
+    return await _get_referral_or_404(db, referral_id)
+
+
 async def reject_referral(db: AsyncSession, admin: User, referral_id: uuid.UUID, reason: str) -> BusinessReferral:
     referral = await _get_referral_or_404(db, referral_id)
     if referral.status != ReferralStatus.PENDING:

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
+import { BadgeApplications } from "@/components/shared/BadgeApplications";
 import { ImageGallery } from "@/components/shared/ImageGallery";
 import { LocationPicker } from "@/components/shared/LocationPicker";
 import { apiClient, ApiError } from "@/lib/api-client";
@@ -68,6 +69,10 @@ export default function PropertyEditPage() {
           onChange={refetch}
           editable={property.status !== "pending_review"}
         />
+      </Section>
+
+      <Section title="Trust Badges">
+        <BadgeApplications entityType="property" entityId={property.id} />
       </Section>
 
       <Section title="Destinations">

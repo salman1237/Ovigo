@@ -19,11 +19,14 @@ from app.core.exceptions import register_exception_handlers
 from app.core.rate_limit import limiter
 from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
+from app.modules.badges.router import admin_router as badges_admin_router
+from app.modules.badges.router import router as badges_router
 from app.modules.bidding.router import bids_router as bidding_bids_router
 from app.modules.bidding.router import router as bidding_router
 from app.modules.bookings.router import router as bookings_router
 from app.modules.business_network.router import admin_router as business_network_admin_router
 from app.modules.business_network.router import router as business_network_router
+from app.modules.commissions.router import admin_router as commissions_admin_router
 from app.modules.commissions.router import router as commissions_router
 from app.modules.disputes.router import admin_router as disputes_admin_router
 from app.modules.disputes.router import router as disputes_router
@@ -32,6 +35,8 @@ from app.modules.locations.router import router as locations_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.partners.router import router as partners_router
 from app.modules.payments.router import router as payments_router
+from app.modules.payouts.router import admin_router as payouts_admin_router
+from app.modules.payouts.router import router as payouts_router
 from app.modules.profiles.router import router as profiles_router
 from app.modules.reviews.router import router as reviews_router
 from app.modules.search.router import router as search_router
@@ -92,7 +97,12 @@ app.include_router(stays_router)
 app.include_router(search_router)
 app.include_router(bookings_router)
 app.include_router(payments_router)
+app.include_router(payouts_router)
+app.include_router(payouts_admin_router)
 app.include_router(commissions_router)
+app.include_router(commissions_admin_router)
+app.include_router(badges_router)
+app.include_router(badges_admin_router)
 app.include_router(reviews_router)
 app.include_router(notifications_router)
 app.include_router(disputes_router)

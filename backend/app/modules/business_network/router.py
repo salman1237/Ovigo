@@ -9,7 +9,12 @@ from app.modules.admin.schemas import RejectRequest
 from app.modules.auth.utils import get_current_user
 from app.modules.business_network import service
 from app.modules.business_network.models import BusinessReferral, ReferralStatus
-from app.modules.business_network.schemas import AdminBusinessReferralRead, BusinessReferralCreate, BusinessReferralRead
+from app.modules.business_network.schemas import (
+    AdminBusinessReferralRead,
+    BusinessReferralCreate,
+    BusinessReferralRead,
+    LinkPartnerRequest,
+)
 from app.modules.users.models import PartnerRole, PartnerRoleType, User
 
 router = APIRouter(prefix="/api/v1/business-network", tags=["business-network"])
@@ -64,6 +69,17 @@ async def admin_approve_referral(
     db: AsyncSession = Depends(get_db),
 ):
     referral = await service.approve_referral(db, current_user, referral_id)
+    return _to_admin_read(referral)
+
+
+@admin_router.post("/{referral_id}/link-partner", response_model=AdminBusinessReferralRead)
+async def admin_link_partner(
+    referral_id: uuid.UUID,
+    payload: LinkPartnerRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    referral = await service.link_partner(db, current_user, referral_id, payload.partner_role_id)
     return _to_admin_read(referral)
 
 

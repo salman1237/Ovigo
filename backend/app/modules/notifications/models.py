@@ -38,6 +38,10 @@ class NotificationType(str, enum.Enum):
     GUIDE_ASSIGNED = "guide_assigned"
     REFERRAL_APPROVED = "referral_approved"
     REFERRAL_REJECTED = "referral_rejected"
+    PAYOUT_PROCESSED = "payout_processed"
+    BADGE_APPROVED = "badge_approved"
+    BADGE_REJECTED = "badge_rejected"
+    BADGE_AUTO_AWARDED = "badge_auto_awarded"
 
 
 class Notification(Base):

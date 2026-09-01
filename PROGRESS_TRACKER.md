@@ -4,14 +4,14 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-08-30 (Sprint 12-13 complete — Phase 2 underway)_
+_Last updated: 2026-09-01 (Sprint 14-15 Part 1 complete — Financial Engine & Trust Badges; Rent-a-Car and multi-service cart UI still pending)_
 
 ## Infrastructure & deployment status
 
 | Item | Status | Notes |
 |---|---|---|
 | GitHub repo | Done | `salman1237/Ovigo`, connected |
-| NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 38 tables live — see Sprint 5-6 (13 tables), Sprint 7-8 (`bookings`, `booking_items`, `booking_guests`, `booking_status_history`, `payments`, `escrow_transactions`, `commissions`, `reviews`), Sprint 9 (`notifications`, `disputes`), Sprint 10-11 (`custom_tour_requests`, `tour_bids`) and Sprint 12-13 (`guide_supervision`, `guide_assignments`, `guide_availability`, `business_referrals`) additions below |
+| NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 41 tables live — see Sprint 5-6 (13 tables), Sprint 7-8 (`bookings`, `booking_items`, `booking_guests`, `booking_status_history`, `payments`, `escrow_transactions`, `commissions`, `reviews`), Sprint 9 (`notifications`, `disputes`), Sprint 10-11 (`custom_tour_requests`, `tour_bids`), Sprint 12-13 (`guide_supervision`, `guide_assignments`, `guide_availability`, `business_referrals`) and Sprint 14-15 Part 1 (`commission_rules`, `payouts`, `badges`) additions below |
 | Cloudflare R2 | Done | `ovigo` bucket, S3-compatible credentials in `backend/.env` and on FastAPI Cloud — see Sprint 5-6 image storage notes |
 | SSLCommerz | Done | Sandbox store credentials in `backend/.env` and on FastAPI Cloud — see Sprint 7-8 payment notes |
 | Backend scaffold | Done | FastAPI app, config, async SQLAlchemy engine, Alembic wired to Neon |
@@ -172,6 +172,38 @@ Partner verification documents (Sprint 3-4) still use Postgres `bytea`, not R2 �
 **Frontend:** `/dashboard/guides` (Expert: invite, list guides, assign to a departure, cancel assignments), `/dashboard/guide` (Guide: respond to invites, availability, assignments, earnings), `/dashboard/business-network` (Expert: add + list referrals), `/admin/business-network` (admin approve/reject).
 
 **Verified:** a full scripted smoke test against Neon covering the entire guide lifecycle (invite → duplicate-invite-rejected → accept → assign-before-approval-rejected → admin-approves-role → assign → check-in → complete → earnings-correct → second-assignment-cancelled-by-expert → availability-set-and-listed → supervision-terminated-by-guide → assign-after-termination-rejected-403) and the full business-network lifecycle (create → list-mine → admin-lists-pending → approve-with-notification → reject-with-reason-and-notification → re-approve-already-processed-rejected). Additionally verified at the HTTP layer end-to-end with fresh per-request sessions (the level that caught both bugs above), confirming every response shape matches the frontend's TypeScript types exactly, including the nested `guide`/`expert`/`departure` summary objects. Frontend `npm run lint` and `npm run build` both clean.
+
+### Sprint 14-15 (Part 1 of 2) — Financial Engine & Trust Badges (Wk 27-30)
+
+> User steered this sprint's order: Financial Engine + Trust Badges first (this section); Rent-a-Car module and the multi-service booking cart UI — both large, independent pieces — follow in a second pass.
+
+| Task | Status |
+|---|---|
+| Advanced commission engine (category, partner-specific, referral/network) | Done — `CommissionRule` table with three scopes: CATEGORY (default per booking-item type, replacing the old hardcoded dict), PARTNER (override for one specific partner, optionally per item type), NETWORK (one platform-wide referral rate). "Referral" and "network" are treated as one concept here — see scope note below |
+| Commission priority resolution | Done — PARTNER-scope (item-type-specific, then blanket) beats CATEGORY beats a hardcoded safety-net default. Every `Commission` row records which `CommissionRule` (if any) produced its rate, for traceability |
+| Commission ledger | Done — the existing `Commission` table now doubles as the ledger: a `source` column (DIRECT vs NETWORK) means one booking item can generate two rows (the partner's own cut, plus a referring expert's cut), and a `payout_id` tracks which batch swept each row |
+| Automated payout split calculation | Done — `GET /api/v1/admin/payouts/preview`: groups every currently-PAYABLE commission by partner and shows what a batch run would pay, without creating or mutating anything |
+| Batch payout processing | Done — `POST /api/v1/admin/payouts/run`: sweeps PAYABLE commissions into one `Payout` per partner, marks them PAID, notifies each partner. Like every other financial feature so far (escrow release, dispute refunds), there's no real bank transfer behind this — a payout is marked paid immediately. Running it again with nothing payable creates nothing (verified) |
+| Trust badges & certifications system | Done — 4 badge types: `verified`, `top_rated`, `couple_friendly`, `safety_certified`. Partners apply (with an optional private note), admin approves/rejects |
+| Badge application, approval, auto-award | Done — application/approval workflow for 3 manually-applied types; `top_rated` is the one auto-awarded type, recomputed by `reviews/service.py` after every new review (≥4.5 average over ≥5 reviews auto-awards it; dropping back below auto-revokes it) |
+| Couple-friendly, privacy-protected badge logic | Done — `couple_friendly` only applies to properties (validated server-side). "Privacy-protected": an applicant's `private_note` and any `rejection_reason` are never in the public-facing schema — `GET /api/v1/badges` (what a tour/property detail page shows) only ever returns the boolean fact that a badge is held. The applicant's *own* view (`GET /api/v1/badges/mine`) does include both fields, since privacy here means private from other people, not from the person who wrote it |
+| Multi-service unified bookings | Not started this pass — deferred to Part 2 |
+| Rent-a-Car module (vehicles, drivers, pricing, booking) | Not started this pass — deferred to Part 2 |
+| Rent-a-Car dashboard | Not started this pass — deferred to Part 2 |
+
+**Scope note ("referral" vs "network" commission):** the technical document lists both "referral" and "network" as commission types without defining a difference, and there's no infrastructure anywhere in the codebase for attributing a *traveler's* booking to a referral (no referral codes, no signup attribution) — building one now would be inventing a feature the doc never actually specifies. The only real "referral" concept that exists is Sprint 12-13's Business Network: a Local Expert refers a *business*. So "referral/network commission" here means exactly that: once an admin links an approved `BusinessReferral` to the referred business's actual `PartnerRole` (new `POST /api/v1/admin/business-network/{id}/link-partner`), every booking against that partner generates a second commission row crediting the referring expert, at the platform-wide NETWORK rate (seeded at 2%).
+
+**Bugs found and fixed while writing this sprint's own migration** (all caught before reaching Neon, by actually running the migration rather than just reading the generated diff):
+1. Alembic's `op.create_table` auto-creates a brand-new enum type for a column, but reusing an *existing* enum type (here, `taggable_entity_type` on the new `badges` table, and `booking_item_type` on the new `commission_rules` table) needs `create_type=False` or Postgres errors with "type already exists". Same root cause as the earlier `ALTER TYPE ... ADD VALUE` precedent (autogenerate doesn't reason about enum identity across tables) — a different manifestation of it, not a new bug class.
+2. The reverse problem: `op.add_column` with a *brand-new* enum type (`commission_source`, added to the existing `commissions` table) does **not** auto-create the type the way `create_table` does — needs an explicit `CREATE TYPE` first.
+3. Adding that new NOT NULL `source` column to `commissions` needed a `server_default` — there was already one real commission row in production (from the SSLCommerz test payment two sprints ago) that would otherwise have failed the migration.
+4. Missed adding the 4 new `NotificationType` enum values in the same migration as the code that introduced them — a small follow-up migration fixed it. All caught by actually running the migration against Neon and reacting to the real errors, not by review alone.
+
+**New tables:** `commission_rules`, `payouts`, `badges`. **Schema changes:** `commissions` gained `source`/`rule_id`/`payout_id` and lost its old one-row-per-booking-item unique constraint (replaced with one scoped to `booking_item_id`+`partner_role_id`+`source`, since a booking item can now generate two rows); `business_referrals` gained `linked_partner_role_id`. **Enum extensions:** `commission_status` gained `PAID`; 4 new `NotificationType` values. Two migrations (one for the schema, one follow-up for the missed notification enum values), both applied to Neon, with the default CATEGORY (10%/12%/10%) and NETWORK (2%) rules seeded as real rows so the engine is visibly configurable from day one rather than relying on invisible code fallbacks.
+
+**Frontend:** `/admin/commission-rules` (view + create + deactivate rules), `/admin/payouts` (preview + run batch + history), `/admin/badges` (approve/reject, private note visible to admin only), `/admin/business-network` gained a "link to partner" action. `/dashboard/earnings` gained a paid-out total and payout history. A `BadgeApplications` component on the tour/property edit pages lets owners apply; a `TrustBadges` component on the public tour/property pages shows approved badges to travelers.
+
+**Verified:** a comprehensive scripted smoke test against Neon covering the full lifecycle — category rate applies by default, a partner-specific rule correctly overrides it, linking an approved referral to a partner correctly generates a second NETWORK commission row at the right rate for the referrer, a payout batch correctly groups and pays out everyone owed money and marks their commissions PAID, running it again with nothing payable creates nothing, badge applications are correctly gated (owner-only, couple-friendly restricted to properties, top-rated rejected as manual), the public/private visibility split holds (private note invisible publicly, visible to the applicant and admin), and TOP_RATED auto-awards after 5 five-star reviews. Also verified at the HTTP layer (commission rule creation, badge apply/approve/public-list, payout preview/mine) confirming every response shape matches the frontend's TypeScript types exactly — including a real gap this caught and fixed: `/api/v1/badges/mine` was returning the public schema, which would have hidden an applicant's own rejection reason from them. Frontend `npm run lint` and `npm run build` both clean.
 
 ## Phase 3 — Growth & Monetization
 

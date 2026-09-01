@@ -27,8 +27,13 @@ class BusinessReferralRead(BaseModel):
     ownership_type: OwnershipType
     status: ReferralStatus
     rejection_reason: str | None
+    linked_partner_role_id: uuid.UUID | None
     created_at: datetime
 
 
 class AdminBusinessReferralRead(BusinessReferralRead):
     referring_expert_name: str
+
+
+class LinkPartnerRequest(BaseModel):
+    partner_role_id: uuid.UUID
