@@ -9,6 +9,13 @@ import Link from "next/link";
 import { MessageButton } from "@/components/shared/MessageButton";
 import { ReviewsList } from "@/components/shared/ReviewsList";
 import { TrustBadges } from "@/components/shared/TrustBadges";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
@@ -25,16 +32,18 @@ export default function TourDetailPage() {
     retry: false,
   });
 
-  if (isLoading) return <p className="px-6 py-12 text-sm text-zinc-400">Loading…</p>;
-  if (error || !tour) return <p className="px-6 py-12 text-sm text-zinc-400">Tour not found.</p>;
+  if (isLoading) return <Spinner />;
+  if (error || !tour) return <ErrorState message="Tour not found." />;
 
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
       <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{tour.title}</h1>
-      <p className="mt-1 text-sm text-zinc-500">{tour.duration_days} days · from {formatMoney(tour.base_price)} · up to {tour.max_group_size} people</p>
-      <div className="mt-3 flex items-center gap-3">
+      <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">
+        {tour.duration_days} days · from {formatMoney(tour.base_price)} · up to {tour.max_group_size} people
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         <TrustBadges entityType="tour" entityId={tour.id} />
-        <MessageButton contextType="tour" contextId={tour.id} label="Message this Expert" className="rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium dark:border-zinc-700" />
+        <MessageButton contextType="tour" contextId={tour.id} label="Message this Expert" />
       </div>
       {tour.description && <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">{tour.description}</p>}
 
@@ -57,8 +66,10 @@ export default function TourDetailPage() {
           <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Upcoming departures</h2>
           <ul className="mt-2 flex flex-wrap gap-2">
             {tour.departures.map((d) => (
-              <li key={d.id} className="rounded-full border border-zinc-300 px-3 py-1 text-xs dark:border-zinc-700">
-                {d.departure_date} — {d.available_seats} seats
+              <li key={d.id}>
+                <Badge variant="primary">
+                  {d.departure_date} — {d.available_seats} seats
+                </Badge>
               </li>
             ))}
           </ul>
@@ -183,78 +194,73 @@ function BookTourSection({ tour }: { tour: Tour }) {
 
   if (!user) {
     return (
-      <div className="mt-10 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <Card className="mt-10">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          <a href="/account/login" className="font-medium underline">Sign in</a> to book this tour.
+          <Link href="/account/login" className="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+            Sign in
+          </Link>{" "}
+          to book this tour.
         </p>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div className="mt-10 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <Card className="mt-10">
       <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Book this tour</h2>
       <div className="mt-3 flex flex-col gap-3">
-        <div>
-          <label className="block text-xs font-medium text-zinc-500">Departure date</label>
-          <select
-            value={departureId}
-            onChange={(e) => setDepartureId(e.target.value)}
-            className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          >
-            {tour.departures.map((d) => (
-              <option key={d.id} value={d.id} disabled={d.available_seats < 1}>
-                {d.departure_date} — {d.available_seats} seat(s) left
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-zinc-500">Number of travelers</label>
-          <input
-            type="number"
-            min={1}
-            max={departure?.available_seats ?? 1}
-            value={quantity}
-            onChange={(e) => setGuestCount(Number(e.target.value))}
-            className="mt-1 w-24 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          />
-        </div>
+        <Select label="Departure date" value={departureId} onChange={(e) => setDepartureId(e.target.value)}>
+          {tour.departures.map((d) => (
+            <option key={d.id} value={d.id} disabled={d.available_seats < 1}>
+              {d.departure_date} — {d.available_seats} seat(s) left
+            </option>
+          ))}
+        </Select>
+        <Input
+          type="number"
+          label="Number of travelers"
+          min={1}
+          max={departure?.available_seats ?? 1}
+          value={quantity}
+          onChange={(e) => setGuestCount(Number(e.target.value))}
+          className="w-32"
+        />
         <div className="flex flex-col gap-2">
           {guestNames.map((name, i) => (
-            <input
+            <Input
               key={i}
               value={name}
               onChange={(e) => setGuestNames((prev) => prev.map((n, idx) => (idx === i ? e.target.value : n)))}
               placeholder={`Traveler ${i + 1} full name`}
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
             />
           ))}
         </div>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span></p>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span>
+        </p>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex flex-wrap items-center gap-3">
-          <button
+          <Button
             onClick={book}
-            disabled={submitting || !departureId || (departure?.available_seats ?? 0) < quantity}
-            className="rounded-full bg-zinc-900 px-6 py-2.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
+            loading={submitting}
+            disabled={!departureId || (departure?.available_seats ?? 0) < quantity}
           >
             {submitting ? "Redirecting to payment…" : "Book & Pay"}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="secondary"
             onClick={addTourToCart}
             disabled={!departureId || (departure?.available_seats ?? 0) < quantity}
-            className="rounded-full border border-zinc-300 px-6 py-2.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
           >
             Add to cart
-          </button>
+          </Button>
           {addedToCart && (
-            <Link href="/cart" className="text-sm text-emerald-600 underline">
+            <Link href="/cart" className="text-sm text-primary-600 underline dark:text-primary-400">
               Added — combine with a stay in your cart →
             </Link>
           )}
         </div>
       </div>
-    </div>
+    </Card>
   );
 }

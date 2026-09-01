@@ -241,12 +241,7 @@ function BookingItemCard({ item }: { item: BookingItem }) {
 
       {item.status !== "cancelled" && (
         <div className="mt-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
-          <MessageButton
-            contextType="booking_item"
-            contextId={item.id}
-            label="Message about this"
-            className="rounded-full border border-zinc-300 px-4 py-1 text-xs dark:border-zinc-700"
-          />
+          <MessageButton contextType="booking_item" contextId={item.id} label="Message about this" size="sm" />
         </div>
       )}
 

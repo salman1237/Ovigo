@@ -1,8 +1,10 @@
 "use client";
 
+import { MessageCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { Button, type ButtonProps } from "@/components/ui/Button";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
 import type { ChatContextType, ChatThread } from "@/types/chat";
@@ -11,12 +13,14 @@ export function MessageButton({
   contextType,
   contextId,
   label = "Message",
-  className,
+  variant = "secondary",
+  size = "sm",
 }: {
   contextType: ChatContextType;
   contextId: string;
   label?: string;
-  className?: string;
+  variant?: ButtonProps["variant"];
+  size?: ButtonProps["size"];
 }) {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
@@ -43,16 +47,10 @@ export function MessageButton({
 
   return (
     <div className="inline-flex flex-col items-start gap-1">
-      <button
-        onClick={openThread}
-        disabled={busy}
-        className={
-          className ??
-          "rounded-full border border-zinc-300 px-6 py-2.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
-        }
-      >
+      <Button onClick={openThread} loading={busy} variant={variant} size={size}>
+        <MessageCircle className="h-4 w-4" />
         {busy ? "Opening…" : label}
-      </button>
+      </Button>
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );

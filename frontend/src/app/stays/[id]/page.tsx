@@ -9,6 +9,13 @@ import Link from "next/link";
 import { MessageButton } from "@/components/shared/MessageButton";
 import { ReviewsList } from "@/components/shared/ReviewsList";
 import { TrustBadges } from "@/components/shared/TrustBadges";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
@@ -25,16 +32,16 @@ export default function StayDetailPage() {
     retry: false,
   });
 
-  if (isLoading) return <p className="px-6 py-12 text-sm text-zinc-400">Loading…</p>;
-  if (error || !property) return <p className="px-6 py-12 text-sm text-zinc-400">Property not found.</p>;
+  if (isLoading) return <Spinner />;
+  if (error || !property) return <ErrorState message="Property not found." />;
 
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
       <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{property.name}</h1>
-      <p className="mt-1 text-sm text-zinc-500">{PROPERTY_TYPE_LABELS[property.property_type]}</p>
-      <div className="mt-3 flex items-center gap-3">
+      <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">{PROPERTY_TYPE_LABELS[property.property_type]}</p>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         <TrustBadges entityType="property" entityId={property.id} />
-        <MessageButton contextType="property" contextId={property.id} label="Message this Host" className="rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium dark:border-zinc-700" />
+        <MessageButton contextType="property" contextId={property.id} label="Message this Host" />
       </div>
       {property.description && <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">{property.description}</p>}
 
@@ -43,9 +50,7 @@ export default function StayDetailPage() {
           <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Amenities</h2>
           <div className="mt-2 flex flex-wrap gap-2">
             {property.amenities.map((a) => (
-              <span key={a.amenity} className="rounded-full border border-zinc-300 px-3 py-1 text-xs dark:border-zinc-700">
-                {AMENITY_LABELS[a.amenity]}
-              </span>
+              <Badge key={a.amenity}>{AMENITY_LABELS[a.amenity]}</Badge>
             ))}
           </div>
         </div>
@@ -56,11 +61,11 @@ export default function StayDetailPage() {
           <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Room types</h2>
           <div className="mt-2 flex flex-col gap-2">
             {property.room_types.map((rt) => (
-              <div key={rt.id} className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+              <Card key={rt.id} className="p-3 text-sm">
                 <p className="font-medium">{rt.name}</p>
                 <p className="text-zinc-500">Up to {rt.max_occupancy} guests · {formatMoney(rt.base_price)}/night</p>
                 {rt.description && <p className="mt-1 text-zinc-400">{rt.description}</p>}
-              </div>
+              </Card>
             ))}
           </div>
         </div>
@@ -149,58 +154,44 @@ function BookStaySection({ property }: { property: Property }) {
 
   if (!user) {
     return (
-      <div className="mt-10 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <Card className="mt-10">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          <a href="/account/login" className="font-medium underline">Sign in</a> to book this stay.
+          <Link href="/account/login" className="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+            Sign in
+          </Link>{" "}
+          to book this stay.
         </p>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div className="mt-10 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <Card className="mt-10">
       <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Book this stay</h2>
       <div className="mt-3 flex flex-col gap-3">
-        <div>
-          <label className="block text-xs font-medium text-zinc-500">Room type</label>
-          <select
-            value={roomTypeId}
-            onChange={(e) => setRoomTypeId(e.target.value)}
-            className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          >
-            {property.room_types.map((rt) => (
-              <option key={rt.id} value={rt.id}>{rt.name} — {formatMoney(rt.base_price)}/night</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex gap-2">
-          <div>
-            <label className="block text-xs font-medium text-zinc-500">Check-in</label>
-            <input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-500">Check-out</label>
-            <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-500">Rooms</label>
-            <input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} className="mt-1 w-20 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-          </div>
+        <Select label="Room type" value={roomTypeId} onChange={(e) => setRoomTypeId(e.target.value)}>
+          {property.room_types.map((rt) => (
+            <option key={rt.id} value={rt.id}>{rt.name} — {formatMoney(rt.base_price)}/night</option>
+          ))}
+        </Select>
+        <div className="flex flex-wrap gap-2">
+          <Input type="date" label="Check-in" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} />
+          <Input type="date" label="Check-out" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} />
+          <Input type="number" label="Rooms" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} className="w-24" />
         </div>
         <div className="flex flex-col gap-2">
           {guestNames.map((name, i) => (
-            <input
+            <Input
               key={i}
               value={name}
               onChange={(e) => setGuestNames((prev) => prev.map((n, idx) => (idx === i ? e.target.value : n)))}
               placeholder={`Guest ${i + 1} full name`}
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
             />
           ))}
           <button
             type="button"
             onClick={() => setGuestNames((prev) => [...prev, ""])}
-            className="self-start text-xs text-zinc-500 underline"
+            className="self-start text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
           >
             + add another guest
           </button>
@@ -212,27 +203,19 @@ function BookStaySection({ property }: { property: Property }) {
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={book}
-            disabled={submitting || !roomTypeId || nights <= 0}
-            className="rounded-full bg-zinc-900 px-6 py-2.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
-          >
+          <Button onClick={book} loading={submitting} disabled={!roomTypeId || nights <= 0}>
             {submitting ? "Redirecting to payment…" : "Book & Pay"}
-          </button>
-          <button
-            onClick={addStayToCart}
-            disabled={!roomTypeId || nights <= 0}
-            className="rounded-full border border-zinc-300 px-6 py-2.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
-          >
+          </Button>
+          <Button variant="secondary" onClick={addStayToCart} disabled={!roomTypeId || nights <= 0}>
             Add to cart
-          </button>
+          </Button>
           {addedToCart && (
-            <Link href="/cart" className="text-sm text-emerald-600 underline">
+            <Link href="/cart" className="text-sm text-primary-600 underline dark:text-primary-400">
               Added — combine with a tour in your cart →
             </Link>
           )}
         </div>
       </div>
-    </div>
+    </Card>
   );
 }

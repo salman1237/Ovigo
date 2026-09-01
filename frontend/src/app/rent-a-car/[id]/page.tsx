@@ -6,6 +6,11 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 
 import { MessageButton } from "@/components/shared/MessageButton";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { Input } from "@/components/ui/Input";
+import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
@@ -22,20 +27,20 @@ export default function VehicleDetailPage() {
     retry: false,
   });
 
-  if (isLoading) return <p className="px-6 py-12 text-sm text-zinc-400">Loading…</p>;
-  if (error || !vehicle) return <p className="px-6 py-12 text-sm text-zinc-400">Vehicle not found.</p>;
+  if (isLoading) return <Spinner />;
+  if (error || !vehicle) return <ErrorState message="Vehicle not found." />;
 
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
       <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{vehicle.make} {vehicle.model} ({vehicle.year})</h1>
-      <p className="mt-1 text-sm text-zinc-500">
+      <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">
         {VEHICLE_TYPE_LABELS[vehicle.vehicle_type]} · {vehicle.transmission} · {vehicle.seats} seats · {formatMoney(vehicle.price_per_day)}/day
         {vehicle.with_driver && " · comes with a driver"}
       </p>
       {vehicle.description && <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">{vehicle.description}</p>}
 
       <div className="mt-3">
-        <MessageButton contextType="vehicle" contextId={vehicle.id} label="Message this Rent-a-Car partner" className="rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium dark:border-zinc-700" />
+        <MessageButton contextType="vehicle" contextId={vehicle.id} label="Message this Rent-a-Car partner" />
       </div>
 
       <BookVehicleSection vehicle={vehicle} />
@@ -95,27 +100,24 @@ function BookVehicleSection({ vehicle }: { vehicle: Vehicle }) {
 
   if (!user) {
     return (
-      <div className="mt-10 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <Card className="mt-10">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          <a href="/account/login" className="font-medium underline">Sign in</a> to book this vehicle.
+          <Link href="/account/login" className="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+            Sign in
+          </Link>{" "}
+          to book this vehicle.
         </p>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div className="mt-10 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <Card className="mt-10">
       <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Book this vehicle</h2>
       <div className="mt-3 flex flex-col gap-3">
-        <div className="flex gap-2">
-          <div>
-            <label className="block text-xs font-medium text-zinc-500">Pickup</label>
-            <input type="date" value={pickup} onChange={(e) => setPickup(e.target.value)} className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-500">Return</label>
-            <input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-          </div>
+        <div className="flex flex-wrap gap-2">
+          <Input type="date" label="Pickup" value={pickup} onChange={(e) => setPickup(e.target.value)} />
+          <Input type="date" label="Return" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
         </div>
         {days > 0 && (
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -124,27 +126,19 @@ function BookVehicleSection({ vehicle }: { vehicle: Vehicle }) {
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={book}
-            disabled={submitting || days <= 0}
-            className="rounded-full bg-zinc-900 px-6 py-2.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
-          >
+          <Button onClick={book} loading={submitting} disabled={days <= 0}>
             {submitting ? "Redirecting to payment…" : "Book & Pay"}
-          </button>
-          <button
-            onClick={addVehicleToCart}
-            disabled={days <= 0}
-            className="rounded-full border border-zinc-300 px-6 py-2.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
-          >
+          </Button>
+          <Button variant="secondary" onClick={addVehicleToCart} disabled={days <= 0}>
             Add to cart
-          </button>
+          </Button>
           {addedToCart && (
-            <Link href="/cart" className="text-sm text-emerald-600 underline">
+            <Link href="/cart" className="text-sm text-primary-600 underline dark:text-primary-400">
               Added to cart →
             </Link>
           )}
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
