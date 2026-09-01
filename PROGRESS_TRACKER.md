@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-01 (Sprint 16 complete — Live Chat, advanced partner analytics and dispute payout holds all shipped; Phase 2 is now fully done)_
+_Last updated: 2026-09-01 (Full-stack audit + complete visual redesign across every module, ahead of Phase 3 — see "Cross-Cutting: Audit & Redesign" below)_
 
 ## Infrastructure & deployment status
 
@@ -262,6 +262,35 @@ Partner verification documents (Sprint 3-4) still use Postgres `bytea`, not R2 �
 **Verified:** a comprehensive scripted smoke test against Neon covering the full lifecycle — analytics summary/timeseries/top-listings correctness after a completed booking, a review updating the average rating, a partner-raised dispute freezing the commission and being excluded from the payout preview, a second concurrent dispute on the same booking correctly rejected, a rejected dispute releasing the hold back to payable, a traveler-raised dispute resolved as refunded correctly cancelling the commission, and a non-party correctly denied at every step. Also verified at the HTTP layer that all new/changed endpoints correctly gate on auth (401 unauthenticated). Frontend `npm run lint` and `npm run build` both pass clean, with the new `/dashboard/analytics` route generated. Both FastAPI Cloud and Vercel confirmed live post-deploy. As with Sprint 16 Part 1, no browser-automation tool is available in this environment, so the UI was verified via the build/lint pass and the backend contract tests rather than interactive browser testing.
 
 **Phase 2 ("Customization & Network") is now fully complete** — all of Sprint 10-11 through Sprint 16 (Parts 1 and 2) are shipped and deployed.
+
+## Cross-Cutting: Full-Stack Audit & Complete Visual Redesign
+
+Requested by the project owner after Phase 2 wrapped: the navbar and overall UI were called out as needing a full modern redesign, plus a fullstack engineering audit before Phase 3 begins. Not a technical-document sprint — a cross-cutting pass over every existing module.
+
+**Audit method:** three research passes (frontend design-pattern survey, backend security/correctness/performance audit, frontend code-quality/UX audit) before any changes, to separate genuine issues from already-documented, deliberate trade-offs.
+
+**Backend fixes applied:**
+- The OTP `dev_code` was always echoed in `/verify-email/request` and `/verify-phone/request` responses regardless of environment, which would defeat OTP verification if shipped as-is — now gated behind `settings.environment != "production"`.
+- `/verify-email/confirm` and `/verify-phone/confirm` had no rate limit unlike their `.../request` siblings (brute-forceable within the OTP TTL by an already-authenticated session) — added 10/minute limits matching the existing convention.
+
+**Backend findings surfaced but deliberately deferred** (real, but a separate body of work from "redesign + audit," and not blocking Phase 3): near-zero backend test coverage relative to how much concurrency-sensitive logic exists in `bookings/service.py`; a few un-indexed FK columns on `booking_items`/`chat_messages`; a small N+1 in `guides/service.py::set_availability`; stale-but-pinned backend dependency versions (roughly a year behind current releases); `/auth/refresh` has no rate limit.
+
+**Frontend redesign — new design system, applied to every page:**
+- Blue/indigo gradient color system replacing the all-`zinc` palette (new `primary` color scale + gradient tokens in `globals.css`); fixed a real bug where the loaded Geist font was silently overridden by a hardcoded `font-family: Arial` on `body`.
+- New shared `components/ui/` primitives (Button, Card, Input, Textarea, Select, Badge, Spinner, Skeleton, EmptyState, ErrorState, Popover) built on `class-variance-authority` + a `cn()` helper — every page migrated onto these instead of hand-rolled Tailwind classes duplicated per-file.
+- Full Header rebuild: sticky blurred bar, gradient wordmark, a grouped "Dashboard" dropdown (replacing 9+ flat partner-tool nav links), a user menu dropdown, and a new Framer Motion slide-in mobile drawer — the single highest-priority finding was that the navbar had **zero mobile responsiveness** at all (no hamburger/drawer).
+- Added `lucide-react` (icons, replacing raw inline SVGs and emoji), `framer-motion` (entrance/hover/drawer animations), `clsx` + `tailwind-merge` (the `cn()` helper), `class-variance-authority` (variant props).
+- Every module migrated: homepage (gradient hero + feature cards), auth pages, all public browse/detail pages (tours/stays/rent-a-car), cart, bookings, chat (inbox + live thread), every partner dashboard page (tours/properties/vehicles/drivers/bids/guides/guide/business-network/earnings/analytics/profile), custom tour requests, and the full admin section (shell + 13 sub-pages).
+
+**Frontend fixes applied alongside the redesign** (mechanical, high-value, done while touching each file anyway rather than as a separate pass):
+- 44 form labels across 16 files were real `<label>` elements never linked via `htmlFor`/`id` (invisible to screen readers) — the new `Input`/`Textarea`/`Select` components wire this automatically via `useId()`, fixing every migrated form.
+- Only 9 of 44 pages checked `isError` on their data queries — a real backend failure rendered identically to "no data." Added a shared `ErrorState` component and wired it into every list/detail page migrated.
+- No `<main>` landmark existed anywhere in the app shell — added to the root layout.
+- `NotificationBell.tsx` had one keyboard-inaccessible `<div onClick>` row — now a real `<button>`.
+- `admin/commission-rules`' item-type dropdown was missing `vehicle_rental`, so an admin couldn't create a rule for that item type through the UI even though the backend and the seeded default rule already supported it.
+- Rent-a-Car partners had no `/api/v1/partners/earnings/vehicles` endpoint at all until this pass (found while cross-checking `dashboard/earnings` against the backend) — added alongside the earlier Sprint 16 Part 2 analytics endpoint of the same shape.
+
+**Verified:** `npm run lint` and `npm run build` both pass clean after every batch (9 batches total, each committed separately), all 38 routes generated throughout. Both FastAPI Cloud and Vercel confirmed live after each push, with a final spot-check across a representative page from every module returning `200`. No browser-automation tool is available in this environment, so interactive/visual verification (actually clicking through the new navbar, drawer, forms) was **not** performed — this was verified via successful builds and by reasoning about the emitted Tailwind classes, not a live QA pass. A manual click-through is recommended before treating this as fully done.
 
 ## Phase 3 — Growth & Monetization
 
