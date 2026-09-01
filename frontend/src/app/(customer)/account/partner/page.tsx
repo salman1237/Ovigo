@@ -5,6 +5,13 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { LocationPicker } from "@/components/shared/LocationPicker";
+import { Badge, type BadgeProps } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { Select } from "@/components/ui/Select";
+import { Spinner } from "@/components/ui/Spinner";
+import { Textarea } from "@/components/ui/Textarea";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Location } from "@/types/location";
@@ -13,19 +20,19 @@ import { DOCUMENT_TYPE_LABELS, DocumentType, PartnerRole, PartnerRoleType, ROLE_
 const ALL_ROLE_TYPES: PartnerRoleType[] = ["local_expert", "host", "guide", "hotel", "rent_a_car"];
 const ALL_DOCUMENT_TYPES: DocumentType[] = ["id_card", "trade_license", "property_deed", "vehicle_registration", "other"];
 
-const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-  approved: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
-  verified: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
-  rejected: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-  suspended: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+const STATUS_VARIANTS: Record<string, BadgeProps["variant"]> = {
+  pending: "warning",
+  approved: "success",
+  verified: "success",
+  rejected: "danger",
+  suspended: "neutral",
 };
 
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status] ?? ""}`}>
+    <Badge variant={STATUS_VARIANTS[status] ?? "neutral"} className="capitalize">
       {status}
-    </span>
+    </Badge>
   );
 }
 
@@ -37,7 +44,7 @@ export default function PartnerOnboardingPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const { data: roles, isLoading } = useQuery({
+  const { data: roles, isLoading, isError } = useQuery({
     queryKey: ["my-partner-roles"],
     queryFn: () => apiClient.get<PartnerRole[]>("/api/v1/partners/roles", { auth: true }),
     enabled: !!user,
@@ -71,7 +78,7 @@ export default function PartnerOnboardingPage() {
       <div className="flex flex-1 items-center justify-center px-6 py-16 text-center">
         <div>
           <p className="text-zinc-600 dark:text-zinc-400">Sign in to apply as a partner.</p>
-          <Link href="/account/login" className="mt-2 inline-block font-medium text-zinc-900 dark:text-zinc-50">
+          <Link href="/account/login" className="mt-2 inline-block font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
             Sign in →
           </Link>
         </div>
@@ -87,40 +94,32 @@ export default function PartnerOnboardingPage() {
         reviewed by our team before it goes live.
       </p>
 
-      <form onSubmit={handleApply} className="mt-6 flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <Card as="form" onSubmit={handleApply} className="mt-6 flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Apply for a new role</h2>
-        <select
-          value={applyRoleType}
-          onChange={(e) => setApplyRoleType(e.target.value as PartnerRoleType)}
-          className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-        >
+        <Select value={applyRoleType} onChange={(e) => setApplyRoleType(e.target.value as PartnerRoleType)}>
           {ALL_ROLE_TYPES.map((rt) => (
             <option key={rt} value={rt} disabled={takenRoleTypes.has(rt)}>
               {ROLE_LABELS[rt]}
               {takenRoleTypes.has(rt) ? " (already applied)" : ""}
             </option>
           ))}
-        </select>
-        <textarea
+        </Select>
+        <Textarea
           value={applyMessage}
           onChange={(e) => setApplyMessage(e.target.value)}
           placeholder="Tell us a bit about yourself (optional)"
           rows={3}
-          className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
         />
         {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          type="submit"
-          disabled={submitting}
-          className="self-start rounded-full bg-zinc-900 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-50 dark:bg-white dark:text-zinc-900"
-        >
+        <Button type="submit" loading={submitting} className="self-start">
           {submitting ? "Submitting…" : "Submit application"}
-        </button>
-      </form>
+        </Button>
+      </Card>
 
       <h2 className="mt-10 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Your roles</h2>
-      {isLoading && <p className="mt-2 text-sm text-zinc-400">Loading…</p>}
-      {!isLoading && (roles ?? []).length === 0 && (
+      {isLoading && <Spinner />}
+      {isError && <ErrorState message="Couldn't load your partner roles. Please try again." />}
+      {!isLoading && !isError && (roles ?? []).length === 0 && (
         <p className="mt-2 text-sm text-zinc-400">No applications yet.</p>
       )}
 
@@ -169,7 +168,7 @@ function RoleCard({ role, onChange }: { role: PartnerRole; onChange: () => void 
   };
 
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <Card>
       <div className="flex items-center justify-between">
         <h3 className="font-medium text-zinc-900 dark:text-zinc-50">{ROLE_LABELS[role.role_type]}</h3>
         <StatusBadge status={role.status} />
@@ -184,44 +183,37 @@ function RoleCard({ role, onChange }: { role: PartnerRole; onChange: () => void 
           <div className="mt-4">
             <p className="text-xs font-medium text-zinc-500">Service locations</p>
             <LocationPicker selected={locations} onChange={setLocations} />
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={saveLocations}
               disabled={locations.length === 0}
-              className="mt-2 rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
+              className="mt-2"
             >
               Save locations
-            </button>
+            </Button>
             {locationsSaved && <span className="ml-2 text-xs text-emerald-600">Saved</span>}
           </div>
 
           <div className="mt-4">
             <p className="text-xs font-medium text-zinc-500">Upload a verification document</p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <select
+              <Select
                 value={documentType}
                 onChange={(e) => setDocumentType(e.target.value as DocumentType)}
-                className="rounded-md border border-zinc-300 px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                className="w-auto py-1.5 pr-8 text-xs"
               >
                 {ALL_DOCUMENT_TYPES.map((dt) => (
                   <option key={dt} value={dt}>
                     {DOCUMENT_TYPE_LABELS[dt]}
                   </option>
                 ))}
-              </select>
-              <input
-                type="file"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                className="text-xs"
-              />
-              <button
-                type="button"
-                onClick={uploadDocument}
-                disabled={!file || uploading}
-                className="rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
-              >
+              </Select>
+              <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-xs" />
+              <Button type="button" variant="secondary" size="sm" onClick={uploadDocument} disabled={!file || uploading}>
                 {uploading ? "Uploading…" : "Upload"}
-              </button>
+              </Button>
             </div>
             {uploadError && <p className="mt-1 text-xs text-red-600">{uploadError}</p>}
           </div>
@@ -243,6 +235,6 @@ function RoleCard({ role, onChange }: { role: PartnerRole; onChange: () => void 
           </ul>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
