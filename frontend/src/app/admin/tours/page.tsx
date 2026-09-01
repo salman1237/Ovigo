@@ -3,7 +3,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
+import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { cn } from "@/lib/cn";
 import type { TourStatus } from "@/types/tour";
 
 interface AdminTour {
@@ -39,19 +45,24 @@ export default function AdminToursPage() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
+            className={cn(
+              "rounded-full px-4 py-1.5 text-sm font-medium capitalize transition-colors",
               tab === t
-                ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                ? "bg-gradient-to-r from-primary-600 to-indigo-600 text-white shadow-md shadow-primary-600/20"
                 : "border border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
-            }`}
+            )}
           >
             {t.replace("_", " ")}
           </button>
         ))}
       </div>
 
-      {isLoading && <p className="mt-6 text-sm text-zinc-400">Loading…</p>}
-      {!isLoading && (tours ?? []).length === 0 && <p className="mt-6 text-sm text-zinc-400">No {tab.replace("_", " ")} tours.</p>}
+      {isLoading && <Spinner />}
+      {!isLoading && (tours ?? []).length === 0 && (
+        <div className="mt-6">
+          <EmptyState title={`No ${tab.replace("_", " ")} tours`} />
+        </div>
+      )}
 
       <div className="mt-6 flex flex-col gap-4">
         {(tours ?? []).map((tour) => (
@@ -87,7 +98,7 @@ function TourReviewCard({ tour, onChange }: { tour: AdminTour; onChange: () => v
   };
 
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <Card>
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-medium text-zinc-900 dark:text-zinc-50">{tour.title}</h3>
@@ -97,33 +108,24 @@ function TourReviewCard({ tour, onChange }: { tour: AdminTour; onChange: () => v
         </div>
         {tour.status === "pending_review" && (
           <div className="flex gap-2">
-            <button onClick={approve} className="rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-emerald-700">
+            <Button size="sm" onClick={approve}>
               Approve
-            </button>
-            <button
-              onClick={() => setShowReject((s) => !s)}
-              className="rounded-full border border-red-300 px-4 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400"
-            >
+            </Button>
+            <Button size="sm" variant="destructive" onClick={() => setShowReject((s) => !s)}>
               Reject
-            </button>
+            </Button>
           </div>
         )}
       </div>
       {showReject && (
         <div className="mt-3 flex gap-2">
-          <input
-            type="text"
-            value={rejectReason}
-            onChange={(e) => setRejectReason(e.target.value)}
-            placeholder="Rejection reason"
-            className="flex-1 rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          />
-          <button onClick={reject} disabled={!rejectReason.trim()} className="rounded-full bg-red-600 px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+          <Input type="text" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Rejection reason" className="flex-1" />
+          <Button size="sm" variant="destructive" onClick={reject} disabled={!rejectReason.trim()}>
             Confirm
-          </button>
+          </Button>
         </div>
       )}
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-    </div>
+    </Card>
   );
 }

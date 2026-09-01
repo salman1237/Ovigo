@@ -3,7 +3,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
+import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { cn } from "@/lib/cn";
 import {
   AdminPartnerRole,
   DOCUMENT_TYPE_LABELS,
@@ -34,20 +41,23 @@ export default function AdminPartnersPage() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
+            className={cn(
+              "rounded-full px-4 py-1.5 text-sm font-medium capitalize transition-colors",
               tab === t
-                ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                ? "bg-gradient-to-r from-primary-600 to-indigo-600 text-white shadow-md shadow-primary-600/20"
                 : "border border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
-            }`}
+            )}
           >
             {t}
           </button>
         ))}
       </div>
 
-      {isLoading && <p className="mt-6 text-sm text-zinc-400">Loading…</p>}
+      {isLoading && <Spinner />}
       {!isLoading && (roles ?? []).length === 0 && (
-        <p className="mt-6 text-sm text-zinc-400">No {tab} applications.</p>
+        <div className="mt-6">
+          <EmptyState title={`No ${tab} applications`} />
+        </div>
       )}
 
       <div className="mt-6 flex flex-col gap-4">
@@ -114,7 +124,7 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
   };
 
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <Card>
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-medium text-zinc-900 dark:text-zinc-50">
@@ -124,40 +134,28 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
         </div>
         {role.status === "pending" && (
           <div className="flex gap-2">
-            <button
-              onClick={approve}
-              disabled={busy}
-              className="rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-            >
+            <Button size="sm" onClick={approve} loading={busy}>
               Approve
-            </button>
-            <button
-              onClick={() => setShowReject((s) => !s)}
-              disabled={busy}
-              className="rounded-full border border-red-300 px-4 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400"
-            >
+            </Button>
+            <Button size="sm" variant="destructive" onClick={() => setShowReject((s) => !s)} disabled={busy}>
               Reject
-            </button>
+            </Button>
           </div>
         )}
       </div>
 
       {showReject && (
         <div className="mt-3 flex gap-2">
-          <input
+          <Input
             type="text"
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
             placeholder="Rejection reason"
-            className="flex-1 rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            className="flex-1"
           />
-          <button
-            onClick={reject}
-            disabled={busy || !rejectReason.trim()}
-            className="rounded-full bg-red-600 px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-          >
+          <Button size="sm" variant="destructive" onClick={reject} disabled={busy || !rejectReason.trim()}>
             Confirm
-          </button>
+          </Button>
         </div>
       )}
 
@@ -171,16 +169,13 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
               <li key={doc.id} className="flex items-center gap-3 text-xs">
                 <button
                   onClick={() => viewDocument(doc.id, doc.file_name)}
-                  className="font-medium text-zinc-900 underline dark:text-zinc-50"
+                  className="font-medium text-primary-600 underline hover:text-primary-700 dark:text-primary-400"
                 >
                   {DOCUMENT_TYPE_LABELS[doc.document_type]} — {doc.file_name}
                 </button>
-                <span className="text-zinc-400">{doc.status}</span>
+                <Badge>{doc.status}</Badge>
                 {doc.status === "pending" && (
-                  <button
-                    onClick={() => verifyDocument(doc.id)}
-                    className="text-emerald-600 underline"
-                  >
+                  <button onClick={() => verifyDocument(doc.id)} className="font-medium text-emerald-600 underline hover:text-emerald-700">
                     Mark verified
                   </button>
                 )}
@@ -189,6 +184,6 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
           </ul>
         </div>
       )}
-    </div>
+    </Card>
   );
 }

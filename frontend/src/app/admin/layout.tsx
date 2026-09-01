@@ -1,8 +1,10 @@
 "use client";
 
+import { ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { cn } from "@/lib/cn";
 import { useAuthStore } from "@/stores/auth-store";
 
 const NAV = [
@@ -32,7 +34,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="flex flex-1 items-center justify-center px-6 py-16 text-center">
         <div>
           <p className="text-zinc-600 dark:text-zinc-400">This area is for admins only.</p>
-          <Link href="/account/login" className="mt-2 inline-block font-medium text-zinc-900 dark:text-zinc-50">
+          <Link href="/account/login" className="mt-2 inline-block font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
             Sign in as an admin →
           </Link>
         </div>
@@ -42,16 +44,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="flex flex-1 flex-col md:flex-row">
-      <nav className="flex shrink-0 gap-2 border-b border-zinc-200 px-6 py-3 md:w-56 md:flex-col md:border-b-0 md:border-r md:py-6 dark:border-zinc-800">
+      <nav className="flex shrink-0 gap-2 overflow-x-auto border-b border-zinc-200 px-6 py-3 md:w-60 md:flex-col md:overflow-visible md:border-b-0 md:border-r md:py-6 dark:border-zinc-800">
+        <div className="mb-2 hidden items-center gap-2 px-3 text-sm font-semibold text-zinc-900 md:flex dark:text-zinc-50">
+          <ShieldCheck className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+          Admin
+        </div>
         {NAV.map((item) => (
           <Link
             key={item.href}
             href={item.href}
-            className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+            className={cn(
+              "shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
               pathname === item.href
-                ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                ? "bg-gradient-to-r from-primary-600 to-indigo-600 text-white shadow-md shadow-primary-600/20"
                 : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
-            }`}
+            )}
           >
             {item.label}
           </Link>
