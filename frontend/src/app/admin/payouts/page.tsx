@@ -3,6 +3,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { Payout, PayoutPreviewRow } from "@/types/earnings";
@@ -45,19 +48,15 @@ export default function AdminPayoutsPage() {
         no real bank transfer behind this yet — a payout is marked paid immediately.
       </p>
 
-      <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <Card className="mt-6">
         <div className="flex items-center justify-between">
           <h2 className="font-medium text-zinc-900 dark:text-zinc-50">Pending Batch Preview</h2>
-          <button
-            onClick={runBatch}
-            disabled={busy || (preview ?? []).length === 0}
-            className="rounded-full bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-          >
+          <Button size="sm" onClick={runBatch} loading={busy} disabled={(preview ?? []).length === 0}>
             Run payout batch
-          </button>
+          </Button>
         </div>
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-        {previewLoading && <p className="mt-2 text-sm text-zinc-400">Loading…</p>}
+        {previewLoading && <Spinner />}
         {!previewLoading && (preview ?? []).length === 0 && (
           <p className="mt-2 text-sm text-zinc-400">Nothing payable right now.</p>
         )}
@@ -67,43 +66,45 @@ export default function AdminPayoutsPage() {
               {(preview ?? []).map((p) => (
                 <div key={p.partner_role_id} className="flex items-center justify-between text-sm">
                   <span>{p.partner_name} · {p.commission_count} commission(s)</span>
-                  <span className="font-medium">{formatMoney(p.total_amount)}</span>
+                  <span className="font-medium text-primary-600 dark:text-primary-400">{formatMoney(p.total_amount)}</span>
                 </div>
               ))}
             </div>
             <p className="mt-3 text-xs text-zinc-500">Total: {formatMoney(totalPreview.toFixed(2))}</p>
           </>
         )}
-      </div>
+      </Card>
 
       <div className="mt-8">
         <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Payout History</h2>
-        {historyLoading && <p className="mt-2 text-sm text-zinc-400">Loading…</p>}
+        {historyLoading && <Spinner />}
         {!historyLoading && (history ?? []).length === 0 && (
           <p className="mt-2 text-sm text-zinc-400">No payouts have been run yet.</p>
         )}
-        <div className="mt-2 overflow-x-auto">
-          <table className="w-full min-w-[480px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-zinc-200 text-xs uppercase text-zinc-400 dark:border-zinc-800">
-                <th className="py-2 pr-4">Partner</th>
-                <th className="py-2 pr-4">Commissions</th>
-                <th className="py-2 pr-4">Amount</th>
-                <th className="py-2 pr-4">Paid at</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(history ?? []).map((p) => (
-                <tr key={p.id} className="border-b border-zinc-100 dark:border-zinc-900">
-                  <td className="py-2.5 pr-4 font-mono text-xs">{p.partner_role_id.slice(0, 8)}</td>
-                  <td className="py-2.5 pr-4">{p.commission_count}</td>
-                  <td className="py-2.5 pr-4">{formatMoney(p.total_amount)}</td>
-                  <td className="py-2.5 pr-4 text-xs text-zinc-500">{new Date(p.paid_at).toLocaleString()}</td>
+        {(history ?? []).length > 0 && (
+          <Card className="mt-2 overflow-x-auto p-0">
+            <table className="w-full min-w-[480px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-zinc-200 text-xs uppercase text-zinc-400 dark:border-zinc-800">
+                  <th className="py-3 pl-4 pr-4">Partner</th>
+                  <th className="py-3 pr-4">Commissions</th>
+                  <th className="py-3 pr-4">Amount</th>
+                  <th className="py-3 pr-4">Paid at</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {(history ?? []).map((p) => (
+                  <tr key={p.id} className="border-b border-zinc-100 last:border-b-0 dark:border-zinc-900">
+                    <td className="py-2.5 pl-4 pr-4 font-mono text-xs">{p.partner_role_id.slice(0, 8)}</td>
+                    <td className="py-2.5 pr-4">{p.commission_count}</td>
+                    <td className="py-2.5 pr-4 font-medium text-primary-600 dark:text-primary-400">{formatMoney(p.total_amount)}</td>
+                    <td className="py-2.5 pr-4 text-xs text-zinc-500">{new Date(p.paid_at).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        )}
       </div>
     </div>
   );
