@@ -3,6 +3,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
+import { Spinner } from "@/components/ui/Spinner";
+import { Textarea } from "@/components/ui/Textarea";
 import { apiClient, ApiError } from "@/lib/api-client";
 import {
   BusinessReferral,
@@ -37,12 +44,9 @@ export default function BusinessNetworkPage() {
     <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Business Network</h1>
-        <button
-          onClick={() => setShowForm((s) => !s)}
-          className="rounded-full bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white dark:bg-white dark:text-zinc-900"
-        >
+        <Button size="sm" variant={showForm ? "secondary" : "primary"} onClick={() => setShowForm((s) => !s)}>
           {showForm ? "Cancel" : "Add business"}
-        </button>
+        </Button>
       </div>
       <p className="mt-1 text-sm text-zinc-500">
         Add a local business you own or trust — approved referrals help travelers discover it through you.
@@ -57,19 +61,19 @@ export default function BusinessNetworkPage() {
         />
       )}
 
-      {isLoading && <p className="mt-6 text-sm text-zinc-400">Loading…</p>}
+      {isLoading && <Spinner />}
       {!isLoading && (referrals ?? []).length === 0 && (
-        <p className="mt-6 text-sm text-zinc-400">You haven&apos;t added any businesses yet.</p>
+        <div className="mt-6">
+          <EmptyState title="No businesses yet" description="Add a local business you own or trust above." />
+        </div>
       )}
 
       <div className="mt-6 flex flex-col gap-3">
         {(referrals ?? []).map((r) => (
-          <div key={r.id} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <Card key={r.id}>
             <div className="flex items-center justify-between">
               <h3 className="font-medium text-zinc-900 dark:text-zinc-50">{r.business_name}</h3>
-              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                {REFERRAL_STATUS_LABELS[r.status]}
-              </span>
+              <Badge>{REFERRAL_STATUS_LABELS[r.status]}</Badge>
             </div>
             <p className="mt-1 text-xs text-zinc-500">
               {r.business_type} · {OWNERSHIP_TYPE_LABELS[r.ownership_type]}
@@ -78,7 +82,7 @@ export default function BusinessNetworkPage() {
             {r.status === "rejected" && r.rejection_reason && (
               <p className="mt-1 text-xs text-red-600">Reason: {r.rejection_reason}</p>
             )}
-          </div>
+          </Card>
         ))}
       </div>
     </div>
@@ -120,19 +124,9 @@ function ReferralForm({ onCreated }: { onCreated: () => void }) {
   };
 
   return (
-    <div className="mt-4 flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-      <input
-        value={businessName}
-        onChange={(e) => setBusinessName(e.target.value)}
-        placeholder="Business name"
-        className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-      />
-      <input
-        value={businessType}
-        onChange={(e) => setBusinessType(e.target.value)}
-        placeholder="Type (e.g. restaurant, shop, transport)"
-        className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-      />
+    <Card className="mt-4 flex flex-col gap-3">
+      <Input value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="Business name" />
+      <Input value={businessType} onChange={(e) => setBusinessType(e.target.value)} placeholder="Type (e.g. restaurant, shop, transport)" />
       <div className="flex gap-4">
         {(["owned", "referred"] as OwnershipType[]).map((t) => (
           <label key={t} className="flex items-center gap-1.5 text-xs">
@@ -141,33 +135,13 @@ function ReferralForm({ onCreated }: { onCreated: () => void }) {
           </label>
         ))}
       </div>
-      <input
-        value={contactPhone}
-        onChange={(e) => setContactPhone(e.target.value)}
-        placeholder="Contact phone (optional)"
-        className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-      />
-      <input
-        value={contactEmail}
-        onChange={(e) => setContactEmail(e.target.value)}
-        placeholder="Contact email (optional)"
-        className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-      />
-      <textarea
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="Description (optional)"
-        rows={2}
-        className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-      />
+      <Input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="Contact phone (optional)" />
+      <Input value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="Contact email (optional)" />
+      <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description (optional)" rows={2} />
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <button
-        onClick={submit}
-        disabled={busy || !businessName || !businessType}
-        className="self-start rounded-full bg-zinc-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
-      >
+      <Button onClick={submit} loading={busy} disabled={!businessName || !businessType} className="self-start">
         Submit for review
-      </button>
-    </div>
+      </Button>
+    </Card>
   );
 }

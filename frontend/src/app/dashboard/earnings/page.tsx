@@ -2,6 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+import { Card } from "@/components/ui/Card";
+import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
@@ -47,9 +49,9 @@ function EarningsCard({ title, endpoint }: { title: string; endpoint: string }) 
   const notEligible = isError && error instanceof ApiError && error.status === 403;
 
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <Card>
       <h2 className="font-medium text-zinc-900 dark:text-zinc-50">{title}</h2>
-      {isLoading && <p className="mt-2 text-sm text-zinc-400">Loading…</p>}
+      {isLoading && <Spinner />}
       {notEligible && <p className="mt-2 text-sm text-zinc-500">No approved role of this type yet.</p>}
       {data && (
         <>
@@ -66,7 +68,7 @@ function EarningsCard({ title, endpoint }: { title: string; endpoint: string }) 
               <div key={c.id} className="flex items-center justify-between text-xs text-zinc-500">
                 <span>
                   {new Date(c.created_at).toLocaleDateString()} · {(Number(c.rate) * 100).toFixed(0)}% of {formatMoney(c.gross_amount)}
-                  {c.source === "network" && <span className="ml-1 text-purple-500">(network)</span>}
+                  {c.source === "network" && <span className="ml-1 text-indigo-500">(network)</span>}
                 </span>
                 <span
                   className={
@@ -89,7 +91,7 @@ function EarningsCard({ title, endpoint }: { title: string; endpoint: string }) 
           </div>
         </>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -102,17 +104,17 @@ function PayoutHistory() {
 
   const notEligible = isError && error instanceof ApiError && error.status === 403;
 
-  if (isLoading) return <p className="mt-2 text-sm text-zinc-400">Loading…</p>;
+  if (isLoading) return <Spinner />;
   if (notEligible) return <p className="mt-2 text-sm text-zinc-500">No approved partner role yet.</p>;
   if (!data || data.length === 0) return <p className="mt-2 text-sm text-zinc-400">No payouts yet.</p>;
 
   return (
     <div className="mt-2 flex flex-col gap-2">
       {data.map((p) => (
-        <div key={p.id} className="flex items-center justify-between rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800">
+        <Card key={p.id} className="flex items-center justify-between p-3 text-sm">
           <span>{new Date(p.paid_at).toLocaleDateString()} · {p.commission_count} commission(s)</span>
-          <span className="font-medium text-zinc-900 dark:text-zinc-50">{formatMoney(p.total_amount)}</span>
-        </div>
+          <span className="font-medium text-primary-600 dark:text-primary-400">{formatMoney(p.total_amount)}</span>
+        </Card>
       ))}
     </div>
   );

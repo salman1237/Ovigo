@@ -3,6 +3,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { Spinner } from "@/components/ui/Spinner";
+import { Textarea } from "@/components/ui/Textarea";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
 import type { HostProfile, LocalExpertProfile } from "@/types/profile";
@@ -62,14 +67,14 @@ function ExpertProfileCard() {
   const notEligible = isError && queryError instanceof ApiError && queryError.status === 403;
 
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <Card>
       <h2 className="font-medium text-zinc-900 dark:text-zinc-50">Local Expert Profile</h2>
-      {isLoading && <p className="mt-2 text-sm text-zinc-400">Loading…</p>}
+      {isLoading && <Spinner />}
       {notEligible && <p className="mt-2 text-sm text-zinc-500">You need an approved Local Expert role to set this up.</p>}
       {!isLoading && !notEligible && (
         <ExpertProfileForm key={profile?.id ?? "new"} profile={profile ?? null} />
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -131,39 +136,24 @@ function ExpertProfileForm({ profile }: { profile: LocalExpertProfile | null }) 
         />
       </div>
 
-      <input
-        value={headline}
-        onChange={(e) => setHeadline(e.target.value)}
-        placeholder="Headline (e.g. Cox's Bazar specialist)"
-        className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-      />
-      <textarea
-        value={bio}
-        onChange={(e) => setBio(e.target.value)}
-        placeholder="Bio"
-        rows={3}
-        className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-      />
-      <input
+      <Input value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="Headline (e.g. Cox's Bazar specialist)" />
+      <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Bio" rows={3} />
+      <Input
         type="number"
         min={0}
         value={yearsExperience}
         onChange={(e) => setYearsExperience(e.target.value ? Number(e.target.value) : "")}
         placeholder="Years of experience"
-        className="w-40 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+        className="w-44"
       />
       <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
         <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} />
         Published (visible in search)
       </label>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <button
-        onClick={save}
-        disabled={saving}
-        className="self-start rounded-full bg-zinc-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
-      >
+      <Button onClick={save} loading={saving} className="self-start">
         {saving ? "Saving…" : "Save"}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -178,14 +168,14 @@ function HostProfileCard() {
   const notEligible = isError && queryError instanceof ApiError && queryError.status === 403;
 
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <Card>
       <h2 className="font-medium text-zinc-900 dark:text-zinc-50">Host Profile</h2>
-      {isLoading && <p className="mt-2 text-sm text-zinc-400">Loading…</p>}
+      {isLoading && <Spinner />}
       {notEligible && <p className="mt-2 text-sm text-zinc-500">You need an approved Host or Hotel role to set this up.</p>}
       {!isLoading && !notEligible && (
         <HostProfileForm key={profile?.id ?? "new"} profile={profile ?? null} />
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -246,31 +236,16 @@ function HostProfileForm({ profile }: { profile: HostProfile | null }) {
         />
       </div>
 
-      <input
-        value={businessName}
-        onChange={(e) => setBusinessName(e.target.value)}
-        placeholder="Business name"
-        className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-      />
-      <textarea
-        value={bio}
-        onChange={(e) => setBio(e.target.value)}
-        placeholder="Bio"
-        rows={3}
-        className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-      />
+      <Input value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="Business name" />
+      <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Bio" rows={3} />
       <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
         <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} />
         Published (visible in search)
       </label>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <button
-        onClick={save}
-        disabled={saving}
-        className="self-start rounded-full bg-zinc-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
-      >
+      <Button onClick={save} loading={saving} className="self-start">
         {saving ? "Saving…" : "Save"}
-      </button>
+      </Button>
     </div>
   );
 }

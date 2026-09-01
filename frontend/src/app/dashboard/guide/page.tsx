@@ -3,6 +3,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
+import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import {
@@ -115,50 +121,46 @@ export default function GuideDashboardPage() {
     <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
       <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Guide Dashboard</h1>
 
-      {supervisionLoading && <p className="mt-4 text-sm text-zinc-400">Loading…</p>}
+      {supervisionLoading && <Spinner />}
 
       {!supervisionLoading && !supervision && (
-        <p className="mt-4 text-sm text-zinc-500">No supervision invitation yet.</p>
+        <div className="mt-4">
+          <EmptyState title="No supervision invitation yet" description="A Local Expert needs to invite you first." />
+        </div>
       )}
 
       {supervision && (
-        <div className="mt-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+        <Card className="mt-4">
           <p className="font-medium text-zinc-900 dark:text-zinc-50">
             Supervised by {supervision.expert.full_name}
           </p>
           <p className="mt-1 text-xs text-zinc-500">{SUPERVISION_STATUS_LABELS[supervision.status]}</p>
           {supervision.status === "pending" && (
             <div className="mt-3 flex gap-2">
-              <button
-                onClick={() => respond(true)}
-                className="rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-              >
+              <Button size="sm" onClick={() => respond(true)}>
                 Accept
-              </button>
-              <button
-                onClick={() => respond(false)}
-                className="rounded-full border border-red-300 px-4 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400"
-              >
+              </Button>
+              <Button size="sm" variant="destructive" onClick={() => respond(false)}>
                 Decline
-              </button>
+              </Button>
             </div>
           )}
           {supervision.status === "accepted" && (
-            <button onClick={terminate} className="mt-3 text-xs text-red-600 hover:underline">
+            <button onClick={terminate} className="mt-3 text-xs font-medium text-red-600 hover:text-red-700">
               End supervision
             </button>
           )}
-        </div>
+        </Card>
       )}
 
       {earnings && (
-        <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+        <Card className="mt-6">
           <p className="text-xs text-zinc-500">Earnings (informational — settled directly with your expert)</p>
-          <p className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+          <p className="mt-1 text-lg font-semibold text-primary-600 dark:text-primary-400">
             {formatMoney(earnings.total_fees)}
           </p>
           <p className="text-xs text-zinc-400">{earnings.total_completed_assignments} completed assignment(s)</p>
-        </div>
+        </Card>
       )}
 
       {supervision && (
@@ -166,36 +168,22 @@ export default function GuideDashboardPage() {
           <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Availability (next 60 days)</h2>
           <p className="mt-1 text-xs text-zinc-500">Mark specific dates you know you won&apos;t be available.</p>
           <div className="mt-2 flex gap-2">
-            <input
-              type="date"
-              value={blockDate}
-              min={today()}
-              max={daysFromNow(60)}
-              onChange={(e) => setBlockDate(e.target.value)}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            />
-            <button
-              onClick={toggleUnavailable}
-              disabled={!blockDate}
-              className="rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
-            >
+            <Input type="date" value={blockDate} min={today()} max={daysFromNow(60)} onChange={(e) => setBlockDate(e.target.value)} />
+            <Button size="sm" variant="secondary" onClick={toggleUnavailable} disabled={!blockDate}>
               Mark unavailable
-            </button>
+            </Button>
           </div>
           {(availability ?? []).filter((a) => !a.is_available).length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
               {(availability ?? [])
                 .filter((a) => !a.is_available)
                 .map((a) => (
-                  <span
-                    key={a.date}
-                    className="inline-flex items-center gap-1 rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-800 dark:bg-red-950 dark:text-red-300"
-                  >
+                  <Badge key={a.date} variant="danger" className="gap-1.5">
                     {a.date}
-                    <button onClick={() => markAvailable(a.date)} className="text-red-600 hover:text-red-900 dark:text-red-400">
+                    <button onClick={() => markAvailable(a.date)} className="hover:text-red-900 dark:hover:text-red-100">
                       ×
                     </button>
-                  </span>
+                  </Badge>
                 ))}
             </div>
           )}
@@ -206,7 +194,7 @@ export default function GuideDashboardPage() {
         <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">My Assignments</h2>
         <div className="mt-2 flex flex-col gap-2">
           {(assignments ?? []).map((a) => (
-            <div key={a.id} className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+            <Card key={a.id} className="p-3 text-sm">
               <p className="font-medium text-zinc-900 dark:text-zinc-50">
                 {a.departure.tour_title} — {a.departure.departure_date}
               </p>
@@ -216,17 +204,17 @@ export default function GuideDashboardPage() {
               </p>
               <div className="mt-2 flex gap-2">
                 {a.status === "assigned" && (
-                  <button onClick={() => checkIn(a.id)} className="rounded-full border border-zinc-300 px-3 py-1 text-xs dark:border-zinc-700">
+                  <Button size="sm" variant="secondary" onClick={() => checkIn(a.id)}>
                     Check in
-                  </button>
+                  </Button>
                 )}
                 {a.status === "checked_in" && (
-                  <button onClick={() => complete(a.id)} className="rounded-full border border-zinc-300 px-3 py-1 text-xs dark:border-zinc-700">
+                  <Button size="sm" variant="secondary" onClick={() => complete(a.id)}>
                     Complete
-                  </button>
+                  </Button>
                 )}
               </div>
-            </div>
+            </Card>
           ))}
           {(assignments ?? []).length === 0 && <p className="text-sm text-zinc-400">No assignments yet.</p>}
         </div>

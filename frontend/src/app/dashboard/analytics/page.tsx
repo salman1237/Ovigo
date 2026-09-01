@@ -4,6 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
+import { Card } from "@/components/ui/Card";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
@@ -37,7 +40,7 @@ export default function AnalyticsPage() {
             onClick={() => setTab(t.key)}
             className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
               tab === t.key
-                ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                ? "bg-gradient-to-r from-primary-600 to-indigo-600 text-white shadow-md shadow-primary-600/20"
                 : "border border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
             }`}
           >
@@ -60,8 +63,9 @@ function AnalyticsDashboardView({ endpoint }: { endpoint: string }) {
 
   const notEligible = isError && error instanceof ApiError && error.status === 403;
 
-  if (isLoading) return <p className="mt-6 text-sm text-zinc-400">Loading…</p>;
+  if (isLoading) return <Spinner />;
   if (notEligible) return <p className="mt-6 text-sm text-zinc-500">No approved role of this type yet.</p>;
+  if (isError) return <div className="mt-6"><ErrorState message="Couldn't load analytics. Please try again." /></div>;
   if (!data) return null;
 
   const { summary, timeseries, top_listings } = data;
@@ -90,7 +94,7 @@ function AnalyticsDashboardView({ endpoint }: { endpoint: string }) {
                 <XAxis dataKey="period" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip formatter={(value) => formatMoney(String(value ?? 0))} />
-                <Line type="monotone" dataKey="gross_revenue" name="Gross revenue" stroke="#18181b" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="gross_revenue" name="Gross revenue" stroke="#2563eb" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="net_earnings" name="Net earnings" stroke="#10b981" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -108,7 +112,7 @@ function AnalyticsDashboardView({ endpoint }: { endpoint: string }) {
                 <XAxis dataKey="period" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="bookings_count" name="Bookings" fill="#18181b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="bookings_count" name="Bookings" fill="#2563eb" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -122,10 +126,10 @@ function AnalyticsDashboardView({ endpoint }: { endpoint: string }) {
         {top_listings.length === 0 && <p className="mt-2 text-sm text-zinc-400">No revenue-generating listings yet.</p>}
         <div className="mt-2 flex flex-col gap-2">
           {top_listings.map((l) => (
-            <div key={l.id} className="flex items-center justify-between rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800">
+            <Card key={l.id} className="flex items-center justify-between p-3 text-sm">
               <span>{l.title}</span>
-              <span className="text-zinc-500">{l.bookings_count} booking(s) · {formatMoney(l.gross_revenue)}</span>
-            </div>
+              <span className="font-medium text-primary-600 dark:text-primary-400">{l.bookings_count} booking(s) · {formatMoney(l.gross_revenue)}</span>
+            </Card>
           ))}
         </div>
       </div>
