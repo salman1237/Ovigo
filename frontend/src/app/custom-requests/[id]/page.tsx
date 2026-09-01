@@ -4,6 +4,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import {
@@ -59,15 +64,13 @@ export default function CustomRequestDetailPage() {
     }
   };
 
-  if (isLoading || !request) return <p className="px-6 py-12 text-sm text-zinc-400">Loading…</p>;
+  if (isLoading || !request) return <Spinner />;
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{request.title}</h1>
-        <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-          {REQUEST_STATUS_LABELS[request.status]}
-        </span>
+        <Badge variant="primary">{REQUEST_STATUS_LABELS[request.status]}</Badge>
       </div>
       <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{request.description}</p>
       <p className="mt-2 text-xs text-zinc-500">
@@ -78,12 +81,9 @@ export default function CustomRequestDetailPage() {
       </p>
 
       {request.status === "open" && (
-        <button
-          onClick={cancelRequest}
-          className="mt-4 rounded-full border border-red-300 px-4 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400"
-        >
+        <Button variant="destructive" size="sm" onClick={cancelRequest} className="mt-4">
           Cancel request
-        </button>
+        </Button>
       )}
 
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
@@ -92,16 +92,18 @@ export default function CustomRequestDetailPage() {
         <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
           Bids ({bids?.length ?? 0})
         </h2>
-        {bidsLoading && <p className="mt-2 text-sm text-zinc-400">Loading…</p>}
+        {bidsLoading && <Spinner />}
         {!bidsLoading && (bids ?? []).length === 0 && (
-          <p className="mt-2 text-sm text-zinc-400">No bids yet — check back soon.</p>
+          <div className="mt-2">
+            <EmptyState title="No bids yet" description="Check back soon — local experts will bid on this request." />
+          </div>
         )}
         <div className="mt-3 flex flex-col gap-3">
           {(bids ?? []).map((bid) => (
-            <div key={bid.id} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+            <Card key={bid.id}>
               <div className="flex items-center justify-between">
                 <h3 className="font-medium text-zinc-900 dark:text-zinc-50">{bid.expert.full_name}</h3>
-                <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                <span className="text-lg font-semibold text-primary-600 dark:text-primary-400">
                   {formatMoney(bid.price)}
                 </span>
               </div>
@@ -119,16 +121,12 @@ export default function CustomRequestDetailPage() {
               <div className="mt-3 flex items-center justify-between">
                 <span className="text-xs capitalize text-zinc-400">{BID_STATUS_LABELS[bid.status]}</span>
                 {bid.status === "pending" && request.status === "open" && (
-                  <button
-                    onClick={() => acceptBid(bid.id)}
-                    disabled={busyBidId === bid.id}
-                    className="rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-                  >
+                  <Button size="sm" onClick={() => acceptBid(bid.id)} loading={busyBidId === bid.id}>
                     Accept &amp; book
-                  </button>
+                  </Button>
                 )}
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       </div>
