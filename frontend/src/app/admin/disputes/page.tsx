@@ -3,7 +3,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Spinner } from "@/components/ui/Spinner";
+import { Textarea } from "@/components/ui/Textarea";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { cn } from "@/lib/cn";
 import { Dispute, DisputeResolution, DisputeStatus } from "@/types/dispute";
 
 const TABS: (DisputeStatus | "all")[] = ["all", "open", "resolved"];
@@ -29,20 +36,23 @@ export default function AdminDisputesPage() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
+            className={cn(
+              "rounded-full px-4 py-1.5 text-sm font-medium capitalize transition-colors",
               tab === t
-                ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                ? "bg-gradient-to-r from-primary-600 to-indigo-600 text-white shadow-md shadow-primary-600/20"
                 : "border border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
-            }`}
+            )}
           >
             {t}
           </button>
         ))}
       </div>
 
-      {isLoading && <p className="mt-6 text-sm text-zinc-400">Loading…</p>}
+      {isLoading && <Spinner />}
       {!isLoading && (disputes ?? []).length === 0 && (
-        <p className="mt-6 text-sm text-zinc-400">No {tab === "all" ? "" : tab} disputes.</p>
+        <div className="mt-6">
+          <EmptyState title={`No ${tab === "all" ? "" : tab} disputes`} />
+        </div>
       )}
 
       <div className="mt-6 flex flex-col gap-4">
@@ -79,29 +89,21 @@ function DisputeCard({ dispute, onChange }: { dispute: Dispute; onChange: () => 
   };
 
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <Card>
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-medium text-zinc-900 dark:text-zinc-50">
             {dispute.raised_by.full_name}
-            <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-normal capitalize text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-              {dispute.raised_by_role}
-            </span>
+            <Badge className="ml-2 text-[10px]">{dispute.raised_by_role}</Badge>
           </h3>
           <p className="text-xs text-zinc-500">
             {dispute.raised_by.email} · Booking {dispute.booking_id.slice(0, 8)} ·{" "}
             {new Date(dispute.created_at).toLocaleString()}
           </p>
         </div>
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${
-            dispute.status === "open"
-              ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
-              : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-          }`}
-        >
+        <Badge variant={dispute.status === "open" ? "warning" : "success"} className="capitalize">
           {dispute.status}
-        </span>
+        </Badge>
       </div>
 
       <p className="mt-3 text-sm text-zinc-700 dark:text-zinc-300">{dispute.reason}</p>
@@ -115,12 +117,9 @@ function DisputeCard({ dispute, onChange }: { dispute: Dispute; onChange: () => 
       {dispute.status === "open" && (
         <div className="mt-3">
           {!showResolve && (
-            <button
-              onClick={() => setShowResolve(true)}
-              className="rounded-full bg-zinc-900 px-4 py-1.5 text-xs font-medium text-white dark:bg-white dark:text-zinc-900"
-            >
+            <Button size="sm" onClick={() => setShowResolve(true)}>
               Resolve
-            </button>
+            </Button>
           )}
           {showResolve && (
             <div className="mt-2 flex flex-col gap-2">
@@ -142,30 +141,20 @@ function DisputeCard({ dispute, onChange }: { dispute: Dispute; onChange: () => 
                   Reject
                 </label>
               </div>
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Resolution note (shown to the traveler)"
-                rows={2}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-              />
+              <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Resolution note (shown to the traveler)" rows={2} />
               {error && <p className="text-xs text-red-600">{error}</p>}
               <div className="flex gap-2">
-                <button
-                  onClick={resolve}
-                  disabled={busy}
-                  className="rounded-full bg-zinc-900 px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
-                >
+                <Button size="sm" onClick={resolve} loading={busy}>
                   Confirm resolution
-                </button>
-                <button onClick={() => setShowResolve(false)} className="text-xs text-zinc-500">
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setShowResolve(false)}>
                   Cancel
-                </button>
+                </Button>
               </div>
             </div>
           )}
         </div>
       )}
-    </div>
+    </Card>
   );
 }

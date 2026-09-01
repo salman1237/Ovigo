@@ -3,6 +3,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { Location, LocationNode, LocationType } from "@/types/location";
 
@@ -65,83 +70,43 @@ export default function AdminLocationsPage() {
       <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Locations</h1>
       <p className="mt-1 text-sm text-zinc-500">Country → Region → City → Attraction hierarchy.</p>
 
-      <form
-        onSubmit={createLocation}
-        className="mt-6 flex flex-wrap items-end gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800"
-      >
-        <div>
-          <label className="block text-xs font-medium text-zinc-500">Name</label>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            className="mt-1 rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-zinc-500">Slug</label>
-          <input
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            required
-            className="mt-1 rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-zinc-500">Type</label>
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value as LocationType)}
-            className="mt-1 rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          >
-            {LOCATION_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-zinc-500">Parent</label>
-          <select
-            value={parentId}
-            onChange={(e) => setParentId(e.target.value)}
-            className="mt-1 rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          >
-            <option value="">— none (top-level) —</option>
-            {rows.map(({ node, depth }) => (
-              <option key={node.id} value={node.id}>
-                {"—".repeat(depth)} {node.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
-        >
+      <Card as="form" onSubmit={createLocation} className="mt-6 flex flex-wrap items-end gap-3">
+        <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} required />
+        <Input label="Slug" value={slug} onChange={(e) => setSlug(e.target.value)} required />
+        <Select label="Type" value={type} onChange={(e) => setType(e.target.value as LocationType)} className="w-auto">
+          {LOCATION_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </Select>
+        <Select label="Parent" value={parentId} onChange={(e) => setParentId(e.target.value)} className="w-auto">
+          <option value="">— none (top-level) —</option>
+          {rows.map(({ node, depth }) => (
+            <option key={node.id} value={node.id}>
+              {"—".repeat(depth)} {node.name}
+            </option>
+          ))}
+        </Select>
+        <Button type="submit" loading={submitting}>
           {submitting ? "Adding…" : "Add location"}
-        </button>
-      </form>
+        </Button>
+      </Card>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
-      {isLoading && <p className="mt-6 text-sm text-zinc-400">Loading…</p>}
+      {isLoading && <Spinner />}
 
       <ul className="mt-6 flex flex-col gap-1">
         {rows.map(({ node, depth }) => (
           <li
             key={node.id}
             style={{ paddingLeft: `${depth * 1.25}rem` }}
-            className="flex items-center justify-between rounded-md px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900"
+            className="flex items-center justify-between rounded-lg px-3 py-1.5 text-sm hover:bg-primary-50/60 dark:hover:bg-primary-950/20"
           >
             <span>
               {node.name} <span className="text-xs text-zinc-400">({node.type})</span>
             </span>
-            <button
-              onClick={() => deleteLocation(node.id)}
-              className="text-xs text-red-600 hover:underline"
-            >
+            <button onClick={() => deleteLocation(node.id)} className="text-xs font-medium text-red-600 hover:text-red-700">
               Delete
             </button>
           </li>

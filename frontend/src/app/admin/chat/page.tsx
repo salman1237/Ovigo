@@ -1,9 +1,17 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { MapPin, Paperclip } from "lucide-react";
 import { useState } from "react";
 
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
+import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { cn } from "@/lib/cn";
 import type { AdminChatThread, ChatMessage } from "@/types/chat";
 
 const TABS = ["reported", "open", "closed", "all"] as const;
@@ -30,19 +38,24 @@ export default function AdminChatPage() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
+            className={cn(
+              "rounded-full px-4 py-1.5 text-sm font-medium capitalize transition-colors",
               tab === t
-                ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                ? "bg-gradient-to-r from-primary-600 to-indigo-600 text-white shadow-md shadow-primary-600/20"
                 : "border border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
-            }`}
+            )}
           >
             {t}
           </button>
         ))}
       </div>
 
-      {isLoading && <p className="mt-6 text-sm text-zinc-400">Loading…</p>}
-      {!isLoading && (threads ?? []).length === 0 && <p className="mt-6 text-sm text-zinc-400">No conversations here.</p>}
+      {isLoading && <Spinner />}
+      {!isLoading && (threads ?? []).length === 0 && (
+        <div className="mt-6">
+          <EmptyState title="No conversations here" />
+        </div>
+      )}
 
       <div className="mt-6 flex flex-col gap-4">
         {(threads ?? []).map((t) => (
@@ -95,7 +108,7 @@ function AdminThreadCard({ thread, onChange }: { thread: AdminChatThread; onChan
   };
 
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <Card>
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-medium text-zinc-900 dark:text-zinc-50">
@@ -107,43 +120,36 @@ function AdminThreadCard({ thread, onChange }: { thread: AdminChatThread; onChan
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {thread.reported_message_count > 0 && (
-            <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-300">
-              {thread.reported_message_count} reported
-            </span>
-          )}
-          <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium capitalize text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-            {thread.status}
-          </span>
+          {thread.reported_message_count > 0 && <Badge variant="danger">{thread.reported_message_count} reported</Badge>}
+          <Badge className="capitalize">{thread.status}</Badge>
         </div>
       </div>
 
       {!expanded && (
         <div className="mt-3 flex items-end gap-2">
-          <input
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Reason for viewing (required, logged)"
-            className="flex-1 rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          />
-          <button
-            onClick={viewMessages}
-            disabled={busy}
-            className="rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
-          >
+          <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason for viewing (required, logged)" className="flex-1" />
+          <Button size="sm" variant="secondary" onClick={viewMessages} loading={busy}>
             View messages
-          </button>
+          </Button>
         </div>
       )}
 
       {expanded && messages && (
-        <div className="mt-3 flex max-h-72 flex-col gap-2 overflow-y-auto rounded-md bg-zinc-50 p-3 dark:bg-zinc-900">
+        <div className="mt-3 flex max-h-72 flex-col gap-2 overflow-y-auto rounded-lg bg-zinc-50 p-3 dark:bg-zinc-900">
           {messages.map((m) => (
             <div key={m.id} className="text-sm">
               <span className="font-medium">{m.sender_name}: </span>
               {m.message_type === "text" && <span>{m.body}</span>}
-              {m.message_type === "location" && <span>📍 shared a location</span>}
-              {m.message_type === "attachment" && <span>📎 {m.attachment?.file_name}</span>}
+              {m.message_type === "location" && (
+                <span className="inline-flex items-center gap-1">
+                  <MapPin className="h-3.5 w-3.5" /> shared a location
+                </span>
+              )}
+              {m.message_type === "attachment" && (
+                <span className="inline-flex items-center gap-1">
+                  <Paperclip className="h-3.5 w-3.5" /> {m.attachment?.file_name}
+                </span>
+              )}
               <span className="ml-2 text-xs text-zinc-400">{new Date(m.created_at).toLocaleString()}</span>
             </div>
           ))}
@@ -153,14 +159,10 @@ function AdminThreadCard({ thread, onChange }: { thread: AdminChatThread; onChan
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
 
       {thread.status === "open" && (
-        <button
-          onClick={closeThread}
-          disabled={busy}
-          className="mt-3 rounded-full border border-red-300 px-4 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400"
-        >
+        <Button size="sm" variant="destructive" onClick={closeThread} loading={busy} className="mt-3">
           Close conversation
-        </button>
+        </Button>
       )}
-    </div>
+    </Card>
   );
 }
