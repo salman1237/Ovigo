@@ -4,14 +4,14 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-01 (Sprint 16 Part 1 complete — Live Chat (WebSocket) shipped; advanced partner analytics and dispute-management enhancements still pending in Part 2)_
+_Last updated: 2026-09-01 (Sprint 16 complete — Live Chat, advanced partner analytics and dispute payout holds all shipped; Phase 2 is now fully done)_
 
 ## Infrastructure & deployment status
 
 | Item | Status | Notes |
 |---|---|---|
 | GitHub repo | Done | `salman1237/Ovigo`, connected |
-| NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 47 tables live — see Sprint 5-6 (13 tables), Sprint 7-8 (`bookings`, `booking_items`, `booking_guests`, `booking_status_history`, `payments`, `escrow_transactions`, `commissions`, `reviews`), Sprint 9 (`notifications`, `disputes`), Sprint 10-11 (`custom_tour_requests`, `tour_bids`), Sprint 12-13 (`guide_supervision`, `guide_assignments`, `guide_availability`, `business_referrals`), Sprint 14-15 Part 1 (`commission_rules`, `payouts`, `badges`), Sprint 14-15 Part 2 (`drivers`, `vehicles`, `vehicle_availability`) and Sprint 16 Part 1 (`chat_threads`, `chat_attachments`, `chat_messages`) additions below |
+| NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 47 tables live — see Sprint 5-6 (13 tables), Sprint 7-8 (`bookings`, `booking_items`, `booking_guests`, `booking_status_history`, `payments`, `escrow_transactions`, `commissions`, `reviews`), Sprint 9 (`notifications`, `disputes`), Sprint 10-11 (`custom_tour_requests`, `tour_bids`), Sprint 12-13 (`guide_supervision`, `guide_assignments`, `guide_availability`, `business_referrals`), Sprint 14-15 Part 1 (`commission_rules`, `payouts`, `badges`), Sprint 14-15 Part 2 (`drivers`, `vehicles`, `vehicle_availability`) and Sprint 16 Part 1 (`chat_threads`, `chat_attachments`, `chat_messages`) additions below. Sprint 16 Part 2 (analytics + dispute payout holds) added no new tables — see that section |
 | Cloudflare R2 | Done | `ovigo` bucket, S3-compatible credentials in `backend/.env` and on FastAPI Cloud — see Sprint 5-6 image storage notes |
 | SSLCommerz | Done | Sandbox store credentials in `backend/.env` and on FastAPI Cloud — see Sprint 7-8 payment notes |
 | Backend scaffold | Done | FastAPI app, config, async SQLAlchemy engine, Alembic wired to Neon |
@@ -242,6 +242,27 @@ Partner verification documents (Sprint 3-4) still use Postgres `bytea`, not R2 �
 
 **Verified:** a comprehensive scripted smoke test against Neon covering the full lifecycle — pre-booking thread creation, idempotent get-or-create, a partner blocked from messaging about their own listing, contact-info redaction firing pre-booking and *not* firing post-booking, location sharing and attachments correctly blocked pre-booking and allowed post-booking, unread counts and read receipts, message reporting, and the full admin moderation flow (reported-queue listing, logged-reason message view, closing a thread, and further messages to a closed thread being rejected). Also verified at the HTTP+WebSocket layer against a live local server — confirmed a message posted via REST is pushed to a connected WebSocket client in real time, and that connecting with an invalid token is correctly rejected at the handshake (HTTP 403, before `accept()`) rather than admitted and then dropped. Frontend `npm run lint` and `npm run build` both pass clean with all new routes generated; no browser-automation tool is available in this environment, so the UI itself was verified via the build/lint pass and the backend contract test rather than interactive browser testing.
 
+### Sprint 16 (Part 2 of 2) — Advanced Analytics & Dispute Payout Holds (Wk 31-32)
+
+| Task | Status |
+|---|---|
+| Advanced partner analytics dashboards | Done — new `analytics` module, `/dashboard/analytics` (recharts trend charts). Per approved role (Local Expert / Host / Rent-a-Car): a summary (bookings, gross/net revenue, average rating), a monthly revenue+bookings timeseries, and top listings by revenue. Built entirely from existing `Commission`/`BookingItem`/`Review` rows — no new tables |
+| Dispute management system (richer) | Done — closes the remaining half of MVP AC #16 ("payout holds"). Either party to a booking (not just the traveler) can now raise a dispute; opening one freezes every `Commission` on the booking (new `ON_HOLD` status, verified to actually drop out of the payout batch preview); rejecting releases the hold, refunding cancels the commission outright (new `CANCELLED` status) |
+
+**Also fixed in passing:** there was no `GET /api/v1/partners/earnings/vehicles` endpoint — Rent-a-Car partners had *no* earnings visibility at all before this. Added it alongside the new `/api/v1/partners/analytics/vehicles` endpoint, giving all three revenue-generating role types parity.
+
+**Bug found and fixed (via this pass's own smoke test, not review alone):** the admin "new dispute" notification has linked to `/admin/disputes/None` since Sprint 9 — `dispute.id` was read for the notification link immediately after `db.add(dispute)`, before any flush, so the client-side UUID default hadn't been assigned yet. Fixed with an explicit `await db.flush()`.
+
+**Scope trims:** dispute resolution stays binary (full refund or reject) — no partial-refund amount tracking, since escrow is a single HELD/REFUNDED flag per booking, not an amount-tracked ledger; no dedicated "disputes I'm involved in" list endpoint for partners yet — a partner is still notified in-app the moment a dispute opens or resolves on their booking (with no dead link, since there's no partner-facing "bookings against my listings" view to send them to), they just can't browse a history list of them yet; a `CUSTOM_BID` commission counts toward analytics totals but is left out of "top listings" since a one-off bid isn't a reusable listing to rank.
+
+**Enum extensions:** `CommissionStatus` gained `ON_HOLD` and `CANCELLED` via `ALTER TYPE ADD VALUE`. One migration, applied cleanly to Neon. No new tables.
+
+**Frontend:** `/dashboard/analytics` (role-tabbed summary stats + revenue/bookings charts + top listings, via `recharts`, newly added as a dependency); `/dashboard/earnings` gained an "on hold" stat and a third card for Rent-a-Car partners; `/admin/disputes` now shows a "traveler"/"partner" tag on who raised each dispute.
+
+**Verified:** a comprehensive scripted smoke test against Neon covering the full lifecycle — analytics summary/timeseries/top-listings correctness after a completed booking, a review updating the average rating, a partner-raised dispute freezing the commission and being excluded from the payout preview, a second concurrent dispute on the same booking correctly rejected, a rejected dispute releasing the hold back to payable, a traveler-raised dispute resolved as refunded correctly cancelling the commission, and a non-party correctly denied at every step. Also verified at the HTTP layer that all new/changed endpoints correctly gate on auth (401 unauthenticated). Frontend `npm run lint` and `npm run build` both pass clean, with the new `/dashboard/analytics` route generated. Both FastAPI Cloud and Vercel confirmed live post-deploy. As with Sprint 16 Part 1, no browser-automation tool is available in this environment, so the UI was verified via the build/lint pass and the backend contract tests rather than interactive browser testing.
+
+**Phase 2 ("Customization & Network") is now fully complete** — all of Sprint 10-11 through Sprint 16 (Parts 1 and 2) are shipped and deployed.
+
 ## Phase 3 — Growth & Monetization
 
 Not started. See technical document §8, Phase 3.
@@ -269,7 +290,7 @@ Not started. See technical document §8, Phase 4.
 | 13 | A Local Expert can add a Guide under supervision | Done — invite by email, guide accepts, admin approves the role, one supervisor per guide enforced at the DB level |
 | 14 | A Local Expert can add a referred business | Done — `owned` or `referred` ownership types, admin approval workflow |
 | 15 | Referral attribution is stored | Done — every `BusinessReferral` row carries `referring_expert_role_id` |
-| 16 | Admin can manage disputes, refunds and payout holds | Done (basic) — a traveler opens a dispute, an admin resolves it as refunded (flips escrow to `REFUNDED`) or rejected with a note. No payout-hold mechanism yet since there's no payout/disbursement system at all in Phase 1 (that's Phase 2 "Financial Engine") — nothing to "hold" against. |
+| 16 | Admin can manage disputes, refunds and payout holds | Done — either party to a booking can open a dispute; an admin resolves it as refunded (flips escrow to `REFUNDED`, cancels the held commission) or rejected (releases the hold). Opening a dispute now actually freezes the relevant `Commission` row (`ON_HOLD`) so it can't be swept into a payout batch while unresolved — the payout-hold mechanism landed in Sprint 16 Part 2 once a real payout system existed to hold against. |
 | 17 | Partners can purchase featured placement | Pending |
 | 18 | Sponsored results are visibly labelled | Pending |
 | 19 | All important Admin actions are audit logged | Done — role approve/reject, document verify/reject, tour/property approve/reject, dispute resolve, business referral approve/reject. Extend as each new admin action lands |
