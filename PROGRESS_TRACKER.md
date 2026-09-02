@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-02 (Sprint 19-20 complete — Advanced Pricing Engine + Hotel Operations shipped; Sprint 21-22 next)_
+_Last updated: 2026-09-02 (Sprint 21-22 Part 1 complete — Fraud & Risk Engine shipped, Part 2 next)_
 
 ## Infrastructure & deployment status
 
@@ -348,6 +348,22 @@ Split the same way as Sprint 14-15 and 16: Part 1 (this section) is the pricing 
 **Verified:** a comprehensive scripted smoke test against Neon covering the full staff permission matrix (a pending invite has no access yet, `MANAGER` implies every permission, `HOUSEKEEPING` staff correctly denied a front-desk-only action, revoked staff correctly lose access, a non-owner can't invite staff on someone else's property), Room CRUD, and a full front-desk booking lifecycle (walk-in booking created directly as `CONFIRMED` with an auto-created guest account → room assigned → checked in → checked out → the assigned room auto-flips to `DIRTY`), plus occupancy/ADR/RevPAR math against a real booking. Also verified at the HTTP layer: all 12 new routes registered and auth-gated (401 unauthenticated), with no new duplicate-operation-ID warnings introduced. Frontend adds a Staff and a Rooms & Housekeeping section to the property dashboard, a dedicated `/dashboard/properties/[id]/front-desk` page (walk-in booking form, check-in/check-out, room assignment), a `/dashboard/staff` "my invitations" page (linked from the header/mobile nav), and an occupancy/ADR/RevPAR widget on the host analytics tab; `npm run lint` and `npm run build` both pass clean, all 41 routes generated. Both FastAPI Cloud and Vercel confirmed live post-deploy (new endpoints and pages spot-checked directly against production).
 
 **Sprint 19-20 ("Hotel Features & Advanced Pricing") is now fully complete** — Parts 1 and 2 both shipped and deployed. Phase 3 continues with Sprint 21-22 (Fraud, Risk & Smart Search) next.
+
+### Sprint 21-22 Part 1 — Fraud & Risk Engine (Wk 41-44)
+
+Split into two parts given the sprint's breadth: Part 1 (this section) is the fraud/risk engine; Part 2 (smart search ranking, notification templates/campaigns, admin reports) follows separately.
+
+| Task | Status |
+|---|---|
+| Fraud scoring engine | Done — a user's risk score is never a stored column; it's `sum(score)` over that user's OPEN `FraudFlag` rows, computed on read (the same derive-don't-store convention analytics/commissions already use) |
+| Risk rules (duplicate accounts, fake bookings, self-referral, etc.) | Done, scoped to signals this schema can actually verify — no device fingerprint, IP, or geolocation data is collected anywhere in this codebase, so rules are built on the existing `PartnerRole → PartnerAccount → User` ownership chain instead: `self_booking` (a partner booking their own listing), `self_review` (reviewing their own listing), `self_referral` (a business referral that resolves to the referrer's own second partner account once linked), `rapid_cancellation_pattern` (3+ cancelled bookings by the same user in 7 days), and `duplicate_identity_document` (byte-identical ID documents uploaded under different accounts) |
+| Automated fraud alerts | Done for four of the five rules — `self_booking`/`self_review`/`self_referral`/`rapid_cancellation_pattern` fire automatically inline at the point of the triggering action (booking creation/cancellation, review creation, referral linking), not on a delay or a batch job. `duplicate_identity_document` is the one rule that's inherently cross-account (comparing every partner's uploaded document against every other's) rather than reactable to a single event, so it stays an admin-triggered scan (`POST /api/v1/admin/fraud/scan-documents`) instead. Every HIGH/CRITICAL flag fans out a notification to all admins, reusing the exact admin-alert pattern `disputes/service.py` already established |
+
+**New table:** `fraud_flags`. **Enum extension:** `notification_type` gained `FRAUD_ALERT` via `ALTER TYPE ADD VALUE`. One migration, applied cleanly to Neon.
+
+**Verified:** a comprehensive scripted smoke test against Neon covering all five rules firing correctly (plus a no-false-positive check for a normal traveler booking), risk-score aggregation counting only OPEN flags, a resolved flag correctly dropping out of the score, the document scan being idempotent on re-run, and HIGH/CRITICAL flags correctly generating an admin notification. Also verified at the HTTP layer: all 5 new admin routes registered and auth-gated (401 unauthenticated), no new duplicate-operation-ID warnings. Frontend adds an `/admin/fraud` dashboard (tabbed by status, severity-colored, resolve/dismiss with a note, manual document-scan trigger), linked from the admin nav; `npm run lint` and `npm run build` both pass clean, all 42 routes generated. Both FastAPI Cloud and Vercel confirmed live post-deploy.
+
+**Part 2 not yet started:** smart search ranking algorithm (relevance, rating, conversion, completeness), notification system expansion (push/SMS — delivery itself needs provider credentials not yet configured, same gap already flagged in `notifications/models.py`'s docstring, so this will likely scope down to templates/campaign tooling with the transport layer left as a documented follow-up), notification templates & campaign tools, and advanced admin reports (20+ report types, likely scoped to a curated set built from existing data rather than 20+ bespoke reports, to be decided when Part 2 starts).
 
 ## Phase 4 — Scale & Expansion
 
