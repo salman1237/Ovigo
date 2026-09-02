@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-02 (Sprint 21-22 Part 2a complete — Smart Search Ranking shipped, Part 2b next)_
+_Last updated: 2026-09-02 (Sprint 21-22 complete — Fraud/Risk, Smart Search, Notification Campaigns & Admin Reports shipped; Phase 3 complete, Phase 4 next)_
 
 ## Infrastructure & deployment status
 
@@ -376,7 +376,20 @@ Split into two parts given the sprint's breadth: Part 1 (this section) is the fr
 
 **Verified:** against Neon, a "rich" listing (complete profile, a real rating, a completed booking, exact location match) correctly outranks a "poor" one (bare minimum, no reviews/bookings, descendant-only match) across all four listing types. Also verified at the HTTP layer that every affected endpoint responds 200 with no new duplicate-operation-ID warnings. No frontend changes needed — pages already render whatever order the backend returns; `npm run lint` and `npm run build` re-verified clean regardless. Both FastAPI Cloud and Vercel confirmed live post-deploy.
 
-**Part 2b not yet started:** notification system expansion (push/SMS — delivery itself needs provider credentials not yet configured, same gap already flagged in `notifications/models.py`'s docstring, so this will likely scope down to templates/campaign tooling with the transport layer left as a documented follow-up), notification templates & campaign tools, and advanced admin reports (20+ report types, likely scoped to a curated set built from existing data rather than 20+ bespoke reports, to be decided when that part starts).
+### Sprint 21-22 Part 2b — Notification Campaigns & Admin Reports (Wk 41-44)
+
+| Task | Status |
+|---|---|
+| Notification system expansion (push, SMS) | Not done — delivery itself needs a provider credential (SendGrid/SES, Twilio, FCM) that isn't configured anywhere in this codebase, the same gap `notifications/models.py` already documented for email. Scoped down to the in-app delivery this codebase actually has |
+| Notification templates & campaign tools | Done — `NotificationTemplate` (reusable subject/body) and `NotificationCampaign` (admin-triggered broadcast to everyone, travelers with no partner account, or partners optionally narrowed by role type). Delivers through the same in-app `Notification` rows every other notification uses; a campaign's title/message are snapshotted from the template at send time so editing/deleting it later never changes what a past campaign is recorded as having sent |
+| Emergency alerts | Done as a display flag only (`is_urgent`) surfaced in the campaign UI, not a real out-of-band emergency channel — there's no push/SMS transport to make it a genuine emergency broadcast (see notification expansion row above) |
+| Advanced Admin reports (20+ report types) | Done, scoped down to 7 curated reports (bookings summary, platform revenue, partner performance, fraud overview, dispute overview, referral overview, partner-approval funnel) built from data this codebase already has — a deliberate reduction from "20+", since fabricating superficial reports with no real signal would be worse than a smaller set of genuinely useful ones. Each is exposed as JSON (dashboard table) and CSV (export) from the same query |
+
+**New tables:** `notification_templates`, `notification_campaigns`. **Enum extension:** `notification_type` gained `ADMIN_ANNOUNCEMENT` via `ALTER TYPE ADD VALUE`. One migration, applied cleanly to Neon.
+
+**Verified:** a comprehensive scripted smoke test against Neon covering template CRUD, campaign validation (needs a template or an ad-hoc title+message; `audience_role_type` only valid with `partners_only`), all three audience types resolving to the correct recipients (including a `partners_only` + role-type filter narrowing to exactly the right partner), a deleted template correctly leaving a sent campaign's snapshot intact, and all 7 reports running correctly with working CSV rendering. Also verified at the HTTP layer: all 10 new admin routes registered and auth-gated (401 unauthenticated), no new duplicate-operation-ID warnings. Frontend adds an `/admin/notifications` page (send/templates/history tabs) and an `/admin/reports` page (tabbed report viewer with CSV export); `npm run lint` and `npm run build` both pass clean, all 44 routes generated. Both FastAPI Cloud and Vercel confirmed live post-deploy.
+
+**Sprint 21-22 ("Fraud, Risk & Smart Search") is now fully complete** — Part 1 (fraud & risk engine) and Part 2 (smart search ranking + notification campaigns/admin reports) both shipped and deployed. This closes out Phase 3 ("Growth & Monetization") per the technical document's phase plan; Phase 4 ("Scale & Expansion") is next.
 
 ## Phase 4 — Scale & Expansion
 
