@@ -146,3 +146,8 @@ export interface Room {
   notes: string | null;
   created_at: string;
 }
+
+export interface IcalToken {
+  ical_token: string;
+  feed_path: string;
+}

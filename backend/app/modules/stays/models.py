@@ -55,6 +55,29 @@ for housekeeping). Deliberate scope trims:
   check-in (`BookingItem.assigned_room_id`). Room assignment does not gate or
   double-book-check against the pooled availability count; it's a convenience
   field, not a second source of truth for inventory.
+
+Sprint 23-24 ("External Integrations" in the technical document's Phase 4 plan)
+adds iCal export/import per `RoomType` (see `stays/service.py::export_ical` /
+`import_ical`, and `core/ical.py` for the RFC 5545 handling itself) — the
+"iCal import/export for stays" and "external calendar sync" line items. Scope
+trims:
+- **One `.ics` feed per `RoomType`, gated by a random unguessable token** (not a
+  JWT) — matching exactly how Airbnb/Booking.com/Google Calendar's own "secret
+  calendar URL" export links work, since the consumer is a third-party calendar
+  app that can't send an Ovigo bearer token.
+- **Import always blocks the full date range at `available_units=0`**, regardless
+  of `RoomType.total_units` — correct for the common case this feature targets
+  (one external OTA listing syncing back to one Ovigo room type) and avoids
+  building partial-unit conflict resolution the technical document doesn't ask
+  for. There's no tracking of *why* a date is blocked (host-set vs.
+  import-derived); a re-import simply re-zeroes the same dates, which is
+  idempotent and safe.
+- **No two-way write-back to the external calendar** — Ovigo consumes an external
+  .ics feed to protect against double-booking, but doesn't (and structurally
+  can't, without that platform's own API) push Ovigo bookings back into Airbnb's
+  own calendar. The "channel manager integration API" / "PMS integration hooks"
+  line items are what let an external system pull Ovigo's own availability
+  programmatically instead — see the `integrations` module.
 """
 import enum
 import uuid
@@ -208,6 +231,11 @@ class RoomType(Base):
     base_price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     total_units: Mapped[int] = mapped_column(Integer, default=1)
     min_stay_nights: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # A random, unguessable token gating this room type's public .ics export feed
+    # (see stays/service.py::export_ical) — generated lazily on first request for
+    # one, not at row-creation time, so most room types never need the column
+    # touched at all.
+    ical_token: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

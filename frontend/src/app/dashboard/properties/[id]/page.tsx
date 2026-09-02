@@ -21,6 +21,7 @@ import {
   AmenityKey,
   HOUSEKEEPING_STATUS_LABELS,
   HousekeepingStatus,
+  IcalToken,
   Property,
   RatePlan,
   RatePlanAdjustmentType,
@@ -31,6 +32,7 @@ import {
   StaffRole,
   STAFF_ROLE_LABELS,
 } from "@/types/stay";
+import { API_URL } from "@/lib/constants";
 import Link from "next/link";
 
 const ALL_AMENITIES = Object.keys(AMENITY_LABELS) as AmenityKey[];
@@ -115,6 +117,10 @@ export default function PropertyEditPage() {
 
       <Section title="Availability calendar">
         <CalendarSection property={property} run={run} />
+      </Section>
+
+      <Section title="Calendar sync (iCal)">
+        <CalendarSyncSection property={property} />
       </Section>
 
       <Section title="Staff">
@@ -502,6 +508,112 @@ function CalendarSection({ property, run }: { property: Property; run: (fn: () =
       >
         Set availability
       </Button>
+    </div>
+  );
+}
+
+function CalendarSyncSection({ property }: { property: Property }) {
+  const [roomTypeId, setRoomTypeId] = useState(property.room_types[0]?.id ?? "");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"load" | "regenerate" | "import" | null>(null);
+  const [token, setToken] = useState<IcalToken | null>(null);
+
+  const loadToken = async (rtId: string) => {
+    setBusy("load");
+    setError(null);
+    try {
+      setToken(await apiClient.get<IcalToken>(`/api/v1/properties/${property.id}/room-types/${rtId}/ical-token`, { auth: true }));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to load calendar feed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const regenerate = async () => {
+    setBusy("regenerate");
+    setError(null);
+    try {
+      setToken(
+        await apiClient.post<IcalToken>(`/api/v1/properties/${property.id}/room-types/${roomTypeId}/ical-token/regenerate`, undefined, { auth: true })
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to regenerate feed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const importCalendar = async () => {
+    setBusy("import");
+    setError(null);
+    setResult(null);
+    try {
+      const res = await apiClient.post<{ blocked_dates_count: number }>(
+        `/api/v1/properties/${property.id}/room-types/${roomTypeId}/ical-import`,
+        { source_url: sourceUrl },
+        { auth: true }
+      );
+      setResult(`Blocked ${res.blocked_dates_count} date(s) from the external calendar.`);
+      setSourceUrl("");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to import calendar");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (property.room_types.length === 0) {
+    return <p className="text-sm text-zinc-400">Add a room type first.</p>;
+  }
+
+  const feedUrl = token ? `${API_URL}${token.feed_path}?token=${token.ical_token}` : null;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Select
+        value={roomTypeId}
+        onChange={(e) => {
+          setRoomTypeId(e.target.value);
+          setToken(null);
+        }}
+        className="w-auto"
+      >
+        {property.room_types.map((rt) => (
+          <option key={rt.id} value={rt.id}>{rt.name}</option>
+        ))}
+      </Select>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      <div>
+        <p className="text-xs font-medium text-zinc-500">Export — subscribe from Google Calendar, Outlook, etc.</p>
+        {feedUrl ? (
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <Input value={feedUrl} readOnly className="flex-1" onFocus={(e) => e.target.select()} />
+            <Button size="sm" variant="secondary" onClick={regenerate} loading={busy === "regenerate"}>
+              Regenerate link
+            </Button>
+          </div>
+        ) : (
+          <Button size="sm" variant="secondary" className="mt-1" onClick={() => loadToken(roomTypeId)} loading={busy === "load"}>
+            Get calendar link
+          </Button>
+        )}
+      </div>
+
+      <div className="border-t border-zinc-100 pt-3 dark:border-zinc-900">
+        <p className="text-xs font-medium text-zinc-500">Import — paste an external calendar&apos;s export link (e.g. Airbnb, Booking.com) to block those dates here</p>
+        <div className="mt-1 flex flex-wrap gap-2">
+          <Input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://...calendar.ics" className="flex-1" />
+          <Button size="sm" onClick={importCalendar} loading={busy === "import"} disabled={!sourceUrl}>
+            Import
+          </Button>
+        </div>
+        {result && <p className="mt-1 text-sm text-emerald-600">{result}</p>}
+      </div>
     </div>
   );
 }

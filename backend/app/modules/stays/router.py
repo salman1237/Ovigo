@@ -19,6 +19,9 @@ from app.modules.stays.schemas import (
     AvailabilityRangeSet,
     AvailabilityRead,
     HousekeepingStatusUpdate,
+    IcalImportRequest,
+    IcalImportResult,
+    IcalTokenRead,
     PropertyCreate,
     PropertyRead,
     PropertySummary,
@@ -38,6 +41,7 @@ from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleTyp
 
 router = APIRouter(prefix="/api/v1/properties", tags=["stays"])
 staff_router = APIRouter(prefix="/api/v1/staff", tags=["stays"])
+ical_router = APIRouter(prefix="/api/v1/ical", tags=["stays"])
 
 require_host = require_approved_role(PartnerRoleType.HOST, PartnerRoleType.HOTEL)
 
@@ -363,3 +367,47 @@ async def respond_to_staff_invite(
     db: AsyncSession = Depends(get_db),
 ):
     return await service.respond_to_staff_invite(db, current_user, staff_id, accept)
+
+
+@router.get("/{property_id}/room-types/{room_type_id}/ical-token", response_model=IcalTokenRead)
+async def get_ical_token(
+    property_id: uuid.UUID,
+    room_type_id: uuid.UUID,
+    role: PartnerRole = Depends(require_host),
+    db: AsyncSession = Depends(get_db),
+):
+    room_type = await service.get_or_create_ical_token(db, role, room_type_id)
+    return IcalTokenRead(
+        ical_token=room_type.ical_token, feed_path=service.ICAL_FEED_PATH_TEMPLATE.format(room_type_id=room_type_id)
+    )
+
+
+@router.post("/{property_id}/room-types/{room_type_id}/ical-token/regenerate", response_model=IcalTokenRead)
+async def regenerate_ical_token(
+    property_id: uuid.UUID,
+    room_type_id: uuid.UUID,
+    role: PartnerRole = Depends(require_host),
+    db: AsyncSession = Depends(get_db),
+):
+    room_type = await service.regenerate_ical_token(db, role, room_type_id)
+    return IcalTokenRead(
+        ical_token=room_type.ical_token, feed_path=service.ICAL_FEED_PATH_TEMPLATE.format(room_type_id=room_type_id)
+    )
+
+
+@router.post("/{property_id}/room-types/{room_type_id}/ical-import", response_model=IcalImportResult)
+async def import_ical(
+    property_id: uuid.UUID,
+    room_type_id: uuid.UUID,
+    payload: IcalImportRequest,
+    role: PartnerRole = Depends(require_host),
+    db: AsyncSession = Depends(get_db),
+):
+    count = await service.import_ical(db, role, room_type_id, payload.source_url)
+    return IcalImportResult(blocked_dates_count=count)
+
+
+@ical_router.get("/room-types/{room_type_id}")
+async def get_ical_feed(room_type_id: uuid.UUID, token: str, db: AsyncSession = Depends(get_db)):
+    ics_text = await service.export_ical(db, room_type_id, token)
+    return Response(content=ics_text, media_type="text/calendar")

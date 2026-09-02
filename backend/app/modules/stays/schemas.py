@@ -231,3 +231,16 @@ class RoomRead(BaseModel):
     housekeeping_status: HousekeepingStatus
     notes: str | None
     created_at: datetime
+
+
+class IcalTokenRead(BaseModel):
+    ical_token: str
+    feed_path: str
+
+
+class IcalImportRequest(BaseModel):
+    source_url: str
+
+
+class IcalImportResult(BaseModel):
+    blocked_dates_count: int

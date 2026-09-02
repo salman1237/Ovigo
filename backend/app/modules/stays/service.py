@@ -1,17 +1,20 @@
+import secrets
 import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
+import httpx
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core import ical as ical_core
 from app.core import storage
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.ranking import RankingFactors, composite_score, relevance_for
 from app.core.slugs import slugify, unique_suffix
-from app.modules.bookings.models import BookingItem, BookingItemStatus
+from app.modules.bookings.models import Booking, BookingItem, BookingItemStatus, BookingItemType, BookingStatus
 from app.modules.locations import service as locations_service
 from app.modules.locations.models import TaggableEntityType
 from app.modules.notifications import service as notifications_service
@@ -659,3 +662,80 @@ async def update_housekeeping_status_by_staff(
     await db.commit()
     await db.refresh(room)
     return room
+
+
+ICAL_FEED_PATH_TEMPLATE = "/api/v1/ical/room-types/{room_type_id}"
+
+
+async def get_or_create_ical_token(db: AsyncSession, role: PartnerRole, room_type_id: uuid.UUID) -> RoomType:
+    room_type = await _assert_owns_room_type(db, role, room_type_id)
+    if room_type.ical_token is None:
+        room_type.ical_token = secrets.token_urlsafe(24)
+        await db.commit()
+        await db.refresh(room_type)
+    return room_type
+
+
+async def regenerate_ical_token(db: AsyncSession, role: PartnerRole, room_type_id: uuid.UUID) -> RoomType:
+    """Invalidates the old feed URL — any calendar app still subscribed to it starts
+    getting 404s. Use this if the old link ever leaks somewhere it shouldn't."""
+    room_type = await _assert_owns_room_type(db, role, room_type_id)
+    room_type.ical_token = secrets.token_urlsafe(24)
+    await db.commit()
+    await db.refresh(room_type)
+    return room_type
+
+
+async def export_ical(db: AsyncSession, room_type_id: uuid.UUID, token: str) -> str:
+    result = await db.execute(
+        select(RoomType).where(RoomType.id == room_type_id, RoomType.ical_token == token)
+    )
+    room_type = result.scalar_one_or_none()
+    if room_type is None:
+        raise NotFoundError("Calendar not found")
+
+    result = await db.execute(
+        select(BookingItem.id, BookingItem.check_in_date, BookingItem.check_out_date)
+        .join(Booking, Booking.id == BookingItem.booking_id)
+        .where(
+            BookingItem.room_type_id == room_type_id,
+            BookingItem.item_type == BookingItemType.ROOM_TYPE,
+            Booking.status.notin_([BookingStatus.PENDING_PAYMENT, BookingStatus.CANCELLED]),
+        )
+    )
+    events = [(str(item_id), check_in, check_out, "Booked (Ovigo)") for item_id, check_in, check_out in result.all()]
+    return ical_core.build_calendar(events, f"{room_type.name} — Ovigo")
+
+
+async def import_ical(db: AsyncSession, role: PartnerRole, room_type_id: uuid.UUID, source_url: str) -> int:
+    """Fetches an external calendar (an Airbnb/Booking.com "export calendar" link,
+    typically) and blocks every date it covers — see stays/models.py's module
+    docstring for why this always zeroes available_units outright rather than
+    trying to reconcile partial-unit availability."""
+    await _assert_owns_room_type(db, role, room_type_id)
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.get(source_url)
+        response.raise_for_status()
+    ranges = ical_core.parse_date_ranges(response.text)
+
+    dates: set[date] = set()
+    for start, end in ranges:
+        d = start
+        while d < end:
+            dates.add(d)
+            d += timedelta(days=1)
+    if not dates:
+        return 0
+
+    rows = [
+        {"id": uuid.uuid4(), "room_type_id": room_type_id, "date": d, "available_units": 0, "price_override": None}
+        for d in dates
+    ]
+    stmt = pg_insert(AvailabilityCalendar).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["room_type_id", "date"], set_={"available_units": stmt.excluded.available_units}
+    )
+    await db.execute(stmt)
+    await db.commit()
+    return len(dates)

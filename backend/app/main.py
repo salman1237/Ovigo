@@ -50,6 +50,7 @@ from app.modules.rentcar.router import drivers_router as rentcar_drivers_router
 from app.modules.rentcar.router import router as rentcar_router
 from app.modules.reviews.router import router as reviews_router
 from app.modules.search.router import router as search_router
+from app.modules.stays.router import ical_router as stays_ical_router
 from app.modules.stays.router import router as stays_router
 from app.modules.stays.router import staff_router as stays_staff_router
 from app.modules.tours.router import router as tours_router
@@ -106,6 +107,7 @@ app.include_router(profiles_router)
 app.include_router(tours_router)
 app.include_router(stays_router)
 app.include_router(stays_staff_router)
+app.include_router(stays_ical_router)
 app.include_router(rentcar_router)
 app.include_router(rentcar_drivers_router)
 app.include_router(search_router)
