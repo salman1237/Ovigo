@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-02 (Sprint 19-20 Part 1 complete — Advanced Pricing Engine shipped, Part 2 next)_
+_Last updated: 2026-09-02 (Sprint 19-20 complete — Advanced Pricing Engine + Hotel Operations shipped; Sprint 21-22 next)_
 
 ## Infrastructure & deployment status
 
@@ -61,7 +61,7 @@ _Last updated: 2026-09-02 (Sprint 19-20 Part 1 complete — Advanced Pricing Eng
 | Tour itinerary, stays, transport, meals, activities, add-ons | Done — each as its own child table with add/delete endpoints (`/dashboard/tours/[id]` UI). `tour_stays`/`tour_transport` are lightweight descriptive line items rather than deep Property/Vehicle integrations — see `tours/models.py` docstring |
 | Tour publishing workflow & admin approval | Done — `submit` requires ≥1 itinerary day, ≥1 departure, ≥1 location tag (MVP AC #20 enforced, verified by test); admin approve/reject at `/admin/tours`, audit-logged |
 | Host profile & property creation | Done — `PUT/GET /api/v1/partners/profiles/host`, requires an approved Host or Hotel role |
-| Room/unit management | Done — `room_types` per property (name, max occupancy, price, unit count); individual physical-room tracking deferred (hotel-grade feature, Phase 3) |
+| Room/unit management | Done — `room_types` per property (name, max occupancy, price, unit count) for booking-availability pooling; individual physical `Room` entities (housekeeping status, optional per-booking assignment) added in Sprint 19-20 Part 2 as an operational layer on top, without changing how availability itself is counted |
 | Availability calendar | Done — `availability_calendars` (room type × date × available units, optional price override), settable as a date range in one call |
 | Property amenities, policies, images | Done — amenities and policies (policies embedded as columns on `properties` — see model docstring for why); images via Cloudflare R2 (see "Image storage" note below) |
 | Stay search & discovery | Done — `/api/v1/search/stays` filters by destination (including descendant destinations, e.g. searching "Bangladesh" surfaces Cox's Bazar) and by actual date-range availability, not just location |
@@ -333,6 +333,21 @@ Split the same way as Sprint 14-15 and 16: Part 1 (this section) is the pricing 
 **Verified:** a comprehensive scripted smoke test against Neon covering rate-plan CRUD and ownership checks, the "at least one condition" validator, cheapest-applicable-plan-wins resolution across weekend/early-bird scenarios, `min_stay_nights` rejecting a too-short booking, a manual `price_override` correctly outranking every rate plan on a real multi-night booking, tax/service-charge math, and confirming `BookingItem.subtotal` stays untouched by the tax/service charge (commission-basis integrity). Also verified at the HTTP layer: all 6 new routes registered and auth-gated (401 unauthenticated). Frontend adds rate-plan management, min-stay, and tax/service-charge rate UI to the property dashboard, plus a tax/service-charge line on the booking detail page; `npm run lint` and `npm run build` both pass clean, all 40 routes generated. Both FastAPI Cloud and Vercel confirmed live post-deploy (new endpoints spot-checked directly against the production backend's OpenAPI schema).
 
 **Part 2 not yet started:** staff accounts with role-based permissions, front-desk booking mode, housekeeping status tracking (needs individual physical `Room` entities — `RoomType` currently only tracks pooled unit counts), and occupancy/ADR/RevPAR reporting extending the existing `analytics` module.
+
+### Sprint 19-20 Part 2 — Hotel Operations (Wk 37-40)
+
+| Task | Status |
+|---|---|
+| Staff accounts with role-based permissions | Done — `PropertyStaff` (three flat roles: `MANAGER`/`FRONT_DESK`/`HOUSEKEEPING`, `MANAGER` implies every permission). Invitation mirrors the existing Guide-invite pattern (`guides/service.py::invite_guide`): the invitee needs an existing Ovigo account, found by email, and a `PENDING` invite becomes `ACTIVE` only once they accept it. No admin-approval step, unlike a Guide role — staff access is internal to one host's own property, not a new public partner category. The owning host always has full access regardless of any `PropertyStaff` row |
+| Front-desk booking mode | Done — a `FRONT_DESK`(or `MANAGER`)-permissioned staff member (or the owner) can create a walk-in booking that starts `CONFIRMED` and skips online payment entirely (paid in person); auto-creates a guest Ovigo account by email if one doesn't already exist. Staff-capable check-in/check-out endpoints reuse the same underlying transition logic as the existing traveler self-service check-in/out (refactored into shared private helpers so neither path drifts from the other) |
+| Housekeeping status tracking | Done — new `Room` entities (physical rooms with a `room_number` and `housekeeping_status`: clean/dirty/cleaning-in-progress/out-of-order) sit as an operational layer on top of `RoomType.total_units`, which stays the sole source of truth for booking availability (unchanged). A `Room` can optionally be assigned to a booking at check-in (`BookingItem.assigned_room_id`) and automatically flips to dirty when that booking is checked out |
+| Occupancy & ADR/RevPAR reports | Done — added to the existing `analytics` module as `GET /api/v1/partners/analytics/host/occupancy`. Available room-nights use each room type's configured unit count × days-in-range (theoretical capacity, not day-by-day `AvailabilityCalendar` overrides); booked room-nights/revenue are bucketed by a booking item's check-in date falling in the requested range (full stay counted in full) — the same "reporting KPI, not a certified ledger" approximation this module's monthly timeseries already uses |
+
+**New tables:** `property_staff`, `rooms`. **New enums:** `staff_role`, `staff_status`, `housekeeping_status`. **New column:** `booking_items.assigned_room_id` (nullable FK to `rooms`, `ON DELETE SET NULL`). **Enum extension:** `notification_type` gained `STAFF_INVITE` via `ALTER TYPE ADD VALUE`. One migration, applied cleanly to Neon.
+
+**Verified:** a comprehensive scripted smoke test against Neon covering the full staff permission matrix (a pending invite has no access yet, `MANAGER` implies every permission, `HOUSEKEEPING` staff correctly denied a front-desk-only action, revoked staff correctly lose access, a non-owner can't invite staff on someone else's property), Room CRUD, and a full front-desk booking lifecycle (walk-in booking created directly as `CONFIRMED` with an auto-created guest account → room assigned → checked in → checked out → the assigned room auto-flips to `DIRTY`), plus occupancy/ADR/RevPAR math against a real booking. Also verified at the HTTP layer: all 12 new routes registered and auth-gated (401 unauthenticated), with no new duplicate-operation-ID warnings introduced. Frontend adds a Staff and a Rooms & Housekeeping section to the property dashboard, a dedicated `/dashboard/properties/[id]/front-desk` page (walk-in booking form, check-in/check-out, room assignment), a `/dashboard/staff` "my invitations" page (linked from the header/mobile nav), and an occupancy/ADR/RevPAR widget on the host analytics tab; `npm run lint` and `npm run build` both pass clean, all 41 routes generated. Both FastAPI Cloud and Vercel confirmed live post-deploy (new endpoints and pages spot-checked directly against production).
+
+**Sprint 19-20 ("Hotel Features & Advanced Pricing") is now fully complete** — Parts 1 and 2 both shipped and deployed. Phase 3 continues with Sprint 21-22 (Fraud, Risk & Smart Search) next.
 
 ## Phase 4 — Scale & Expansion
 
