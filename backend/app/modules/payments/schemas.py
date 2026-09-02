@@ -26,4 +26,18 @@ class PaymentRead(BaseModel):
     amount: Decimal
     currency: str
     status: PaymentStatus
+    bank_reference: str | None
     created_at: datetime
+
+
+class BankTransferInitiateResponse(BaseModel):
+    payment: PaymentRead
+    instructions: str
+
+
+class BankReferenceSubmit(BaseModel):
+    bank_reference: str
+
+
+class BankTransferRejectRequest(BaseModel):
+    reason: str

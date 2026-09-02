@@ -42,6 +42,7 @@ from app.modules.locations.router import router as locations_router
 from app.modules.notifications.router import admin_router as notifications_admin_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.partners.router import router as partners_router
+from app.modules.payments.router import admin_router as payments_admin_router
 from app.modules.payments.router import router as payments_router
 from app.modules.payouts.router import admin_router as payouts_admin_router
 from app.modules.payouts.router import router as payouts_router
@@ -114,6 +115,7 @@ app.include_router(search_router)
 app.include_router(bookings_router)
 app.include_router(front_desk_router)
 app.include_router(payments_router)
+app.include_router(payments_admin_router)
 app.include_router(payouts_router)
 app.include_router(payouts_admin_router)
 app.include_router(commissions_router)

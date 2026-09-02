@@ -7,15 +7,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.exceptions import NotFoundError
+from app.core.permissions import require_admin
 from app.database import get_db
 from app.modules.auth.utils import get_current_user
 from app.modules.bookings.models import Booking
 from app.modules.payments import service
 from app.modules.payments.models import Payment
-from app.modules.payments.schemas import PaymentInitiateRequest, PaymentInitiateResponse, PaymentRead
+from app.modules.payments.schemas import (
+    BankReferenceSubmit,
+    BankTransferInitiateResponse,
+    BankTransferRejectRequest,
+    PaymentInitiateRequest,
+    PaymentInitiateResponse,
+    PaymentRead,
+)
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/api/v1/payments", tags=["payments"])
+admin_router = APIRouter(prefix="/api/v1/admin/payments", tags=["payments"], dependencies=[Depends(require_admin)])
 settings = get_settings()
 
 
@@ -27,6 +36,26 @@ async def initiate_payment(
 ):
     payment, gateway_url = await service.initiate_payment(db, current_user, payload.booking_id)
     return PaymentInitiateResponse(payment_id=payment.id, gateway_page_url=gateway_url)
+
+
+@router.post("/bank-transfer/initiate", response_model=BankTransferInitiateResponse)
+async def initiate_bank_transfer(
+    payload: PaymentInitiateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    payment = await service.initiate_bank_transfer(db, current_user, payload.booking_id)
+    return BankTransferInitiateResponse(payment=payment, instructions=settings.bank_transfer_instructions)
+
+
+@router.post("/bank-transfer/{payment_id}/reference", response_model=PaymentRead)
+async def submit_bank_reference(
+    payment_id: uuid.UUID,
+    payload: BankReferenceSubmit,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.submit_bank_reference(db, current_user, payment_id, payload.bank_reference)
 
 
 @router.get("/{payment_id}", response_model=PaymentRead)
@@ -108,3 +137,25 @@ async def payment_cancel(request: Request, db: AsyncSession = Depends(get_db)):
     if tran_id:
         await service.handle_fail_or_cancel(db, tran_id, "cancel")
     return RedirectResponse(f"{settings.frontend_url}/bookings?payment=cancelled")
+
+
+@admin_router.get("/bank-transfers/pending", response_model=list[PaymentRead])
+async def list_pending_bank_transfers(db: AsyncSession = Depends(get_db)):
+    return await service.list_pending_bank_transfers(db)
+
+
+@admin_router.post("/bank-transfers/{payment_id}/verify", response_model=PaymentRead)
+async def verify_bank_transfer(
+    payment_id: uuid.UUID, current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)
+):
+    return await service.verify_bank_transfer(db, current_user, payment_id)
+
+
+@admin_router.post("/bank-transfers/{payment_id}/reject", response_model=PaymentRead)
+async def reject_bank_transfer(
+    payment_id: uuid.UUID,
+    payload: BankTransferRejectRequest,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.reject_bank_transfer(db, current_user, payment_id, payload.reason)

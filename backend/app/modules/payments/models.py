@@ -5,6 +5,20 @@ Escrow here is deliberately basic (technical document §11.3 calls Phase 1's sco
 the moment payment is validated, RELEASED the moment the booking is marked
 COMPLETED. There's no actual money movement modeled — releasing escrow just marks
 it ready for the payout process, which is Phase 2 work.
+
+Sprint 23-24 Part 2 ("Additional payment gateways" in the technical document's
+Phase 4 plan) adds `BANK_TRANSFER` as a second provider — genuinely implementable
+without a third-party credential, unlike Stripe/cards, which need a real provider
+account this environment doesn't have (the same "credential not configured" gap
+already documented for email/SMS/push notification delivery). A bank transfer is
+manual/offline by nature: the traveler is shown Ovigo's transfer instructions,
+makes the transfer themselves outside the platform, records the reference number
+they were given, and an admin verifies it arrived before the booking confirms —
+see payments/service.py's `initiate_bank_transfer` / `submit_bank_reference` /
+`verify_bank_transfer`. This reuses the exact same "flag-only, no real money
+movement modeled" precedent as escrow/payouts elsewhere in this codebase; the
+difference is *when* confirmation happens (an admin's manual click, not a gateway
+webhook), not how confirmation is recorded once it does.
 """
 import enum
 import uuid
@@ -20,6 +34,7 @@ from app.database import Base
 
 class PaymentProvider(str, enum.Enum):
     SSLCOMMERZ = "sslcommerz"
+    BANK_TRANSFER = "bank_transfer"
 
 
 class PaymentStatus(str, enum.Enum):
@@ -45,6 +60,10 @@ class Payment(Base):
     currency: Mapped[str] = mapped_column(String(3), default="BDT")
     status: Mapped[PaymentStatus] = mapped_column(Enum(PaymentStatus, name="payment_status"), default=PaymentStatus.INITIATED)
     gateway_response: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Traveler-supplied reference number for a BANK_TRANSFER payment — the only
+    # provider where confirmation waits on an admin's manual verification rather
+    # than a gateway callback (see module docstring).
+    bank_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

@@ -46,6 +46,10 @@ class Settings(BaseSettings):
             return "https://securepay.sslcommerz.com/validator/api/validationserverAPI.php"
         return "https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php"
 
+    # Shown to a traveler who picks bank transfer at checkout — set a real bank
+    # name/account/routing number via env var before this is used with real money.
+    bank_transfer_instructions: str = "Bank transfer details have not been configured yet — contact support."
+
     # Cloudflare R2 (S3-compatible object storage)
     r2_account_id: str | None = None
     r2_access_key_id: str | None = None
