@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-02 (Sprint 21-22 Part 1 complete — Fraud & Risk Engine shipped, Part 2 next)_
+_Last updated: 2026-09-02 (Sprint 21-22 Part 2a complete — Smart Search Ranking shipped, Part 2b next)_
 
 ## Infrastructure & deployment status
 
@@ -363,7 +363,20 @@ Split into two parts given the sprint's breadth: Part 1 (this section) is the fr
 
 **Verified:** a comprehensive scripted smoke test against Neon covering all five rules firing correctly (plus a no-false-positive check for a normal traveler booking), risk-score aggregation counting only OPEN flags, a resolved flag correctly dropping out of the score, the document scan being idempotent on re-run, and HIGH/CRITICAL flags correctly generating an admin notification. Also verified at the HTTP layer: all 5 new admin routes registered and auth-gated (401 unauthenticated), no new duplicate-operation-ID warnings. Frontend adds an `/admin/fraud` dashboard (tabbed by status, severity-colored, resolve/dismiss with a note, manual document-scan trigger), linked from the admin nav; `npm run lint` and `npm run build` both pass clean, all 42 routes generated. Both FastAPI Cloud and Vercel confirmed live post-deploy.
 
-**Part 2 not yet started:** smart search ranking algorithm (relevance, rating, conversion, completeness), notification system expansion (push/SMS — delivery itself needs provider credentials not yet configured, same gap already flagged in `notifications/models.py`'s docstring, so this will likely scope down to templates/campaign tooling with the transport layer left as a documented follow-up), notification templates & campaign tools, and advanced admin reports (20+ report types, likely scoped to a curated set built from existing data rather than 20+ bespoke reports, to be decided when Part 2 starts).
+### Sprint 21-22 Part 2a — Smart Search Ranking (Wk 41-44)
+
+| Task | Status |
+|---|---|
+| Smart search ranking algorithm | Done — a shared composite score (`app/core/ranking.py`) replaces `created_at desc` ordering across every public listing surface: tours, stays (`search_stays`), rent-a-car (both its own public list and `search_vehicles`), and expert search |
+| Search ranking factors (relevance, rating, conversion, completeness) | Done, each reinterpreted to what this schema can actually compute — no free-text query exists anywhere in this codebase (search is location-tag + date filtered only), so **relevance** means exact-location-tag match vs. subtree-only match rather than text relevance; **rating** is neutral (not penalized) wherever no review data exists for that listing/type, since e.g. `Review` has no `vehicle_id` column at all — rent-a-car ranking runs on relevance/conversion/completeness only; **conversion** is each listing's own completed-booking count, smoothed via `count/(count+5)` so one high-volume listing can't collapse everyone else's score; **completeness** is the fraction of a curated set of profile/listing fields actually filled in. Weights are a documented starting judgment call (no click/booking-attribution telemetry exists yet to tune against) |
+
+**Bug fix found via this work's own HTTP-level verification** (unrelated to ranking itself, fixed alongside it): `GET /api/v1/search/stays` had been returning a 500 for any published property since it never eager-loaded `images`, which `PropertyRead`'s response serialization needs.
+
+**No schema changes** — ranking is computed at query time from existing tables.
+
+**Verified:** against Neon, a "rich" listing (complete profile, a real rating, a completed booking, exact location match) correctly outranks a "poor" one (bare minimum, no reviews/bookings, descendant-only match) across all four listing types. Also verified at the HTTP layer that every affected endpoint responds 200 with no new duplicate-operation-ID warnings. No frontend changes needed — pages already render whatever order the backend returns; `npm run lint` and `npm run build` re-verified clean regardless. Both FastAPI Cloud and Vercel confirmed live post-deploy.
+
+**Part 2b not yet started:** notification system expansion (push/SMS — delivery itself needs provider credentials not yet configured, same gap already flagged in `notifications/models.py`'s docstring, so this will likely scope down to templates/campaign tooling with the transport layer left as a documented follow-up), notification templates & campaign tools, and advanced admin reports (20+ report types, likely scoped to a curated set built from existing data rather than 20+ bespoke reports, to be decided when that part starts).
 
 ## Phase 4 — Scale & Expansion
 
