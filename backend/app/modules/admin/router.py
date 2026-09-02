@@ -2,13 +2,15 @@ import uuid
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import Response
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.csv_export import rows_to_csv
 from app.core.exceptions import NotFoundError
 from app.core.permissions import require_admin
 from app.database import get_db
-from app.modules.admin import service
+from app.modules.admin import reports, service
 from app.modules.admin.models import AuditLog
 from app.modules.admin.schemas import (
     AdminBookingRead,
@@ -18,6 +20,13 @@ from app.modules.admin.schemas import (
     AdminTourRead,
     AdminVehicleRead,
     AuditLogRead,
+    BookingsSummaryRow,
+    DisputeOverviewRow,
+    FraudOverviewRow,
+    PartnerApprovalFunnelRow,
+    PartnerPerformanceRow,
+    PlatformRevenueRow,
+    ReferralOverviewRow,
     RejectRequest,
 )
 from app.modules.bookings.models import BookingStatus
@@ -168,3 +177,46 @@ async def reject_vehicle(
     db: AsyncSession = Depends(get_db),
 ):
     return await service.reject_vehicle(db, current_user, vehicle_id, payload.reason)
+
+
+def _csv_or_json(rows: list[BaseModel], csv: bool, filename: str):
+    if not csv:
+        return rows
+    return Response(
+        content=rows_to_csv(rows), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{filename}.csv"'}
+    )
+
+
+@router.get("/reports/bookings-summary", response_model=list[BookingsSummaryRow])
+async def get_bookings_summary_report(months: int = 12, csv: bool = False, db: AsyncSession = Depends(get_db)):
+    return _csv_or_json(await reports.bookings_summary(db, months), csv, "bookings-summary")
+
+
+@router.get("/reports/platform-revenue", response_model=list[PlatformRevenueRow])
+async def get_platform_revenue_report(months: int = 12, csv: bool = False, db: AsyncSession = Depends(get_db)):
+    return _csv_or_json(await reports.platform_revenue(db, months), csv, "platform-revenue")
+
+
+@router.get("/reports/partner-performance", response_model=list[PartnerPerformanceRow])
+async def get_partner_performance_report(limit: int = 20, csv: bool = False, db: AsyncSession = Depends(get_db)):
+    return _csv_or_json(await reports.partner_performance(db, limit), csv, "partner-performance")
+
+
+@router.get("/reports/fraud-overview", response_model=list[FraudOverviewRow])
+async def get_fraud_overview_report(csv: bool = False, db: AsyncSession = Depends(get_db)):
+    return _csv_or_json(await reports.fraud_overview(db), csv, "fraud-overview")
+
+
+@router.get("/reports/dispute-overview", response_model=list[DisputeOverviewRow])
+async def get_dispute_overview_report(csv: bool = False, db: AsyncSession = Depends(get_db)):
+    return _csv_or_json(await reports.dispute_overview(db), csv, "dispute-overview")
+
+
+@router.get("/reports/referral-overview", response_model=list[ReferralOverviewRow])
+async def get_referral_overview_report(csv: bool = False, db: AsyncSession = Depends(get_db)):
+    return _csv_or_json(await reports.referral_overview(db), csv, "referral-overview")
+
+
+@router.get("/reports/partner-approval-funnel", response_model=list[PartnerApprovalFunnelRow])
+async def get_partner_approval_funnel_report(csv: bool = False, db: AsyncSession = Depends(get_db)):
+    return _csv_or_json(await reports.partner_approval_funnel(db), csv, "partner-approval-funnel")

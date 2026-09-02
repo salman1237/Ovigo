@@ -137,3 +137,52 @@ class AuditLogRead(BaseModel):
     entity_id: uuid.UUID | None
     extra: dict | None
     created_at: datetime
+
+
+class BookingsSummaryRow(BaseModel):
+    period: str  # "YYYY-MM"
+    status: BookingStatus
+    booking_count: int
+    gross_revenue: Decimal
+
+
+class PlatformRevenueRow(BaseModel):
+    period: str  # "YYYY-MM"
+    commission_count: int
+    platform_revenue: Decimal  # sum of Commission.commission_amount — Ovigo's cut
+    partner_net_revenue: Decimal  # sum of Commission.partner_net_amount
+
+
+class PartnerPerformanceRow(BaseModel):
+    partner_role_id: uuid.UUID
+    partner_name: str
+    role_type: PartnerRoleType
+    commission_count: int
+    gross_revenue: Decimal
+    platform_revenue: Decimal
+
+
+class FraudOverviewRow(BaseModel):
+    rule_type: str
+    severity: str
+    open_count: int
+    resolved_count: int
+    dismissed_count: int
+
+
+class DisputeOverviewRow(BaseModel):
+    status: str
+    resolution: str | None
+    dispute_count: int
+
+
+class ReferralOverviewRow(BaseModel):
+    status: str
+    ownership_type: str
+    referral_count: int
+
+
+class PartnerApprovalFunnelRow(BaseModel):
+    role_type: PartnerRoleType
+    status: PartnerRoleStatus
+    role_count: int

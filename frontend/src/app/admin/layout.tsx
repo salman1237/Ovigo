@@ -23,6 +23,8 @@ const NAV = [
   { href: "/admin/badges", label: "Trust Badges" },
   { href: "/admin/ads", label: "Ad Campaigns" },
   { href: "/admin/fraud", label: "Fraud & Risk" },
+  { href: "/admin/notifications", label: "Notifications" },
+  { href: "/admin/reports", label: "Reports" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
