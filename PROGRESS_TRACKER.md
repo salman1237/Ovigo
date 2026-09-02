@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-02 (Sprint 21-22 complete — Fraud/Risk, Smart Search, Notification Campaigns & Admin Reports shipped; Phase 3 complete, Phase 4 next)_
+_Last updated: 2026-09-02 (Sprint 23-24 Part 1 complete — iCal Sync for Stays shipped; Phase 4 underway)_
 
 ## Infrastructure & deployment status
 
@@ -393,7 +393,23 @@ Split into two parts given the sprint's breadth: Part 1 (this section) is the fr
 
 ## Phase 4 — Scale & Expansion
 
-Not started. See technical document §8, Phase 4.
+### Sprint 23-24 Part 1 — iCal Sync for Stays (Wk 45-48)
+
+Split given the sprint's breadth: Part 1 (this section) is iCal import/export; Part 2 (channel manager / PMS integration API, additional payment gateways) follows separately.
+
+| Task | Status |
+|---|---|
+| iCal import/export for stays | Done — a per-`RoomType` `.ics` export feed plus external-calendar import, both built on a hand-rolled RFC 5545 reader/writer (`app/core/ical.py`) rather than a new dependency, since the only need is VEVENT date ranges, not the full iCalendar spec |
+| External calendar sync | Done via the same import feature — a host pastes an external platform's (Airbnb/Booking.com) calendar export URL and Ovigo blocks those dates to prevent double-booking |
+| Channel manager integration API | Not yet started (Part 2) |
+| PMS integration hooks | Not yet started (Part 2) |
+| Additional payment gateways (Stripe, cards, bank transfer) | Not yet started (Part 2) — Stripe/cards need a real provider credential not configured anywhere in this codebase (the same gap already documented for email/SMS/push); bank transfer is fully implementable without one and will ship in Part 2 |
+
+**Design:** the export feed is gated by a random unguessable token generated lazily on first request (not a JWT) — matching exactly how Airbnb/Booking.com/Google Calendar's own "secret calendar URL" links work, since the consumer is a third-party calendar app that can't send an Ovigo bearer token; a host can regenerate it to invalidate a leaked link. Import always blocks the full date range at `available_units=0` regardless of `RoomType.total_units` — correct for this feature's target case (one external OTA listing synced to one Ovigo room type) and documented as a scope trim rather than building partial-unit conflict resolution.
+
+**New column:** `room_types.ical_token` (nullable, unique). No enum changes. One migration, applied cleanly to Neon.
+
+**Verified:** a comprehensive scripted smoke test against Neon covering the pure RFC 5545 build/parse round-trip (including line-folding), lazy token creation being idempotent, a non-owner denied both token access and import, export correctly including confirmed bookings while excluding pending-payment ones, token regeneration correctly invalidating the old feed URL, and import correctly blocking the right dates. Also verified at the HTTP layer: all 4 new routes registered, owner endpoints 401 unauthenticated, the public feed 404s on a wrong token, no new duplicate-operation-ID warnings. Frontend adds a "Calendar sync" section to the property dashboard (copyable feed link, regenerate, import-by-URL); `npm run lint` and `npm run build` both pass clean, all 44 routes generated. Both FastAPI Cloud and Vercel confirmed live post-deploy.
 
 ## MVP Acceptance Criteria (from technical document §11)
 
