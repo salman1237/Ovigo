@@ -1,10 +1,13 @@
+import uuid
+from datetime import date
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import require_approved_role
 from app.database import get_db
 from app.modules.analytics import service
-from app.modules.analytics.schemas import AnalyticsDashboard
+from app.modules.analytics.schemas import AnalyticsDashboard, HotelPerformanceReport
 from app.modules.users.models import PartnerRole, PartnerRoleType
 
 router = APIRouter(prefix="/api/v1/partners/analytics", tags=["analytics"])
@@ -32,3 +35,14 @@ async def get_vehicle_analytics(
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_dashboard(db, role)
+
+
+@router.get("/host/occupancy", response_model=HotelPerformanceReport)
+async def get_host_occupancy(
+    property_id: uuid.UUID,
+    start_date: date,
+    end_date: date,
+    role: PartnerRole = Depends(require_approved_role(PartnerRoleType.HOST, PartnerRoleType.HOTEL)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_hotel_performance(db, role, property_id, start_date, end_date)

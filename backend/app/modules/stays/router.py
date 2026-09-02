@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import storage
 from app.core.permissions import require_approved_role
 from app.database import get_db
-from app.modules.auth.utils import get_current_user_optional
+from app.modules.auth.utils import get_current_user, get_current_user_optional
 from app.modules.locations import service as locations_service
 from app.modules.locations.models import TaggableEntityType
 from app.modules.locations.schemas import LocationTagRead, LocationTagSet
@@ -18,6 +18,7 @@ from app.modules.stays.schemas import (
     AmenitySet,
     AvailabilityRangeSet,
     AvailabilityRead,
+    HousekeepingStatusUpdate,
     PropertyCreate,
     PropertyRead,
     PropertySummary,
@@ -25,12 +26,18 @@ from app.modules.stays.schemas import (
     RatePlanCreate,
     RatePlanRead,
     RatePlanUpdate,
+    RoomCreate,
+    RoomRead,
     RoomTypeCreate,
     RoomTypeUpdate,
+    RoomUpdate,
+    StaffInviteCreate,
+    StaffRead,
 )
 from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleType, User
 
 router = APIRouter(prefix="/api/v1/properties", tags=["stays"])
+staff_router = APIRouter(prefix="/api/v1/staff", tags=["stays"])
 
 require_host = require_approved_role(PartnerRoleType.HOST, PartnerRoleType.HOTEL)
 
@@ -264,3 +271,95 @@ async def set_property_locations(
 @router.get("/{property_id}/locations", response_model=list[LocationTagRead])
 async def get_property_locations(property_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     return await locations_service.get_tags(db, TaggableEntityType.PROPERTY, property_id)
+
+
+@router.post("/{property_id}/staff", response_model=StaffRead, status_code=201)
+async def invite_staff(
+    property_id: uuid.UUID,
+    payload: StaffInviteCreate,
+    role: PartnerRole = Depends(require_host),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.invite_staff(db, role, property_id, payload)
+
+
+@router.get("/{property_id}/staff", response_model=list[StaffRead])
+async def list_staff(
+    property_id: uuid.UUID, role: PartnerRole = Depends(require_host), db: AsyncSession = Depends(get_db)
+):
+    return await service.list_staff(db, role, property_id)
+
+
+@router.delete("/{property_id}/staff/{staff_id}", status_code=204)
+async def revoke_staff(
+    property_id: uuid.UUID,
+    staff_id: uuid.UUID,
+    role: PartnerRole = Depends(require_host),
+    db: AsyncSession = Depends(get_db),
+):
+    await service.revoke_staff(db, role, property_id, staff_id)
+
+
+@router.post("/{property_id}/room-types/{room_type_id}/rooms", response_model=RoomRead, status_code=201)
+async def create_room(
+    property_id: uuid.UUID,
+    room_type_id: uuid.UUID,
+    payload: RoomCreate,
+    role: PartnerRole = Depends(require_host),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.create_room(db, role, room_type_id, payload)
+
+
+@router.get("/{property_id}/room-types/{room_type_id}/rooms", response_model=list[RoomRead])
+async def list_rooms(
+    property_id: uuid.UUID,
+    room_type_id: uuid.UUID,
+    role: PartnerRole = Depends(require_host),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.list_rooms(db, role, room_type_id)
+
+
+@router.put("/{property_id}/rooms/{room_id}", response_model=RoomRead)
+async def update_room(
+    property_id: uuid.UUID,
+    room_id: uuid.UUID,
+    payload: RoomUpdate,
+    role: PartnerRole = Depends(require_host),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.update_room(db, role, room_id, payload)
+
+
+@router.delete("/{property_id}/rooms/{room_id}", status_code=204)
+async def delete_room(
+    property_id: uuid.UUID, room_id: uuid.UUID, role: PartnerRole = Depends(require_host), db: AsyncSession = Depends(get_db)
+):
+    await service.delete_room(db, role, room_id)
+
+
+@router.put("/{property_id}/rooms/{room_id}/housekeeping-status", response_model=RoomRead)
+async def update_housekeeping_status(
+    property_id: uuid.UUID,
+    room_id: uuid.UUID,
+    payload: HousekeepingStatusUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.update_housekeeping_status_by_staff(db, current_user, property_id, room_id, payload)
+
+
+@staff_router.get("/my-invitations", response_model=list[StaffRead])
+async def list_my_staff_memberships(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await service.list_my_staff_memberships(db, current_user)
+
+
+@staff_router.post("/{staff_id}/respond", response_model=StaffRead)
+async def respond_to_staff_invite(
+    staff_id: uuid.UUID,
+    accept: bool,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.respond_to_staff_invite(db, current_user, staff_id, accept)

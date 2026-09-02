@@ -49,6 +49,7 @@ const PARTNER_LINKS = [
   { href: "/dashboard/ads", label: "Ad Campaigns" },
   { href: "/dashboard/earnings", label: "Earnings" },
   { href: "/dashboard/analytics", label: "Analytics" },
+  { href: "/dashboard/staff", label: "Staff Invitations" },
 ];
 
 const TRAVELER_LINKS = [

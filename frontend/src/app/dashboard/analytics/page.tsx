@@ -6,11 +6,14 @@ import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Too
 
 import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
-import type { AnalyticsDashboard } from "@/types/analytics";
+import type { AnalyticsDashboard, HotelPerformanceReport } from "@/types/analytics";
+import type { PropertySummary } from "@/types/stay";
 
 const TABS = [
   { key: "expert", label: "Local Expert", endpoint: "/api/v1/partners/analytics/expert" },
@@ -50,6 +53,65 @@ export default function AnalyticsPage() {
       </div>
 
       <AnalyticsDashboardView key={active.key} endpoint={active.endpoint} />
+      {tab === "host" && <OccupancyReportSection />}
+    </div>
+  );
+}
+
+function OccupancyReportSection() {
+  const [propertyId, setPropertyId] = useState("");
+  const today = new Date();
+  const monthAgo = new Date(today);
+  monthAgo.setDate(monthAgo.getDate() - 30);
+  const [startDate, setStartDate] = useState(monthAgo.toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
+
+  const { data: properties } = useQuery({
+    queryKey: ["my-properties-summary"],
+    queryFn: () => apiClient.get<PropertySummary[]>("/api/v1/properties/mine", { auth: true }),
+  });
+
+  const activePropertyId = propertyId || properties?.[0]?.id || "";
+
+  const { data: report, isLoading, isError } = useQuery({
+    queryKey: ["occupancy", activePropertyId, startDate, endDate],
+    queryFn: () =>
+      apiClient.get<HotelPerformanceReport>(
+        `/api/v1/partners/analytics/host/occupancy?property_id=${activePropertyId}&start_date=${startDate}&end_date=${endDate}`,
+        { auth: true }
+      ),
+    enabled: !!activePropertyId,
+    retry: false,
+  });
+
+  if (!properties || properties.length === 0) return null;
+
+  return (
+    <div className="mt-8 border-t border-zinc-100 pt-8 dark:border-zinc-900">
+      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Occupancy, ADR &amp; RevPAR</h2>
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <Select value={activePropertyId} onChange={(e) => setPropertyId(e.target.value)} className="w-auto">
+          {properties.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </Select>
+        <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} title="Start date" />
+        <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} title="End date" />
+      </div>
+
+      {isLoading && <Spinner />}
+      {isError && <p className="mt-3 text-sm text-zinc-400">Couldn&apos;t load this report — check the date range.</p>}
+      {report && (
+        <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+          <Stat label="Occupancy rate" value={`${(report.occupancy_rate * 100).toFixed(1)}%`} />
+          <Stat label="Room-nights booked" value={`${report.booked_room_nights} / ${report.available_room_nights}`} />
+          <Stat label="ADR" value={formatMoney(report.adr)} />
+          <Stat label="RevPAR" value={formatMoney(report.revpar)} highlight />
+        </div>
+      )}
+      <p className="mt-3 text-xs text-zinc-400">
+        Available room-nights use each room type&apos;s configured unit count × days in range (theoretical capacity), not day-by-day calendar overrides.
+      </p>
     </div>
   );
 }

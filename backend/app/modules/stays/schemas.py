@@ -4,7 +4,16 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.modules.stays.models import AmenityKey, PropertyStatus, PropertyType, RatePlanAdjustmentType, RatePlanType
+from app.modules.stays.models import (
+    AmenityKey,
+    HousekeepingStatus,
+    PropertyStatus,
+    PropertyType,
+    RatePlanAdjustmentType,
+    RatePlanType,
+    StaffRole,
+    StaffStatus,
+)
 
 
 class PropertyCreate(BaseModel):
@@ -178,3 +187,47 @@ class PropertySummary(BaseModel):
     description: str | None
     property_type: PropertyType
     status: PropertyStatus
+
+
+class StaffInviteCreate(BaseModel):
+    email: str
+    staff_role: StaffRole
+
+
+class StaffRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    property_id: uuid.UUID
+    user_id: uuid.UUID
+    staff_role: StaffRole
+    status: StaffStatus
+    created_at: datetime
+    responded_at: datetime | None
+    staff_name: str
+    staff_email: str
+    property_name: str
+
+
+class RoomCreate(BaseModel):
+    room_number: str
+    housekeeping_status: HousekeepingStatus = HousekeepingStatus.CLEAN
+    notes: str | None = None
+
+
+class RoomUpdate(BaseModel):
+    room_number: str | None = None
+    notes: str | None = None
+
+
+class HousekeepingStatusUpdate(BaseModel):
+    housekeeping_status: HousekeepingStatus
+
+
+class RoomRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    room_type_id: uuid.UUID
+    room_number: str
+    housekeeping_status: HousekeepingStatus
+    notes: str | None
+    created_at: datetime

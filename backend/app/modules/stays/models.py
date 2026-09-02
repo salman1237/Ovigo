@@ -32,6 +32,29 @@ trims:
 - **No traveler-facing "you got X% off" messaging** — the resolved nightly rate is
   simply what's charged; which plan (if any) produced it isn't surfaced to the
   guest in this pass, mirroring the trust-badge precedent of keeping v1 minimal.
+
+Sprint 19-20 Part 2 ("Hotel Features" in the technical document's phase plan) adds
+`PropertyStaff` (role-based staff accounts) and `Room` (individual physical rooms,
+for housekeeping). Deliberate scope trims:
+- **Staff invitation mirrors the existing Guide-invite pattern** (`guides/service.py
+  ::invite_guide`): the invitee must already have an Ovigo account (found by email),
+  and a `PENDING` invite becomes `ACTIVE` only once they accept it — a host can't
+  silently grant themselves access to someone else's account. Unlike a Guide role,
+  there's no admin-approval step: staff access is purely internal to one host's own
+  property, not a new public-facing partner category.
+- **Three flat staff roles, no per-permission matrix.** `MANAGER` implies every
+  permission; `FRONT_DESK` covers booking/check-in/check-out; `HOUSEKEEPING` covers
+  room-status updates only. A fine-grained permission system isn't asked for by the
+  technical document and would be speculative machinery for a single-tenant-per-
+  property feature.
+- **`Room` is an operational layer on top of `RoomType.total_units`, not a
+  replacement for it.** Booking availability still runs on the existing pooled
+  `AvailabilityCalendar` counts (unchanged, already battle-tested) — individual
+  `Room` rows exist so housekeeping status can be tracked per physical room and so
+  front-desk staff can optionally assign a specific room number to a booking at
+  check-in (`BookingItem.assigned_room_id`). Room assignment does not gate or
+  double-book-check against the pooled availability count; it's a convenience
+  field, not a second source of truth for inventory.
 """
 import enum
 import uuid
@@ -82,6 +105,25 @@ class RatePlanType(str, enum.Enum):
 class RatePlanAdjustmentType(str, enum.Enum):
     PERCENTAGE = "percentage"  # adjustment_value is a % delta from base_price — negative discounts, positive surcharges
     FIXED_PRICE = "fixed_price"  # adjustment_value replaces base_price outright on a matching night
+
+
+class StaffRole(str, enum.Enum):
+    MANAGER = "manager"  # implies every permission below
+    FRONT_DESK = "front_desk"  # booking creation, check-in, check-out, room assignment
+    HOUSEKEEPING = "housekeeping"  # room housekeeping-status updates only
+
+
+class StaffStatus(str, enum.Enum):
+    PENDING = "pending"  # invited, awaiting the staff member's response
+    ACTIVE = "active"
+    REVOKED = "revoked"  # declined, or removed by the host after being active
+
+
+class HousekeepingStatus(str, enum.Enum):
+    CLEAN = "clean"
+    DIRTY = "dirty"
+    CLEANING_IN_PROGRESS = "cleaning_in_progress"
+    OUT_OF_ORDER = "out_of_order"
 
 
 class AmenityKey(str, enum.Enum):
@@ -174,6 +216,7 @@ class RoomType(Base):
         back_populates="room_type", cascade="all, delete-orphan"
     )
     rate_plans: Mapped[list["RatePlan"]] = relationship(back_populates="room_type", cascade="all, delete-orphan")
+    rooms: Mapped[list["Room"]] = relationship(back_populates="room_type", cascade="all, delete-orphan")
 
 
 class AvailabilityCalendar(Base):
@@ -220,6 +263,48 @@ class RatePlan(Base):
     )
 
     room_type: Mapped["RoomType"] = relationship(back_populates="rate_plans")
+
+
+class PropertyStaff(Base):
+    __tablename__ = "property_staff"
+    __table_args__ = (UniqueConstraint("property_id", "user_id", name="uq_property_staff_user"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    property_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("properties.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    staff_role: Mapped[StaffRole] = mapped_column(Enum(StaffRole, name="staff_role"))
+    status: Mapped[StaffStatus] = mapped_column(Enum(StaffStatus, name="staff_status"), default=StaffStatus.PENDING)
+    invited_by_role_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("partner_roles.id", ondelete="CASCADE")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    property: Mapped["Property"] = relationship()
+    user: Mapped["User"] = relationship()  # noqa: F821
+
+
+class Room(Base):
+    __tablename__ = "rooms"
+    __table_args__ = (UniqueConstraint("room_type_id", "room_number", name="uq_room_number_per_type"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    room_type_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("room_types.id", ondelete="CASCADE"), index=True
+    )
+    room_number: Mapped[str] = mapped_column(String(20))
+    housekeeping_status: Mapped[HousekeepingStatus] = mapped_column(
+        Enum(HousekeepingStatus, name="housekeeping_status"), default=HousekeepingStatus.CLEAN
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    room_type: Mapped["RoomType"] = relationship(back_populates="rooms")
 
 
 class PropertyImage(Base):

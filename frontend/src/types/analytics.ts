@@ -27,3 +27,15 @@ export interface AnalyticsDashboard {
   timeseries: TimeseriesPoint[];
   top_listings: TopListing[];
 }
+
+export interface HotelPerformanceReport {
+  property_id: string;
+  start_date: string;
+  end_date: string;
+  available_room_nights: number;
+  booked_room_nights: number;
+  occupancy_rate: number;
+  revenue: string;
+  adr: string;
+  revpar: string;
+}

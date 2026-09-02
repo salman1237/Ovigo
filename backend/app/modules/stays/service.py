@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -8,31 +8,42 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core import storage
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.slugs import slugify, unique_suffix
 from app.modules.locations import service as locations_service
 from app.modules.locations.models import TaggableEntityType
+from app.modules.notifications import service as notifications_service
+from app.modules.notifications.models import NotificationType
 from app.modules.stays.models import (
     AvailabilityCalendar,
+    HousekeepingStatus,
     Property,
     PropertyAmenity,
     PropertyImage,
+    PropertyStaff,
     PropertyStatus,
     RatePlan,
     RatePlanAdjustmentType,
+    Room,
     RoomType,
+    StaffRole,
+    StaffStatus,
 )
 from app.modules.stays.schemas import (
     AmenitySet,
     AvailabilityRangeSet,
+    HousekeepingStatusUpdate,
     PropertyCreate,
     PropertyUpdate,
     RatePlanCreate,
     RatePlanUpdate,
+    RoomCreate,
     RoomTypeCreate,
     RoomTypeUpdate,
+    RoomUpdate,
+    StaffInviteCreate,
 )
-from app.modules.users.models import PartnerRole
+from app.modules.users.models import PartnerAccount, PartnerRole, User
 
 _EAGER = (selectinload(Property.room_types), selectinload(Property.amenities), selectinload(Property.images))
 
@@ -388,3 +399,195 @@ async def resolve_nightly_rate(
     if not candidates:
         return base_price
     return min(candidates)
+
+
+def _to_staff_dict(staff: PropertyStaff) -> dict:
+    return {
+        "id": staff.id,
+        "property_id": staff.property_id,
+        "user_id": staff.user_id,
+        "staff_role": staff.staff_role,
+        "status": staff.status,
+        "created_at": staff.created_at,
+        "responded_at": staff.responded_at,
+        "staff_name": staff.user.full_name,
+        "staff_email": staff.user.email,
+        "property_name": staff.property.name,
+    }
+
+
+async def assert_property_staff_access(
+    db: AsyncSession, user: User, property_id: uuid.UUID, *allowed_roles: StaffRole
+) -> Property:
+    """The host who owns the property always has full access. Otherwise the current user
+    needs an ACTIVE PropertyStaff row — MANAGER always qualifies, any other role only for
+    the specific actions listed in `allowed_roles`."""
+    prop_result = await db.execute(select(Property).where(Property.id == property_id))
+    prop = prop_result.scalar_one_or_none()
+    if prop is None:
+        raise NotFoundError("Property not found")
+
+    owner_result = await db.execute(
+        select(PartnerRole.id)
+        .join(PartnerAccount, PartnerRole.partner_account_id == PartnerAccount.id)
+        .where(PartnerRole.id == prop.host_role_id, PartnerAccount.user_id == user.id)
+    )
+    if owner_result.scalar_one_or_none() is not None:
+        return prop
+
+    staff_result = await db.execute(
+        select(PropertyStaff).where(
+            PropertyStaff.property_id == property_id,
+            PropertyStaff.user_id == user.id,
+            PropertyStaff.status == StaffStatus.ACTIVE,
+        )
+    )
+    staff = staff_result.scalar_one_or_none()
+    if staff is None or (staff.staff_role != StaffRole.MANAGER and staff.staff_role not in allowed_roles):
+        raise ForbiddenError("You don't have the staff permissions required for this action")
+    return prop
+
+
+async def invite_staff(db: AsyncSession, role: PartnerRole, property_id: uuid.UUID, payload: StaffInviteCreate) -> dict:
+    prop = await get_own_property_or_404(db, role, property_id)
+
+    user_result = await db.execute(select(User).where(User.email == payload.email))
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        raise NotFoundError("No Ovigo account found with that email — the staff member needs to register first")
+
+    existing_result = await db.execute(
+        select(PropertyStaff).where(PropertyStaff.property_id == property_id, PropertyStaff.user_id == user.id)
+    )
+    if existing_result.scalar_one_or_none() is not None:
+        raise ConflictError("This person is already staff (or has a pending invite) for this property")
+
+    staff = PropertyStaff(
+        property_id=property_id, user_id=user.id, staff_role=payload.staff_role, invited_by_role_id=role.id
+    )
+    db.add(staff)
+    await db.flush()
+    await notifications_service.notify(
+        db,
+        user_id=user.id,
+        type=NotificationType.STAFF_INVITE,
+        title="You've been invited to join a property's staff",
+        message=f"{prop.name} invited you as {payload.staff_role.value.replace('_', ' ')} staff.",
+        link="/dashboard/staff",
+    )
+    await db.commit()
+    await db.refresh(staff, attribute_names=["user", "property"])
+    return _to_staff_dict(staff)
+
+
+async def list_staff(db: AsyncSession, role: PartnerRole, property_id: uuid.UUID) -> list[dict]:
+    await get_own_property_or_404(db, role, property_id)
+    result = await db.execute(
+        select(PropertyStaff)
+        .where(PropertyStaff.property_id == property_id)
+        .options(selectinload(PropertyStaff.user), selectinload(PropertyStaff.property))
+        .order_by(PropertyStaff.created_at.desc())
+    )
+    return [_to_staff_dict(s) for s in result.scalars().all()]
+
+
+async def list_my_staff_memberships(db: AsyncSession, user: User) -> list[dict]:
+    result = await db.execute(
+        select(PropertyStaff)
+        .where(PropertyStaff.user_id == user.id)
+        .options(selectinload(PropertyStaff.user), selectinload(PropertyStaff.property))
+        .order_by(PropertyStaff.created_at.desc())
+    )
+    return [_to_staff_dict(s) for s in result.scalars().all()]
+
+
+async def respond_to_staff_invite(db: AsyncSession, user: User, staff_id: uuid.UUID, accept: bool) -> dict:
+    result = await db.execute(
+        select(PropertyStaff)
+        .where(PropertyStaff.id == staff_id, PropertyStaff.user_id == user.id)
+        .options(selectinload(PropertyStaff.user), selectinload(PropertyStaff.property))
+    )
+    staff = result.scalar_one_or_none()
+    if staff is None:
+        raise NotFoundError("Staff invitation not found")
+    if staff.status != StaffStatus.PENDING:
+        raise ConflictError("This invitation has already been responded to")
+
+    staff.status = StaffStatus.ACTIVE if accept else StaffStatus.REVOKED
+    staff.responded_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(staff, attribute_names=["user", "property"])
+    return _to_staff_dict(staff)
+
+
+async def revoke_staff(db: AsyncSession, role: PartnerRole, property_id: uuid.UUID, staff_id: uuid.UUID) -> None:
+    await get_own_property_or_404(db, role, property_id)
+    result = await db.execute(
+        select(PropertyStaff).where(PropertyStaff.id == staff_id, PropertyStaff.property_id == property_id)
+    )
+    staff = result.scalar_one_or_none()
+    if staff is None:
+        raise NotFoundError("Staff member not found")
+    staff.status = StaffStatus.REVOKED
+    await db.commit()
+
+
+async def create_room(
+    db: AsyncSession, role: PartnerRole, room_type_id: uuid.UUID, payload: RoomCreate
+) -> Room:
+    await _assert_owns_room_type(db, role, room_type_id)
+    room = Room(room_type_id=room_type_id, **payload.model_dump())
+    db.add(room)
+    await db.commit()
+    await db.refresh(room)
+    return room
+
+
+async def list_rooms(db: AsyncSession, role: PartnerRole, room_type_id: uuid.UUID) -> list[Room]:
+    await _assert_owns_room_type(db, role, room_type_id)
+    result = await db.execute(select(Room).where(Room.room_type_id == room_type_id).order_by(Room.room_number))
+    return list(result.scalars().all())
+
+
+async def _get_own_room_or_404(db: AsyncSession, role: PartnerRole, room_id: uuid.UUID) -> Room:
+    result = await db.execute(
+        select(Room)
+        .join(RoomType, Room.room_type_id == RoomType.id)
+        .join(Property, RoomType.property_id == Property.id)
+        .where(Room.id == room_id, Property.host_role_id == role.id)
+    )
+    room = result.scalar_one_or_none()
+    if room is None:
+        raise NotFoundError("Room not found")
+    return room
+
+
+async def update_room(db: AsyncSession, role: PartnerRole, room_id: uuid.UUID, payload: RoomUpdate) -> Room:
+    room = await _get_own_room_or_404(db, role, room_id)
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(room, field, value)
+    await db.commit()
+    await db.refresh(room)
+    return room
+
+
+async def delete_room(db: AsyncSession, role: PartnerRole, room_id: uuid.UUID) -> None:
+    room = await _get_own_room_or_404(db, role, room_id)
+    await db.delete(room)
+    await db.commit()
+
+
+async def update_housekeeping_status_by_staff(
+    db: AsyncSession, user: User, property_id: uuid.UUID, room_id: uuid.UUID, payload: HousekeepingStatusUpdate
+) -> Room:
+    await assert_property_staff_access(db, user, property_id, StaffRole.HOUSEKEEPING)
+    result = await db.execute(
+        select(Room).join(RoomType, Room.room_type_id == RoomType.id).where(Room.id == room_id, RoomType.property_id == property_id)
+    )
+    room = result.scalar_one_or_none()
+    if room is None:
+        raise NotFoundError("Room not found on this property")
+    room.housekeeping_status = payload.housekeeping_status
+    await db.commit()
+    await db.refresh(room)
+    return room

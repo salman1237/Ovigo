@@ -11,14 +11,22 @@ Scope trim: a CUSTOM_BID commission counts toward the summary/timeseries totals
 (it's still real revenue) but is left out of "top listings" — a one-off custom
 bid isn't a reusable listing to rank the way a Tour/Property/Vehicle is.
 """
-from datetime import datetime, timedelta, timezone
+import uuid
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.analytics.schemas import AnalyticsDashboard, AnalyticsSummary, TimeseriesPoint, TopListingRead
-from app.modules.bookings.models import BookingItem, BookingItemStatus
+from app.core.exceptions import ConflictError, NotFoundError
+from app.modules.analytics.schemas import (
+    AnalyticsDashboard,
+    AnalyticsSummary,
+    HotelPerformanceReport,
+    TimeseriesPoint,
+    TopListingRead,
+)
+from app.modules.bookings.models import BookingItem, BookingItemStatus, BookingItemType
 from app.modules.commissions.models import Commission
 from app.modules.rentcar.models import Vehicle
 from app.modules.reviews.models import Review
@@ -137,4 +145,69 @@ async def get_dashboard(db: AsyncSession, role: PartnerRole) -> AnalyticsDashboa
         summary=await _summary(db, role),
         timeseries=await _timeseries(db, role),
         top_listings=await _top_listings(db, role),
+    )
+
+
+async def get_hotel_performance(
+    db: AsyncSession, role: PartnerRole, property_id: uuid.UUID, start_date: date, end_date: date
+) -> HotelPerformanceReport:
+    """Occupancy/ADR/RevPAR for one property over [start_date, end_date).
+
+    Scope trim (documented since these are approximations, not a certified ledger):
+    `available_room_nights` uses each room type's configured `total_units` × days in
+    the period (theoretical capacity) rather than day-by-day AvailabilityCalendar
+    overrides — a host who's manually closed out specific dates will see a slightly
+    inflated denominator. `booked_room_nights`/`revenue` are bucketed by a booking
+    item's check-in date falling in the period (its full stay counted in full), not
+    true per-night stay-through accounting — the same "good enough for a reporting
+    KPI, not a financial ledger" trade-off already used by this module's monthly
+    timeseries (bucketed by Commission.created_at)."""
+    prop_result = await db.execute(
+        select(Property).where(Property.id == property_id, Property.host_role_id == role.id)
+    )
+    prop = prop_result.scalar_one_or_none()
+    if prop is None:
+        raise NotFoundError("Property not found")
+
+    days_in_period = (end_date - start_date).days
+    if days_in_period <= 0:
+        raise ConflictError("end_date must be after start_date")
+
+    units_result = await db.execute(
+        select(func.coalesce(func.sum(RoomType.total_units), 0)).where(RoomType.property_id == property_id)
+    )
+    total_units = units_result.scalar_one()
+    available_room_nights = total_units * days_in_period
+
+    items_result = await db.execute(
+        select(BookingItem.check_in_date, BookingItem.check_out_date, BookingItem.quantity, BookingItem.subtotal)
+        .join(RoomType, RoomType.id == BookingItem.room_type_id)
+        .where(
+            RoomType.property_id == property_id,
+            BookingItem.item_type == BookingItemType.ROOM_TYPE,
+            BookingItem.status != BookingItemStatus.CANCELLED,
+            BookingItem.check_in_date >= start_date,
+            BookingItem.check_in_date < end_date,
+        )
+    )
+    booked_room_nights = 0
+    revenue = Decimal("0")
+    for check_in, check_out, quantity, subtotal in items_result.all():
+        booked_room_nights += (check_out - check_in).days * quantity
+        revenue += subtotal
+
+    occupancy_rate = (booked_room_nights / available_room_nights) if available_room_nights else 0.0
+    adr = (revenue / booked_room_nights).quantize(Decimal("0.01")) if booked_room_nights else Decimal("0")
+    revpar = (revenue / available_room_nights).quantize(Decimal("0.01")) if available_room_nights else Decimal("0")
+
+    return HotelPerformanceReport(
+        property_id=property_id,
+        start_date=start_date,
+        end_date=end_date,
+        available_room_nights=available_room_nights,
+        booked_room_nights=booked_room_nights,
+        occupancy_rate=round(occupancy_rate, 4),
+        revenue=revenue,
+        adr=adr,
+        revpar=revpar,
     )

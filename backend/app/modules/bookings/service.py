@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import ConflictError, NotFoundError
+from app.core.security import hash_password
 from app.modules.bookings.models import (
     Booking,
     BookingGuest,
@@ -28,14 +29,14 @@ from app.modules.bookings.models import (
     BookingStatus,
     BookingStatusHistory,
 )
-from app.modules.bookings.schemas import BookingCreate, BookingItemCreate
+from app.modules.bookings.schemas import BookingCreate, BookingItemCreate, FrontDeskBookingCreate
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.models import NotificationType
 from app.modules.rentcar.models import Vehicle, VehicleAvailability, VehicleStatus
 from app.modules.stays import service as stays_service
-from app.modules.stays.models import AvailabilityCalendar, Property, PropertyStatus, RoomType
+from app.modules.stays.models import AvailabilityCalendar, HousekeepingStatus, Property, PropertyStatus, Room, RoomType
 from app.modules.tours.models import Tour, TourDeparture, TourStatus
-from app.modules.users.models import User
+from app.modules.users.models import SystemRole, User
 
 _EAGER = (
     selectinload(Booking.items),
@@ -338,26 +339,29 @@ async def cancel_booking(db: AsyncSession, user: User, booking_id: uuid.UUID) ->
     return await get_own_booking_or_404(db, user, booking_id)
 
 
-async def check_in(db: AsyncSession, user: User, booking_id: uuid.UUID) -> Booking:
-    booking = await get_own_booking_or_404(db, user, booking_id)
+async def _mark_checked_in(db: AsyncSession, booking: Booking) -> None:
     if booking.status != BookingStatus.CONFIRMED:
         raise ConflictError(f"Booking must be confirmed to check in (currently {booking.status.value})")
     for item in booking.items:
         item.status = BookingItemStatus.CHECKED_IN
     await _add_status_history(db, booking, BookingStatus.CHECKED_IN)
     booking.status = BookingStatus.CHECKED_IN
-    await db.commit()
-    return await get_own_booking_or_404(db, user, booking_id)
 
 
-async def check_out(db: AsyncSession, user: User, booking_id: uuid.UUID) -> Booking:
+async def _mark_checked_out(db: AsyncSession, booking: Booking) -> None:
     from app.modules.commissions import service as commissions_service  # avoid import cycle at module load
 
-    booking = await get_own_booking_or_404(db, user, booking_id)
     if booking.status != BookingStatus.CHECKED_IN:
         raise ConflictError(f"Booking must be checked in before checking out (currently {booking.status.value})")
     for item in booking.items:
         item.status = BookingItemStatus.COMPLETED
+        # A room whose stay just ended needs cleaning before its next guest — see
+        # stays/models.py's Part 2 docstring on Room as an operational layer.
+        if item.assigned_room_id:
+            room_result = await db.execute(select(Room).where(Room.id == item.assigned_room_id))
+            room = room_result.scalar_one_or_none()
+            if room is not None:
+                room.housekeeping_status = HousekeepingStatus.DIRTY
     await _add_status_history(db, booking, BookingStatus.CHECKED_OUT)
     await _add_status_history(db, booking, BookingStatus.COMPLETED, note="Auto-completed on checkout")
     booking.status = BookingStatus.COMPLETED
@@ -370,5 +374,158 @@ async def check_out(db: AsyncSession, user: User, booking_id: uuid.UUID) -> Book
         message="Your booking is complete. We'd love to hear about your experience — leave a review!",
         link=f"/bookings/{booking.id}",
     )
+
+
+async def check_in(db: AsyncSession, user: User, booking_id: uuid.UUID) -> Booking:
+    booking = await get_own_booking_or_404(db, user, booking_id)
+    await _mark_checked_in(db, booking)
     await db.commit()
     return await get_own_booking_or_404(db, user, booking_id)
+
+
+async def check_out(db: AsyncSession, user: User, booking_id: uuid.UUID) -> Booking:
+    booking = await get_own_booking_or_404(db, user, booking_id)
+    await _mark_checked_out(db, booking)
+    await db.commit()
+    return await get_own_booking_or_404(db, user, booking_id)
+
+
+async def get_booking_or_404(db: AsyncSession, booking_id: uuid.UUID) -> Booking:
+    """No ownership check — for front-desk/staff contexts where the acting user isn't
+    the booking's own traveler."""
+    result = await db.execute(
+        select(Booking).where(Booking.id == booking_id).options(*_EAGER).execution_options(populate_existing=True)
+    )
+    booking = result.scalar_one_or_none()
+    if booking is None:
+        raise NotFoundError("Booking not found")
+    return booking
+
+
+async def _assert_booking_belongs_to_property(db: AsyncSession, booking_id: uuid.UUID, property_id: uuid.UUID) -> None:
+    result = await db.execute(
+        select(BookingItem.id)
+        .join(RoomType, RoomType.id == BookingItem.room_type_id)
+        .where(BookingItem.booking_id == booking_id, RoomType.property_id == property_id)
+    )
+    if result.first() is None:
+        raise NotFoundError("Booking not found for this property")
+
+
+async def list_property_bookings(db: AsyncSession, property_id: uuid.UUID) -> list[Booking]:
+    """Every booking with a room_type item on this property — for front-desk staff."""
+    result = await db.execute(
+        select(Booking)
+        .join(BookingItem, BookingItem.booking_id == Booking.id)
+        .join(RoomType, RoomType.id == BookingItem.room_type_id)
+        .where(RoomType.property_id == property_id)
+        .options(*_EAGER)
+        .order_by(Booking.created_at.desc())
+        .distinct()
+    )
+    return list(result.scalars().all())
+
+
+async def staff_check_in(db: AsyncSession, property_id: uuid.UUID, booking_id: uuid.UUID) -> Booking:
+    await _assert_booking_belongs_to_property(db, booking_id, property_id)
+    booking = await get_booking_or_404(db, booking_id)
+    await _mark_checked_in(db, booking)
+    await db.commit()
+    return await get_booking_or_404(db, booking_id)
+
+
+async def staff_check_out(db: AsyncSession, property_id: uuid.UUID, booking_id: uuid.UUID) -> Booking:
+    await _assert_booking_belongs_to_property(db, booking_id, property_id)
+    booking = await get_booking_or_404(db, booking_id)
+    await _mark_checked_out(db, booking)
+    await db.commit()
+    return await get_booking_or_404(db, booking_id)
+
+
+async def assign_room(db: AsyncSession, property_id: uuid.UUID, booking_item_id: uuid.UUID, room_id: uuid.UUID) -> BookingItem:
+    result = await db.execute(select(BookingItem).where(BookingItem.id == booking_item_id))
+    item = result.scalar_one_or_none()
+    if item is None or item.item_type != BookingItemType.ROOM_TYPE:
+        raise NotFoundError("Room booking item not found")
+
+    room_result = await db.execute(
+        select(Room)
+        .join(RoomType, Room.room_type_id == RoomType.id)
+        .where(Room.id == room_id, RoomType.property_id == property_id)
+    )
+    room = room_result.scalar_one_or_none()
+    if room is None:
+        raise NotFoundError("Room not found on this property")
+    if room.room_type_id != item.room_type_id:
+        raise ConflictError("This room belongs to a different room type than the booking")
+
+    item.assigned_room_id = room.id
+    await db.commit()
+    await db.refresh(item)
+    return item
+
+
+async def create_front_desk_booking(db: AsyncSession, property_id: uuid.UUID, payload: FrontDeskBookingCreate) -> Booking:
+    """Walk-in booking created by front-desk staff — paid in person, so it skips the
+    online-payment step entirely and starts CONFIRMED rather than PENDING_PAYMENT.
+    Commission still applies normally at checkout, same as any other room booking."""
+    if not payload.items:
+        raise ConflictError("A booking needs at least one item")
+
+    user_result = await db.execute(select(User).where(User.email == payload.guest_email))
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        user = User(
+            email=payload.guest_email,
+            password_hash=hash_password(uuid.uuid4().hex),
+            full_name=payload.guest_name,
+            system_role=SystemRole.TRAVELER,
+        )
+        db.add(user)
+        await db.flush()
+
+    total = Decimal("0")
+    tax_service_total = Decimal("0")
+    prepared: list[tuple[BookingItemCreate, Decimal, Decimal]] = []
+    for item in payload.items:
+        if item.item_type != BookingItemType.ROOM_TYPE:
+            raise ConflictError("Front-desk bookings can only include room_type items")
+        room_check = await db.execute(
+            select(RoomType.id).where(RoomType.id == item.room_type_id, RoomType.property_id == property_id)
+        )
+        if room_check.scalar_one_or_none() is None:
+            raise NotFoundError("Room type not found on this property")
+        unit_price, subtotal = await _reserve_room(db, item)
+        tax_service = await _room_tax_and_service_charge(db, item.room_type_id, subtotal)
+        prepared.append((item, unit_price, subtotal))
+        total += subtotal + tax_service
+        tax_service_total += tax_service
+
+    booking = Booking(
+        user_id=user.id, status=BookingStatus.CONFIRMED, total_amount=total, tax_service_amount=tax_service_total
+    )
+    db.add(booking)
+    await db.flush()
+
+    for item, unit_price, subtotal in prepared:
+        db.add(
+            BookingItem(
+                booking_id=booking.id,
+                item_type=item.item_type,
+                room_type_id=item.room_type_id,
+                check_in_date=item.check_in_date,
+                check_out_date=item.check_out_date,
+                quantity=item.quantity,
+                unit_price=unit_price,
+                subtotal=subtotal,
+            )
+        )
+    db.add(
+        BookingStatusHistory(
+            booking_id=booking.id,
+            to_status=BookingStatus.CONFIRMED.value,
+            note="Front-desk walk-in booking — paid in person",
+        )
+    )
+    await db.commit()
+    return await get_booking_or_404(db, booking.id)

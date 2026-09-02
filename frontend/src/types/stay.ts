@@ -106,3 +106,43 @@ export interface PropertySummary {
   property_type: PropertyType;
   status: PropertyStatus;
 }
+
+export type StaffRole = "manager" | "front_desk" | "housekeeping";
+export type StaffStatus = "pending" | "active" | "revoked";
+
+export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
+  manager: "Manager",
+  front_desk: "Front Desk",
+  housekeeping: "Housekeeping",
+};
+
+export interface Staff {
+  id: string;
+  property_id: string;
+  user_id: string;
+  staff_role: StaffRole;
+  status: StaffStatus;
+  created_at: string;
+  responded_at: string | null;
+  staff_name: string;
+  staff_email: string;
+  property_name: string;
+}
+
+export type HousekeepingStatus = "clean" | "dirty" | "cleaning_in_progress" | "out_of_order";
+
+export const HOUSEKEEPING_STATUS_LABELS: Record<HousekeepingStatus, string> = {
+  clean: "Clean",
+  dirty: "Dirty",
+  cleaning_in_progress: "Cleaning in Progress",
+  out_of_order: "Out of Order",
+};
+
+export interface Room {
+  id: string;
+  room_type_id: string;
+  room_number: string;
+  housekeeping_status: HousekeepingStatus;
+  notes: string | null;
+  created_at: string;
+}

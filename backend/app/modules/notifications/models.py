@@ -44,6 +44,7 @@ class NotificationType(str, enum.Enum):
     BADGE_AUTO_AWARDED = "badge_auto_awarded"
     NEW_CHAT_MESSAGE = "new_chat_message"
     CHAT_MESSAGE_REPORTED = "chat_message_reported"
+    STAFF_INVITE = "staff_invite"
 
 
 class Notification(Base):

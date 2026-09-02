@@ -67,6 +67,7 @@ class BookingItemRead(BaseModel):
     quantity: int
     unit_price: Decimal
     subtotal: Decimal
+    assigned_room_id: uuid.UUID | None
 
 
 class GuestRead(BaseModel):
@@ -76,6 +77,24 @@ class GuestRead(BaseModel):
     full_name: str
     age: int | None
     id_document: str | None
+
+
+class FrontDeskBookingCreate(BaseModel):
+    guest_name: str
+    guest_email: str
+    items: list[BookingItemCreate]
+
+    @model_validator(mode="after")
+    def check_room_items_only(self) -> "FrontDeskBookingCreate":
+        if not self.items:
+            raise ValueError("A booking needs at least one item")
+        if any(item.item_type != BookingItemType.ROOM_TYPE for item in self.items):
+            raise ValueError("Front-desk bookings can only include room_type items")
+        return self
+
+
+class RoomAssignRequest(BaseModel):
+    room_id: uuid.UUID
 
 
 class BookingRead(BaseModel):

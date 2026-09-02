@@ -16,7 +16,22 @@ import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import type { Location } from "@/types/location";
-import { AMENITY_LABELS, AmenityKey, Property, RatePlan, RatePlanAdjustmentType, RatePlanType, RATE_PLAN_TYPE_LABELS } from "@/types/stay";
+import {
+  AMENITY_LABELS,
+  AmenityKey,
+  HOUSEKEEPING_STATUS_LABELS,
+  HousekeepingStatus,
+  Property,
+  RatePlan,
+  RatePlanAdjustmentType,
+  RatePlanType,
+  RATE_PLAN_TYPE_LABELS,
+  Room,
+  Staff,
+  StaffRole,
+  STAFF_ROLE_LABELS,
+} from "@/types/stay";
+import Link from "next/link";
 
 const ALL_AMENITIES = Object.keys(AMENITY_LABELS) as AmenityKey[];
 
@@ -101,6 +116,26 @@ export default function PropertyEditPage() {
       <Section title="Availability calendar">
         <CalendarSection property={property} run={run} />
       </Section>
+
+      <Section title="Staff">
+        <StaffSection property={property} />
+      </Section>
+
+      <Section title="Rooms & housekeeping">
+        <RoomsSection property={property} />
+      </Section>
+
+      <Card className="mt-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Front desk</h2>
+            <p className="mt-1 text-xs text-zinc-400">Create walk-in bookings and manage check-in/check-out for this property.</p>
+          </div>
+          <Link href={`/dashboard/properties/${property.id}/front-desk`}>
+            <Button size="sm" variant="secondary">Open front desk</Button>
+          </Link>
+        </div>
+      </Card>
     </div>
   );
 }
@@ -467,6 +502,172 @@ function CalendarSection({ property, run }: { property: Property; run: (fn: () =
       >
         Set availability
       </Button>
+    </div>
+  );
+}
+
+function StaffSection({ property }: { property: Property }) {
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [staffRole, setStaffRole] = useState<StaffRole>("front_desk");
+
+  const { data: staff, isLoading } = useQuery({
+    queryKey: ["staff", property.id],
+    queryFn: () => apiClient.get<Staff[]>(`/api/v1/properties/${property.id}/staff`, { auth: true }),
+  });
+
+  const refetch = () => queryClient.invalidateQueries({ queryKey: ["staff", property.id] });
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setError(null);
+    try {
+      await fn();
+      refetch();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong");
+    }
+  };
+
+  return (
+    <div>
+      {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+      {isLoading ? (
+        <Spinner />
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {(staff ?? []).map((s) => (
+            <li key={s.id} className="flex items-center justify-between text-sm">
+              <span>
+                {s.staff_name} ({s.staff_email}) — {STAFF_ROLE_LABELS[s.staff_role]}
+                {s.status !== "active" && ` · ${s.status}`}
+              </span>
+              {s.status !== "revoked" && (
+                <button
+                  onClick={() => run(() => apiClient.delete(`/api/v1/properties/${property.id}/staff/${s.id}`, { auth: true }))}
+                  className="text-xs font-medium text-red-600 hover:text-red-700"
+                >
+                  Revoke
+                </button>
+              )}
+            </li>
+          ))}
+          {(staff ?? []).length === 0 && <p className="text-sm text-zinc-400">No staff invited yet.</p>}
+        </ul>
+      )}
+      <div className="mt-3 flex flex-wrap gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-900">
+        <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Staff member's Ovigo email" className="flex-1" />
+        <Select value={staffRole} onChange={(e) => setStaffRole(e.target.value as StaffRole)} className="w-auto">
+          {Object.entries(STAFF_ROLE_LABELS).map(([key, label]) => (
+            <option key={key} value={key}>{label}</option>
+          ))}
+        </Select>
+        <Button
+          size="sm"
+          onClick={() => {
+            run(() => apiClient.post(`/api/v1/properties/${property.id}/staff`, { email, staff_role: staffRole }, { auth: true }));
+            setEmail("");
+          }}
+          disabled={!email}
+        >
+          Invite
+        </Button>
+      </div>
+      <p className="mt-2 text-xs text-zinc-400">The invitee needs an existing Ovigo account and must accept before they gain access.</p>
+    </div>
+  );
+}
+
+function RoomsSection({ property }: { property: Property }) {
+  const [roomTypeId, setRoomTypeId] = useState(property.room_types[0]?.id ?? "");
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const [roomNumber, setRoomNumber] = useState("");
+
+  const { data: rooms, isLoading } = useQuery({
+    queryKey: ["rooms", roomTypeId],
+    queryFn: () => apiClient.get<Room[]>(`/api/v1/properties/${property.id}/room-types/${roomTypeId}/rooms`, { auth: true }),
+    enabled: !!roomTypeId,
+  });
+
+  const refetch = () => queryClient.invalidateQueries({ queryKey: ["rooms", roomTypeId] });
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setError(null);
+    try {
+      await fn();
+      refetch();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong");
+    }
+  };
+
+  if (property.room_types.length === 0) {
+    return <p className="text-sm text-zinc-400">Add a room type first.</p>;
+  }
+
+  return (
+    <div>
+      <Select value={roomTypeId} onChange={(e) => setRoomTypeId(e.target.value)} className="w-auto">
+        {property.room_types.map((rt) => (
+          <option key={rt.id} value={rt.id}>{rt.name}</option>
+        ))}
+      </Select>
+
+      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+
+      {isLoading ? (
+        <Spinner />
+      ) : (
+        <ul className="mt-3 flex flex-col gap-1">
+          {(rooms ?? []).map((room) => (
+            <li key={room.id} className="flex items-center justify-between text-sm">
+              <span>Room {room.room_number}</span>
+              <span className="flex items-center gap-2">
+                <Select
+                  value={room.housekeeping_status}
+                  onChange={(e) =>
+                    run(() =>
+                      apiClient.put(
+                        `/api/v1/properties/${property.id}/rooms/${room.id}/housekeeping-status`,
+                        { housekeeping_status: e.target.value as HousekeepingStatus },
+                        { auth: true }
+                      )
+                    )
+                  }
+                  className="w-auto"
+                >
+                  {Object.entries(HOUSEKEEPING_STATUS_LABELS).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </Select>
+                <button
+                  onClick={() => run(() => apiClient.delete(`/api/v1/properties/${property.id}/rooms/${room.id}`, { auth: true }))}
+                  className="text-xs font-medium text-red-600 hover:text-red-700"
+                >
+                  Remove
+                </button>
+              </span>
+            </li>
+          ))}
+          {(rooms ?? []).length === 0 && <p className="text-sm text-zinc-400">No rooms added yet.</p>}
+        </ul>
+      )}
+
+      <div className="mt-3 flex flex-wrap gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-900">
+        <Input value={roomNumber} onChange={(e) => setRoomNumber(e.target.value)} placeholder="Room number" className="w-40" />
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => {
+            run(() => apiClient.post(`/api/v1/properties/${property.id}/room-types/${roomTypeId}/rooms`, { room_number: roomNumber }, { auth: true }));
+            setRoomNumber("");
+          }}
+          disabled={!roomNumber}
+        >
+          Add room
+        </Button>
+      </div>
     </div>
   );
 }

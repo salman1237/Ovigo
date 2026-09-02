@@ -13,6 +13,7 @@ export interface BookingItem {
   quantity: number;
   unit_price: string;
   subtotal: string;
+  assigned_room_id: string | null;
 }
 
 export interface Guest {

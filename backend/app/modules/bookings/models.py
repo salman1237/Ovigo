@@ -90,6 +90,12 @@ class BookingItem(Base):
     room_type_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("room_types.id", ondelete="SET NULL"), nullable=True
     )
+    # Optional, front-desk-only convenience (Sprint 19-20 Part 2) — which physical Room
+    # a staff member assigned to this stay. Doesn't gate or affect inventory counting;
+    # see stays/models.py's module docstring.
+    assigned_room_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("rooms.id", ondelete="SET NULL"), nullable=True
+    )
     custom_bid_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tour_bids.id", ondelete="SET NULL"), nullable=True
     )
@@ -110,6 +116,7 @@ class BookingItem(Base):
     booking: Mapped["Booking"] = relationship(back_populates="items")
     tour_departure: Mapped["TourDeparture | None"] = relationship()  # noqa: F821
     room_type: Mapped["RoomType | None"] = relationship()  # noqa: F821
+    assigned_room: Mapped["Room | None"] = relationship()  # noqa: F821
     reviews: Mapped[list["Review"]] = relationship(back_populates="booking_item")  # noqa: F821
 
 

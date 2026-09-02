@@ -27,6 +27,11 @@ class UnauthorizedError(AppError):
         super().__init__(message, status.HTTP_401_UNAUTHORIZED)
 
 
+class ForbiddenError(AppError):
+    def __init__(self, message: str = "You do not have permission to perform this action"):
+        super().__init__(message, status.HTTP_403_FORBIDDEN)
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
