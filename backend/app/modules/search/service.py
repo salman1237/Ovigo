@@ -5,11 +5,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.ranking import RankingFactors, composite_score, relevance_for
 from app.modules.bookings.models import BookingItem, BookingItemStatus
+from app.modules.locations import service as locations_service
 from app.modules.locations.models import Location, LocationTag, TaggableEntityType
 from app.modules.profiles.models import LocalExpertProfile
 from app.modules.rentcar import service as rentcar_service
 from app.modules.rentcar.models import Vehicle, VehicleStatus
+from app.modules.reviews.models import Review
 from app.modules.search.schemas import DestinationSummary, ExpertSearchResult
 from app.modules.stays import service as stays_service
 from app.modules.stays.models import Property, PropertyStatus
@@ -35,7 +38,7 @@ async def search_stays(
     guests: int,
 ) -> list[Property]:
     query = select(Property).where(Property.status == PropertyStatus.PUBLISHED).options(
-        selectinload(Property.room_types), selectinload(Property.amenities)
+        selectinload(Property.room_types), selectinload(Property.amenities), selectinload(Property.images)
     )
     if location_ids is not None:
         query = query.join(
@@ -45,18 +48,18 @@ async def search_stays(
     result = await db.execute(query.distinct())
     properties = list(result.scalars().all())
 
-    if check_in is None or check_out is None:
-        return properties  # no dates given — return all published matches, no availability check
+    if check_in is not None and check_out is not None:
+        available = []
+        for prop in properties:
+            for room_type in prop.room_types:
+                if room_type.max_occupancy < guests:
+                    continue
+                if await _room_type_covers_range(db, room_type.id, check_in, check_out):
+                    available.append(prop)
+                    break
+        properties = available
 
-    available = []
-    for prop in properties:
-        for room_type in prop.room_types:
-            if room_type.max_occupancy < guests:
-                continue
-            if await _room_type_covers_range(db, room_type.id, check_in, check_out):
-                available.append(prop)
-                break
-    return available
+    return await stays_service.rank_properties(db, properties, location_ids)
 
 
 async def _vehicle_covers_range(db: AsyncSession, vehicle_id: uuid.UUID, pickup: date, return_: date) -> bool:
@@ -77,13 +80,13 @@ async def search_vehicles(
         query = query.join(
             LocationTag, (LocationTag.entity_id == Vehicle.id) & (LocationTag.entity_type == TaggableEntityType.VEHICLE)
         ).where(LocationTag.location_id.in_(location_ids))
-    result = await db.execute(query.order_by(Vehicle.created_at.desc()).distinct())
+    result = await db.execute(query.distinct())
     vehicles = list(result.scalars().all())
 
-    if pickup is None or return_ is None:
-        return vehicles
+    if pickup is not None and return_ is not None:
+        vehicles = [v for v in vehicles if await _vehicle_covers_range(db, v.id, pickup, return_)]
 
-    return [v for v in vehicles if await _vehicle_covers_range(db, v.id, pickup, return_)]
+    return await rentcar_service.rank_vehicles(db, vehicles, location_ids)
 
 
 async def _successful_tour_counts(db: AsyncSession, role_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
@@ -103,7 +106,23 @@ async def _successful_tour_counts(db: AsyncSession, role_ids: list[uuid.UUID]) -
     return dict(result.all())
 
 
+async def _expert_rating_map(db: AsyncSession, role_ids: list[uuid.UUID]) -> dict[uuid.UUID, float]:
+    if not role_ids:
+        return {}
+    result = await db.execute(
+        select(Tour.local_expert_role_id, func.avg(Review.rating))
+        .join(Review, Review.tour_id == Tour.id)
+        .where(Tour.local_expert_role_id.in_(role_ids))
+        .group_by(Tour.local_expert_role_id)
+    )
+    return dict(result.all())
+
+
 async def search_experts(db: AsyncSession, location_ids: list[uuid.UUID] | None) -> list[ExpertSearchResult]:
+    """Ranked by core/ranking.py's composite score — `conversion` reuses the same
+    completed-tour-booking count as MVP acceptance criterion #5's "successful-tour
+    count", and `completeness` is the fraction of profile fields (headline/bio/years
+    of experience/languages) an expert has actually filled in."""
     query = (
         select(LocalExpertProfile, User.full_name)
         .join(PartnerRole, LocalExpertProfile.partner_role_id == PartnerRole.id)
@@ -119,7 +138,31 @@ async def search_experts(db: AsyncSession, location_ids: list[uuid.UUID] | None)
 
     result = await db.execute(query.distinct())
     rows = result.all()
-    tour_counts = await _successful_tour_counts(db, [profile.partner_role_id for profile, _ in rows])
+    role_ids = [profile.partner_role_id for profile, _ in rows]
+    tour_counts = await _successful_tour_counts(db, role_ids)
+    ratings = await _expert_rating_map(db, role_ids)
+    exact_match_ids = (
+        await locations_service.get_exact_match_ids(db, TaggableEntityType.PARTNER_ROLE, role_ids, location_ids[0])
+        if location_ids
+        else set()
+    )
+
+    def score(profile: LocalExpertProfile) -> float:
+        completeness_signals = [
+            bool(profile.headline),
+            bool(profile.bio),
+            profile.years_experience is not None,
+            bool(profile.languages),
+        ]
+        factors = RankingFactors(
+            relevance=relevance_for(profile.partner_role_id, location_ids, exact_match_ids),
+            rating=ratings.get(profile.partner_role_id),
+            conversion_count=tour_counts.get(profile.partner_role_id, 0),
+            completeness=sum(completeness_signals) / len(completeness_signals),
+        )
+        return composite_score(factors)
+
+    rows = sorted(rows, key=lambda r: score(r[0]), reverse=True)
     return [
         ExpertSearchResult(
             partner_role_id=profile.partner_role_id,

@@ -2,18 +2,21 @@ import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core import storage
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from app.core.ranking import RankingFactors, composite_score, relevance_for
 from app.core.slugs import slugify, unique_suffix
+from app.modules.bookings.models import BookingItem, BookingItemStatus
 from app.modules.locations import service as locations_service
 from app.modules.locations.models import TaggableEntityType
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.models import NotificationType
+from app.modules.reviews.models import Review
 from app.modules.stays.models import (
     AvailabilityCalendar,
     HousekeepingStatus,
@@ -101,6 +104,70 @@ async def list_my_properties(db: AsyncSession, role: PartnerRole) -> list[Proper
     return list(result.scalars().all())
 
 
+async def _property_rating_map(db: AsyncSession, property_ids: list[uuid.UUID]) -> dict[uuid.UUID, float]:
+    if not property_ids:
+        return {}
+    result = await db.execute(
+        select(Review.property_id, func.avg(Review.rating))
+        .where(Review.property_id.in_(property_ids))
+        .group_by(Review.property_id)
+    )
+    return dict(result.all())
+
+
+async def _property_conversion_map(db: AsyncSession, property_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+    if not property_ids:
+        return {}
+    result = await db.execute(
+        select(RoomType.property_id, func.count(BookingItem.id))
+        .select_from(RoomType)
+        .join(BookingItem, BookingItem.room_type_id == RoomType.id)
+        .where(RoomType.property_id.in_(property_ids), BookingItem.status == BookingItemStatus.COMPLETED)
+        .group_by(RoomType.property_id)
+    )
+    return dict(result.all())
+
+
+async def rank_properties(
+    db: AsyncSession, properties: list[Property], location_ids: list[uuid.UUID] | None
+) -> list[Property]:
+    """Ranked by core/ranking.py's composite score — see that module's docstring for
+    the formula and what each factor means here. Shared by this module's own public
+    listing and search/service.py's date-filtered search so both surfaces rank the
+    same way. Requires `properties` to already have `.room_types` and `.amenities`
+    eager-loaded (see `_EAGER`) — completeness/conversion read those without a
+    lazy-load."""
+    if not properties:
+        return properties
+
+    property_ids = [p.id for p in properties]
+    ratings = await _property_rating_map(db, property_ids)
+    conversions = await _property_conversion_map(db, property_ids)
+    exact_match_ids = (
+        await locations_service.get_exact_match_ids(db, TaggableEntityType.PROPERTY, property_ids, location_ids[0])
+        if location_ids
+        else set()
+    )
+
+    def score(prop: Property) -> float:
+        completeness_signals = [
+            bool(prop.description),
+            len(prop.amenities) > 0,
+            bool(prop.check_in_time),
+            bool(prop.cancellation_policy),
+        ]
+        factors = RankingFactors(
+            relevance=relevance_for(prop.id, location_ids, exact_match_ids),
+            rating=ratings.get(prop.id),
+            conversion_count=conversions.get(prop.id, 0),
+            completeness=sum(completeness_signals) / len(completeness_signals),
+        )
+        return composite_score(factors)
+
+    properties.sort(key=lambda p: (score(p), p.created_at), reverse=True)
+    return properties
+
+
 async def list_published_properties(db: AsyncSession, location_ids: list[uuid.UUID] | None = None) -> list[Property]:
     query = select(Property).where(Property.status == PropertyStatus.PUBLISHED)
     if location_ids is not None:
@@ -110,8 +177,9 @@ async def list_published_properties(db: AsyncSession, location_ids: list[uuid.UU
             LocationTag,
             (LocationTag.entity_id == Property.id) & (LocationTag.entity_type == TaggableEntityType.PROPERTY),
         ).where(LocationTag.location_id.in_(location_ids))
-    result = await db.execute(query.options(*_EAGER).order_by(Property.created_at.desc()).distinct())
-    return list(result.scalars().all())
+    result = await db.execute(query.options(*_EAGER).distinct())
+    properties = list(result.scalars().all())
+    return await rank_properties(db, properties, location_ids)
 
 
 async def update_property(

@@ -45,6 +45,26 @@ async def has_tags(db: AsyncSession, entity_type: TaggableEntityType, entity_id:
     return len(await get_tags(db, entity_type, entity_id)) > 0
 
 
+async def get_exact_match_ids(
+    db: AsyncSession, entity_type: TaggableEntityType, entity_ids: list[uuid.UUID], exact_location_id: uuid.UUID
+) -> set[uuid.UUID]:
+    """Which of `entity_ids` are tagged directly to `exact_location_id` — as opposed to
+    only matching a search because that location's subtree included one of their
+    tags. Used by core/ranking.py's `relevance_for` to rank an exact location match
+    above a broader-ancestor match. See resolve_slug_to_subtree_ids for how a search
+    accumulates the subtree in the first place."""
+    if not entity_ids:
+        return set()
+    result = await db.execute(
+        select(LocationTag.entity_id).where(
+            LocationTag.entity_type == entity_type,
+            LocationTag.entity_id.in_(entity_ids),
+            LocationTag.location_id == exact_location_id,
+        )
+    )
+    return set(result.scalars().all())
+
+
 async def get_ancestor_ids(db: AsyncSession, location_id: uuid.UUID) -> list[uuid.UUID]:
     """The reverse of resolve_slug_to_subtree_ids: given one location, return its own id
     plus every ancestor's id, walking up via parent_id. Used by the bidding module's

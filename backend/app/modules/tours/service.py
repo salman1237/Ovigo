@@ -1,14 +1,18 @@
 import uuid
+from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core import storage
 from app.core.exceptions import ConflictError, NotFoundError
+from app.core.ranking import RankingFactors, composite_score, relevance_for
 from app.core.slugs import slugify, unique_suffix
+from app.modules.bookings.models import BookingItem, BookingItemStatus
 from app.modules.locations import service as locations_service
 from app.modules.locations.models import TaggableEntityType
+from app.modules.reviews.models import Review
 from app.modules.tours.models import (
     Tour,
     TourActivity,
@@ -103,17 +107,77 @@ async def list_my_tours(db: AsyncSession, role: PartnerRole) -> list[Tour]:
     return list(result.scalars().all())
 
 
-async def list_published_tours(db: AsyncSession, location_ids: list[uuid.UUID] | None = None) -> list[Tour]:
-    query = select(Tour).where(Tour.status == TourStatus.PUBLISHED)
-    if location_ids is not None:
-        from app.modules.locations.models import LocationTag
+async def _tour_rating_map(db: AsyncSession, tour_ids: list[uuid.UUID]) -> dict[uuid.UUID, float]:
+    if not tour_ids:
+        return {}
+    result = await db.execute(
+        select(Review.tour_id, func.avg(Review.rating)).where(Review.tour_id.in_(tour_ids)).group_by(Review.tour_id)
+    )
+    return dict(result.all())
 
+
+async def _tour_conversion_map(db: AsyncSession, tour_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+    if not tour_ids:
+        return {}
+    result = await db.execute(
+        select(Tour.id, func.count(BookingItem.id))
+        .select_from(Tour)
+        .join(TourDeparture, TourDeparture.tour_id == Tour.id)
+        .join(BookingItem, BookingItem.tour_departure_id == TourDeparture.id)
+        .where(Tour.id.in_(tour_ids), BookingItem.status == BookingItemStatus.COMPLETED)
+        .group_by(Tour.id)
+    )
+    return dict(result.all())
+
+
+async def list_published_tours(db: AsyncSession, location_ids: list[uuid.UUID] | None = None) -> list[Tour]:
+    """Ranked by core/ranking.py's composite score (relevance/rating/conversion/
+    completeness) — see that module's docstring for the formula and what each factor
+    means here. `created_at desc` is only the final tiebreaker now, not the primary
+    order."""
+    from app.modules.locations.models import LocationTag
+
+    query = (
+        select(Tour)
+        .where(Tour.status == TourStatus.PUBLISHED)
+        .options(selectinload(Tour.itinerary), selectinload(Tour.departures))
+    )
+    if location_ids is not None:
         query = query.join(
             LocationTag,
             (LocationTag.entity_id == Tour.id) & (LocationTag.entity_type == TaggableEntityType.TOUR),
         ).where(LocationTag.location_id.in_(location_ids))
-    result = await db.execute(query.order_by(Tour.created_at.desc()).distinct())
-    return list(result.scalars().all())
+    result = await db.execute(query.distinct())
+    tours = list(result.scalars().all())
+    if not tours:
+        return tours
+
+    tour_ids = [t.id for t in tours]
+    ratings = await _tour_rating_map(db, tour_ids)
+    conversions = await _tour_conversion_map(db, tour_ids)
+    exact_match_ids = (
+        await locations_service.get_exact_match_ids(db, TaggableEntityType.TOUR, tour_ids, location_ids[0])
+        if location_ids
+        else set()
+    )
+    today = date.today()
+
+    def score(tour: Tour) -> float:
+        completeness_signals = [
+            bool(tour.description),
+            bool(tour.itinerary),
+            any(dep.departure_date >= today for dep in tour.departures),
+        ]
+        factors = RankingFactors(
+            relevance=relevance_for(tour.id, location_ids, exact_match_ids),
+            rating=ratings.get(tour.id),
+            conversion_count=conversions.get(tour.id, 0),
+            completeness=sum(completeness_signals) / len(completeness_signals),
+        )
+        return composite_score(factors)
+
+    tours.sort(key=lambda t: (score(t), t.created_at), reverse=True)
+    return tours
 
 
 async def update_tour(db: AsyncSession, role: PartnerRole, tour_id: uuid.UUID, payload: TourUpdate) -> Tour:
