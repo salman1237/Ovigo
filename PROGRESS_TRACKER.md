@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-01 (Sprint 17-18 complete — Advertising Platform shipped, Phase 3 underway)_
+_Last updated: 2026-09-02 (Sprint 19-20 Part 1 complete — Advanced Pricing Engine shipped, Part 2 next)_
 
 ## Infrastructure & deployment status
 
@@ -313,6 +313,26 @@ Requested by the project owner after Phase 2 wrapped: the navbar and overall UI 
 **New table:** `ad_campaigns`. **Enum extension:** `TaggableEntityType` gained `AD_CAMPAIGN` via `ALTER TYPE ADD VALUE`. One migration, applied cleanly to Neon on the first attempt.
 
 **Verified:** a comprehensive scripted smoke test against Neon covering the full lifecycle — ownership checks (can't advertise someone else's listing), submit-without-targeting rejected, admin approve/reject, sponsored-result serving with correct impression tracking (and correctly excluding wrong entity types, unapproved, paused and budget-exhausted campaigns), CPC click billing and budget-exhaustion auto-completion, CPM impression billing, pause/resume, and a lowered-budget-below-spend guard. Also verified at the HTTP layer: all 13 routes registered, auth gating correct on partner/admin endpoints, and the public sponsored/click endpoints respond correctly unauthenticated. Frontend `npm run lint` and `npm run build` both pass clean, all 40 routes generated. Both FastAPI Cloud and Vercel confirmed live post-deploy.
+
+### Sprint 19-20 Part 1 — Advanced Pricing Engine (Wk 37-40)
+
+Split the same way as Sprint 14-15 and 16: Part 1 (this section) is the pricing engine; Part 2 (staff accounts, front-desk booking mode, individual `Room`/housekeeping tracking, occupancy/ADR/RevPAR reporting) follows separately.
+
+| Task | Status |
+|---|---|
+| Rate plans (seasonal/weekend/corporate/group) | Done — `RatePlan` model with a `rate_type` label plus generic qualifying conditions (date range, weekend flag, min-days-before-checkin, min-quantity); a plan applies purely from its own conditions, not from a hardcoded branch on `rate_type` — so "corporate" and "seasonal" behave identically given the same conditions, since no corporate-account/coupon gating exists in this codebase to key off of |
+| Advanced pricing rules (early-bird, group discount, min stay) | Done for early-bird/group (both are just `RatePlan` rows using `min_days_before_checkin`/`min_quantity`). Min stay is a hard `RoomType.min_stay_nights` constraint enforced in the booking engine (rejects a too-short stay outright), not a discount condition — matches how real booking platforms treat it |
+| Tax & service charge configuration | Done — per-property `tax_rate`/`service_charge_rate` percentages, computed on the room subtotal and tracked as a separate `Booking.tax_service_amount` (included in the traveler's total, excluded from `BookingItem.subtotal` so it doesn't inflate `Commission.gross_amount` — Ovigo doesn't take a cut of taxes/fees collected on a host's behalf) |
+| Hotel/Resort multi-property management | Done via existing infra — a `PartnerRole` could already own unlimited `Property` rows with no uniqueness constraint; no new work needed |
+| Bulk inventory management | Done via existing infra — `set_availability_range` already upserts a whole date range in one call; no new work needed |
+
+**Conflict resolution:** when multiple rate plans qualify for the same night, the cheapest-applicable-plan wins (deterministic `min()` over every qualifying plan's adjusted price) rather than a fixed type-priority ladder the technical document never specifies. A per-date `AvailabilityCalendar.price_override` still always outranks every rate plan — a host who manually sets one date's price gets exactly that.
+
+**New table:** `rate_plans`. **New enums:** `rate_plan_type`, `rate_plan_adjustment_type`. **New columns:** `properties.tax_rate`/`service_charge_rate`, `room_types.min_stay_nights`, `bookings.tax_service_amount` (`server_default='0'` for existing rows). One migration, applied cleanly to Neon.
+
+**Verified:** a comprehensive scripted smoke test against Neon covering rate-plan CRUD and ownership checks, the "at least one condition" validator, cheapest-applicable-plan-wins resolution across weekend/early-bird scenarios, `min_stay_nights` rejecting a too-short booking, a manual `price_override` correctly outranking every rate plan on a real multi-night booking, tax/service-charge math, and confirming `BookingItem.subtotal` stays untouched by the tax/service charge (commission-basis integrity). Also verified at the HTTP layer: all 6 new routes registered and auth-gated (401 unauthenticated). Frontend adds rate-plan management, min-stay, and tax/service-charge rate UI to the property dashboard, plus a tax/service-charge line on the booking detail page; `npm run lint` and `npm run build` both pass clean, all 40 routes generated. Both FastAPI Cloud and Vercel confirmed live post-deploy (new endpoints spot-checked directly against the production backend's OpenAPI schema).
+
+**Part 2 not yet started:** staff accounts with role-based permissions, front-desk booking mode, housekeeping status tracking (needs individual physical `Room` entities — `RoomType` currently only tracks pooled unit counts), and occupancy/ADR/RevPAR reporting extending the existing `analytics` module.
 
 ## Phase 4 — Scale & Expansion
 
