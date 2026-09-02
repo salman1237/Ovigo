@@ -8,6 +8,7 @@ from app.core import audit
 from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.business_network.models import BusinessReferral, ReferralStatus
 from app.modules.business_network.schemas import BusinessReferralCreate
+from app.modules.fraud import service as fraud_service
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.models import NotificationType
 from app.modules.users.models import PartnerAccount, PartnerRole, User
@@ -93,6 +94,8 @@ async def link_partner(db: AsyncSession, admin: User, referral_id: uuid.UUID, pa
     if referral.status != ReferralStatus.APPROVED:
         raise ConflictError("Only an approved referral can be linked to a partner")
     referral.linked_partner_role_id = partner_role_id
+    await db.commit()
+    await fraud_service.check_self_referral(db, referral.referring_expert_role_id, partner_role_id, referral.id)
     await db.commit()
     await audit.record(
         db,

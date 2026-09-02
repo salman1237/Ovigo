@@ -45,6 +45,7 @@ class NotificationType(str, enum.Enum):
     NEW_CHAT_MESSAGE = "new_chat_message"
     CHAT_MESSAGE_REPORTED = "chat_message_reported"
     STAFF_INVITE = "staff_invite"
+    FRAUD_ALERT = "fraud_alert"
 
 
 class Notification(Base):

@@ -30,6 +30,7 @@ from app.modules.bookings.models import (
     BookingStatusHistory,
 )
 from app.modules.bookings.schemas import BookingCreate, BookingItemCreate, FrontDeskBookingCreate
+from app.modules.fraud import service as fraud_service
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.models import NotificationType
 from app.modules.rentcar.models import Vehicle, VehicleAvailability, VehicleStatus
@@ -196,6 +197,7 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
             # reaching here — this branch exists only so a future new item type
             # fails loudly instead of silently mis-dispatching.
             raise ConflictError(f"Cannot create a booking item of type {item.item_type.value} directly")
+        await fraud_service.check_self_booking(db, user.id, item)
         prepared.append((item, unit_price, subtotal))
         total += subtotal + tax_service
         tax_service_total += tax_service
@@ -317,6 +319,7 @@ async def _release_and_cancel(db: AsyncSession, booking: Booking, note: str | No
         message=note or "Your booking has been cancelled.",
         link=f"/bookings/{booking.id}",
     )
+    await fraud_service.check_rapid_cancellations(db, booking.user_id)
 
 
 async def cancel_booking_by_id(db: AsyncSession, booking_id: uuid.UUID, note: str | None = None) -> None:

@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.bookings.models import Booking, BookingItem, BookingItemStatus
+from app.modules.fraud import service as fraud_service
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.models import NotificationType
 from app.modules.reviews.models import Review
@@ -86,6 +87,8 @@ async def create_review(db: AsyncSession, user: User, payload: ReviewCreate) -> 
             message=f'{user.full_name} left a {payload.rating}-star review on "{listing_title}".',
         )
 
+    await db.commit()
+    await fraud_service.check_self_review(db, user.id, recipient_user_id, review.id)
     await db.commit()
 
     if tour_id is not None:

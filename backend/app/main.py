@@ -36,6 +36,7 @@ from app.modules.commissions.router import admin_router as commissions_admin_rou
 from app.modules.commissions.router import router as commissions_router
 from app.modules.disputes.router import admin_router as disputes_admin_router
 from app.modules.disputes.router import router as disputes_router
+from app.modules.fraud.router import router as fraud_router
 from app.modules.guides.router import router as guides_router
 from app.modules.locations.router import router as locations_router
 from app.modules.notifications.router import router as notifications_router
@@ -125,6 +126,7 @@ app.include_router(chat_router)
 app.include_router(chat_admin_router)
 app.include_router(disputes_router)
 app.include_router(disputes_admin_router)
+app.include_router(fraud_router)
 app.include_router(admin_router)
 
 
