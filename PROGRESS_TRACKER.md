@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-03 (Sprint 25-26 Part 3 complete — Translation-Assisted Chat shipped)_
+_Last updated: 2026-09-03 (Sprint 25-26 complete — full multilingual UI explicitly deferred per user decision)_
 
 ## Infrastructure & deployment status
 
@@ -486,6 +486,10 @@ Split given the sprint's breadth: Part 1 (this section) is iCal import/export; P
 **No new tables or migrations.**
 
 **Verified:** `core/translate.py::translate_text` called directly against the live MyMemory API for both directions (English->Bengali and Bengali->English), confirming correct translations and a graceful `None` for empty input. Confirmed `POST /api/v1/chat/translate` is registered on the live app and reachable in production. `npm run lint` and `npm run build` both pass clean, all 44 routes generated. Both the Dokploy backend and Vercel frontend confirmed live post-deploy.
+
+### Sprint 25-26 — scope decision: full multilingual (Bengali) UI translation
+
+Explicitly deferred, not attempted. A full multilingual interface would mean adopting locale-prefixed routing (e.g. `next-intl` with `/en`/`/bn` URL segments) across all 44 routes and re-copy every page — a routing-structure change to the whole app, not an additive feature like the three slices above, with real risk to every existing internal `Link` and bookmarked/shared URL. Presented to the user as a choice (bounded first pass vs. full app vs. skip); the user chose to skip it and close out Sprint 25-26 with multi-currency + smart recommendations + translation-assisted chat as the "Internationalization & Personalization" deliverables. Revisit only if asked — see [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for the original full-i18n scope if that happens.
 
 ## Infrastructure note — Dokploy VPS backend (2026-09-03)
 
