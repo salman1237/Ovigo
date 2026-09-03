@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-03 (Sprint 25-26 complete — full multilingual UI explicitly deferred per user decision)_
+_Last updated: 2026-09-03 (Sprint 27-28 Part 1 complete — Loyalty Wallet & Promotional Credit System shipped)_
 
 ## Infrastructure & deployment status
 
@@ -490,6 +490,34 @@ Split given the sprint's breadth: Part 1 (this section) is iCal import/export; P
 ### Sprint 25-26 — scope decision: full multilingual (Bengali) UI translation
 
 Explicitly deferred, not attempted. A full multilingual interface would mean adopting locale-prefixed routing (e.g. `next-intl` with `/en`/`/bn` URL segments) across all 44 routes and re-copy every page — a routing-structure change to the whole app, not an additive feature like the three slices above, with real risk to every existing internal `Link` and bookmarked/shared URL. Presented to the user as a choice (bounded first pass vs. full app vs. skip); the user chose to skip it and close out Sprint 25-26 with multi-currency + smart recommendations + translation-assisted chat as the "Internationalization & Personalization" deliverables. Revisit only if asked — see [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for the original full-i18n scope if that happens.
+
+## Phase 4 — Sprint 27-28 (Loyalty, Mobile & Platform Maturity)
+
+### Sprint 27-28 Part 1 — Loyalty Wallet & Promotional Credit System (Wk 53-56)
+
+User explicitly selected these 3 items from the sprint's full deliverable list to build now: loyalty wallet & reward points, promotional credit system, and (separately — see the next section) an Elasticsearch migration for search. Split, not attempted: promotional credit split payment between travelers, React Native/Flutter mobile app foundation, ML-based advanced personalization, and horizontal scaling architecture review — not requested, remain **Not started**.
+
+| Task | Status |
+|---|---|
+| Loyalty wallet: earn points on completed bookings | Done |
+| Loyalty wallet: redeem points for a BDT discount at checkout | Done |
+| Loyalty wallet: refund points on booking cancellation | Done |
+| Promotional credit system: admin-issued percentage/fixed-amount codes | Done |
+| Promo codes: total + per-user redemption caps, expiry, deactivation | Done |
+| `GET /api/v1/loyalty/me`, `GET /api/v1/loyalty/transactions` | Done |
+| `GET /api/v1/promotions/validate/{code}`, admin CRUD under `/api/v1/admin/promotions` | Done |
+| Cart page: promo code + points redemption inputs with live discount preview | Done |
+| New `/account/loyalty` page (balance + history), `/admin/promotions` page | Done |
+
+**Design:** both discounts follow the exact commission-basis-integrity rule already established for `bundle_discount_amount`/`tax_service_amount` — subtracted from `Booking.total_amount` only, never `BookingItem.subtotal`, so partners are paid in full and Ovigo's own margin absorbs the cost. They stack with the bundle discount and each other in checkout order: bundle discount first, then promo code (on the bundle-discounted total), then loyalty points (on the further-discounted total) — each capped so the running total can never go negative.
+
+Loyalty points are earned at 1 point per ৳100 spent (floored) on a booking that reaches `COMPLETED`, and redeemable 1:1 for ৳1 off — a simple, symmetric ~1% cashback-in-points program, not tuned against real usage data (same "starting judgment call" precedent as `core/ranking.py`'s weights). Redemption is modeled exactly like inventory reservation elsewhere in this codebase: points are deducted when the booking is created and **refunded if it's later cancelled**, since they're the traveler's own previously-earned balance.
+
+Promo codes are deliberately asymmetric: a redemption is **never refunded on cancellation** — unlike loyalty points, a promo code is a scarce, admin-controlled resource (often with a hard `max_redemptions` cap), and refunding on cancel would open a trivial book-cancel-rebook loop to reuse a one-time code indefinitely.
+
+**New tables:** `loyalty_accounts` (one per user, denormalized `points_balance`), `loyalty_transactions` (append-only ledger — the real source of truth for every balance change), `promo_codes`, `promo_redemptions` (unique per `promo_code_id`+`booking_id`, also used to enforce the per-user cap). **New columns:** `bookings.loyalty_discount_amount`, `bookings.promo_discount_amount` (both `Numeric(10,2)`, `server_default='0'`). One migration (`5136324a57a0`), applied cleanly to Neon.
+
+**Verified:** a Neon smoke test covering — a zero-balance redemption attempt correctly rejected; a completed 1000-BDT booking correctly earning 10 points; redeeming 6 points for a ৳6 discount on a second booking; cancelling that booking correctly refunding the 6 points; a 10%-off promo code correctly discounting a third booking by ৳100; reusing that same single-use-per-user code correctly rejected; the promo redemption correctly staying consumed even after its booking was cancelled (the deliberate asymmetry with loyalty points); and a deactivated promo code correctly rejected. Also verified at the HTTP layer: all 6 new routes registered on the live app and present in the production OpenAPI schema. `npm run lint` and `npm run build` both pass clean, all 46 routes generated. Both the Dokploy backend and Vercel frontend confirmed live post-deploy.
 
 ## Infrastructure note — Dokploy VPS backend (2026-09-03)
 
