@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-03 (Sprint 25-26 Part 2a complete — Dynamic Packaging shipped)_
+_Last updated: 2026-09-03 (Sprint 25-26 Part 2b complete — Smart Recommendations Engine shipped)_
 
 ## Infrastructure & deployment status
 
@@ -458,6 +458,21 @@ Split given the sprint's breadth: Part 1 (this section) is iCal import/export; P
 **New column:** `bookings.bundle_discount_amount` (`Numeric(10,2)`, default `0`) — added via migration `0efda2ae6204` with an explicit `server_default='0'` (required for a NOT NULL column against a table with existing rows, per the Alembic lesson learned earlier this project). Applied successfully to Neon.
 
 **Verified:** a Neon smoke test covering single-type (no discount), two-type (5% off, tour+room), and three-type (10% off, tour+room+vehicle) bookings — confirming exact discount amounts, that every `BookingItem.subtotal` stays at full price, that a same-type-only booking with `quantity > 1` never triggers a discount, and that `Commission.gross_amount` for all three items matches the full undiscounted subtotal after walking a real booking through check-in/check-out. Frontend cart page shows a live discount-eligibility banner as items are added and a strikethrough-total view once eligible; booking detail page shows the applied discount line. `npm run lint` and `npm run build` both pass clean, all 44 routes generated. Both the Dokploy backend and Vercel frontend confirmed live post-deploy.
+
+### Sprint 25-26 Part 2b — Smart Recommendations Engine (Wk 49-52)
+
+| Task | Status |
+| --- | --- |
+| Content-based "similar listings" (tours, properties, vehicles) | Done |
+| Collaborative "frequently booked together" (real booking co-occurrence) | Done |
+| `GET /{id}/similar` and `GET /{id}/frequently-booked-with` on all three listing routers | Done |
+| Surfaced on tour/stay/vehicle public detail pages | Done |
+
+**Design:** two independent, deterministic strategies — no ML model and no click/impression telemetry exist yet, the same "starting judgment call, not tuned against real usage data" precedent `core/ranking.py` already set for search ranking. **Similar listings** (`similar_tours`/`similar_properties`/`similar_vehicles`, added next to each module's existing rating/conversion helpers in its own `service.py`) scores other PUBLISHED listings sharing at least one location tag by price closeness to the source listing, plus a same-category bonus for properties/vehicles (tours have no category field). **Frequently booked together** (new `app/core/recommendations.py`, kept central rather than in any one module since it has to resolve `BookingItem` rows across all three item types at once) counts genuine co-occurrence: which other tours/properties/vehicles actually shipped in the same `Booking`, restricted to `BookingItemStatus.COMPLETED` — the same trust bar `core/ranking.py`'s own conversion signal uses, so a pending or cancelled booking never inflates a pairing.
+
+**No new tables or migrations** — both strategies are computed on read from existing `LocationTag`/`BookingItem` data, nothing persisted.
+
+**Verified:** a Neon smoke test seeded three tours, three properties, and three vehicles at one shared location with deliberately-spread prices/categories, confirming `similar_*` always excludes the source listing and ranks the closer-priced/same-category candidate first; then booked a tour + a room type together twice (and a third, unrelated tour alone) through the full check-in/check-out lifecycle, confirming `frequently_booked_with_tour`/`frequently_booked_with_property` correctly surface each other, the unrelated booking never leaks in, and a listing with zero completed bookings returns an empty list rather than erroring. Confirmed all six new routes (`/similar` and `/frequently-booked-with` on tours/properties/vehicles) are registered in the live app and present in the production OpenAPI schema. `npm run lint` and `npm run build` both pass clean, all 44 routes generated. Both the Dokploy backend and Vercel frontend confirmed live post-deploy.
 
 ## Infrastructure note — Dokploy VPS backend (2026-09-03)
 
