@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-03 (Sprint 27-28 Part 1 complete — Loyalty Wallet & Promotional Credit System shipped)_
+_Last updated: 2026-09-03 (Sprint 27-28 Part 2 complete — Elasticsearch-Backed Free-Text Search shipped)_
 
 ## Infrastructure & deployment status
 
@@ -519,6 +519,27 @@ Promo codes are deliberately asymmetric: a redemption is **never refunded on can
 
 **Verified:** a Neon smoke test covering — a zero-balance redemption attempt correctly rejected; a completed 1000-BDT booking correctly earning 10 points; redeeming 6 points for a ৳6 discount on a second booking; cancelling that booking correctly refunding the 6 points; a 10%-off promo code correctly discounting a third booking by ৳100; reusing that same single-use-per-user code correctly rejected; the promo redemption correctly staying consumed even after its booking was cancelled (the deliberate asymmetry with loyalty points); and a deactivated promo code correctly rejected. Also verified at the HTTP layer: all 6 new routes registered on the live app and present in the production OpenAPI schema. `npm run lint` and `npm run build` both pass clean, all 46 routes generated. Both the Dokploy backend and Vercel frontend confirmed live post-deploy.
 
+### Sprint 27-28 Part 2 — Elasticsearch-Backed Free-Text Search (Wk 53-56)
+
+The user's third selected item. Before this, `core/ranking.py`'s own docstring noted "no free-text query exists anywhere in this codebase" — every search surface was location-tag (and, for stays/vehicles, date-range) filtered only, never a typed keyword.
+
+| Task | Status |
+|---|---|
+| Single-node Elasticsearch deployed on the Dokploy VPS | Done |
+| `core/search_engine.py` — indexing + search client, graceful degradation | Done |
+| Free-text `q` param on tours, properties (`/api/v1/search/stays`), vehicles | Done |
+| Incremental indexing on publish (admin approval) and on edit | Done |
+| One-time backfill script (`scripts/reindex_search.py`) for pre-existing listings | Done |
+| Keyword search inputs on the Tours, Stays, and Rent-a-Car pages | Done |
+
+**Infrastructure:** a single-node Elasticsearch 8.15.0 container (`ovigo-elasticsearch`), deployed directly via `docker run` (not through Dokploy's own UI/API — it's a data store, not a git-built app, so this was the more direct path) onto the same VPS, attached to `dokploy-network` so the backend reaches it over Docker's internal DNS at `http://ovigo-elasticsearch:9200` — no public port exposure, no credentials (`xpack.security.enabled=false`, safe only because it's unreachable from outside the Docker network). `restart unless-stopped` and a named volume (`ovigo-es-data`) survive a VPS reboot. The VPS had 12GB of its 15GB RAM free before this (confirmed via SSH) — a 512MB-1GB JVM heap leaves ample headroom alongside the backend and other apps already running there.
+
+**Design:** one index per listing type (`ovigo_tours`/`ovigo_properties`/`ovigo_vehicles`) rather than a unified index, matching each module's existing service.py/router.py boundary. Every search call and indexing call swallows connection errors and returns `None`/no-ops rather than raising — the exact same graceful-degradation shape already established by `core/fx.py` and `core/translate.py`. A search with Elasticsearch unreachable doesn't drop the filter entirely: it falls back to a plain Postgres `ILIKE` substring match, so a traveler always gets *some* text-filtered result, just with degraded relevance. A text match **filters** which listings get scored — it does not feed into `core/ranking.py`'s composite score itself; ordering among matches is still relevance/rating/conversion/completeness as before. Indexing is incremental (hooked into `admin/service.py`'s three `approve_*` functions and each module's `update_*`), not read-time; the backfill script is a one-time catch-up for anything published before this feature shipped.
+
+**Known scope trim:** the default Elasticsearch analyzer keeps a possessive like "Cox's" as one token, so a bare query for `cox` won't match "Cox's Bazar..." (fuzziness AUTO's edit-distance budget isn't enough to bridge the apostrophe+s) — `bazar`, `sunset`, or any other whole word in the same title matches correctly. A custom analyzer (word-delimiter filter) would fix this but wasn't worth the added indexing complexity for what's a minor, narrow edge case; noted here rather than silently left undiscovered.
+
+**Verified:** a Neon + production-Elasticsearch smoke test (via an SSH tunnel to the VPS's loopback-bound ES port) confirming a "mangrove" query matches only the tour whose description mentions it, a "trekking hills" query matches only the other, a nonsense query correctly returns an empty list (not `None` — a real zero-result search, distinguishable from "search unavailable"), `list_published_tours(q=...)` correctly filters at the service layer, and — with a broken Elasticsearch client injected directly — `search_tour_ids` correctly returns `None` and `list_published_tours` correctly falls back to its Postgres ILIKE path instead of raising or silently dropping the filter. Ran the backfill script against the real production database and Elasticsearch, then verified end-to-end on the live API (`https://ovigo-api.salmandev.io/api/v1/tours?q=sunset` correctly returning the one real published tour matching it). `npm run lint` and `npm run build` both pass clean, all 46 routes generated. Both the Dokploy backend and Vercel frontend confirmed live post-deploy.
+
 ## Infrastructure note — Dokploy VPS backend (2026-09-03)
 
 FastAPI Cloud's build infrastructure hit a sustained outage (repeated identical "Installing Python interpreter" failures on their build servers, confirmed via their own CLI's build logs — unrelated to this codebase), leaving production stuck for several hours without the bank-transfer commit. As a mitigation, the backend was also deployed to the user's own VPS via Dokploy:
@@ -527,6 +548,7 @@ FastAPI Cloud's build infrastructure hit a sustained outage (repeated identical 
 - Same Neon database, R2, and SSLCommerz credentials as FastAPI Cloud; a freshly generated `JWT_SECRET_KEY` (FastAPI Cloud's was masked/unretrievable, and the local `.env`'s is explicitly dev-only) — meaning JWTs aren't interchangeable between the two backend instances.
 - `.github/workflows/deploy-dokploy.yml` added (API key stored as a GitHub Actions secret) to auto-deploy here on every backend push, mirroring FastAPI Cloud's own auto-deploy.
 - **The live frontend now points at this Dokploy backend** (`NEXT_PUBLIC_API_URL` updated on Vercel and redeployed, verified in the shipped JS bundle) — FastAPI Cloud is currently idle/unused, not decommissioned; worth revisiting once their outage clears.
+- **(2026-09-03) A second container, `ovigo-elasticsearch`, was added to the same VPS** for Sprint 27-28's free-text search (see that section above) — a plain `docker run`, not a Dokploy-managed application, attached to `dokploy-network` and reachable by the backend at `http://ovigo-elasticsearch:9200`. Port 9200 is bound to the VPS's own loopback only (`127.0.0.1:9200`), for occasional SSH-tunneled admin access — never exposed publicly.
 
 ## MVP Acceptance Criteria (from technical document §11)
 
