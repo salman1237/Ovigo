@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-03 (Sprint 25-26 Part 2b complete — Smart Recommendations Engine shipped)_
+_Last updated: 2026-09-03 (Sprint 25-26 Part 3 complete — Translation-Assisted Chat shipped)_
 
 ## Infrastructure & deployment status
 
@@ -473,6 +473,19 @@ Split given the sprint's breadth: Part 1 (this section) is iCal import/export; P
 **No new tables or migrations** — both strategies are computed on read from existing `LocationTag`/`BookingItem` data, nothing persisted.
 
 **Verified:** a Neon smoke test seeded three tours, three properties, and three vehicles at one shared location with deliberately-spread prices/categories, confirming `similar_*` always excludes the source listing and ranks the closer-priced/same-category candidate first; then booked a tour + a room type together twice (and a third, unrelated tour alone) through the full check-in/check-out lifecycle, confirming `frequently_booked_with_tour`/`frequently_booked_with_property` correctly surface each other, the unrelated booking never leaks in, and a listing with zero completed bookings returns an empty list rather than erroring. Confirmed all six new routes (`/similar` and `/frequently-booked-with` on tours/properties/vehicles) are registered in the live app and present in the production OpenAPI schema. `npm run lint` and `npm run build` both pass clean, all 44 routes generated. Both the Dokploy backend and Vercel frontend confirmed live post-deploy.
+
+### Sprint 25-26 Part 3 — Translation-Assisted Chat (Wk 49-52)
+
+| Task | Status |
+| --- | --- |
+| `POST /api/v1/chat/translate` (English <-> Bengali, on-demand) | Done |
+| Per-message "EN" / "বাং" translate buttons in the chat UI | Done |
+
+**Design:** uses `api.mymemory.translated.net` — a free, keyless translation API validated working for English<->Bengali earlier this sprint — via a new `core/translate.py` mirroring `core/fx.py`'s graceful-degradation shape (returns `None` on any failure rather than raising, so a translation hiccup never breaks the chat). Deliberately scoped to Ovigo's two primary languages only, not "translate to any language": the traveler base is overwhelmingly Bangladesh-based (Bengali) or international (English), and a bounded two-button toggle avoids needing a source-language auto-detection step this free API doesn't reliably offer. Translation is on-demand per message click, never persisted or auto-triggered on load — keeps volume well within MyMemory's free anonymous quota and keeps the original message the single source of truth.
+
+**No new tables or migrations.**
+
+**Verified:** `core/translate.py::translate_text` called directly against the live MyMemory API for both directions (English->Bengali and Bengali->English), confirming correct translations and a graceful `None` for empty input. Confirmed `POST /api/v1/chat/translate` is registered on the live app and reachable in production. `npm run lint` and `npm run build` both pass clean, all 44 routes generated. Both the Dokploy backend and Vercel frontend confirmed live post-deploy.
 
 ## Infrastructure note — Dokploy VPS backend (2026-09-03)
 
