@@ -50,6 +50,8 @@ class GuestCreate(BaseModel):
 class BookingCreate(BaseModel):
     items: list[BookingItemCreate]
     guests: list[GuestCreate] = []
+    redeem_points: int = 0
+    promo_code: str | None = None
 
 
 class BookingItemRead(BaseModel):
@@ -106,6 +108,8 @@ class BookingRead(BaseModel):
     total_amount: Decimal
     tax_service_amount: Decimal
     bundle_discount_amount: Decimal
+    loyalty_discount_amount: Decimal
+    promo_discount_amount: Decimal
     currency: str
     created_at: datetime
     items: list[BookingItemRead] = []

@@ -22,6 +22,15 @@ what's actually collected from the traveler (`total_amount`, post-discount)
 always equals the sum of every item's `partner_net_amount` plus Ovigo's
 (now-reduced) commission take — there's no shortfall, Ovigo is simply choosing
 to keep less per bundled booking to make the bundle attractive.
+
+Sprint 27-28 ("Loyalty, Mobile & Platform Maturity") adds two more
+`total_amount`-only deductions on the same principle: `loyalty_discount_amount`
+(see loyalty/models.py) when the traveler redeems reward points, and
+`promo_discount_amount` (see promotions/models.py) when an admin-issued promo
+code is applied. Both stack with `bundle_discount_amount` and with each other —
+bundle first, then promo, then loyalty points, each computed on the
+already-discounted running total — and neither ever touches `BookingItem.subtotal`
+for the same commission-basis-integrity reason.
 """
 import enum
 import uuid
@@ -77,6 +86,10 @@ class Booking(Base):
     # docstring for why this comes out of Ovigo's own commission margin rather
     # than any BookingItem.subtotal.
     bundle_discount_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0"))
+    # Same total_amount-only-deduction principle as bundle_discount_amount above —
+    # see this module's docstring and loyalty/models.py, promotions/models.py.
+    loyalty_discount_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0"))
+    promo_discount_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0"))
     currency: Mapped[str] = mapped_column(String(3), default="BDT")
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

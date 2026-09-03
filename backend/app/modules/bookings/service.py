@@ -31,8 +31,10 @@ from app.modules.bookings.models import (
 )
 from app.modules.bookings.schemas import BookingCreate, BookingItemCreate, FrontDeskBookingCreate
 from app.modules.fraud import service as fraud_service
+from app.modules.loyalty import service as loyalty_service
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.models import NotificationType
+from app.modules.promotions import service as promotions_service
 from app.modules.rentcar.models import Vehicle, VehicleAvailability, VehicleStatus
 from app.modules.stays import service as stays_service
 from app.modules.stays.models import AvailabilityCalendar, HousekeepingStatus, Property, PropertyStatus, Room, RoomType
@@ -219,11 +221,39 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
     bundle_discount_amount = (bundle_eligible_subtotal * bundle_discount_rate).quantize(Decimal("0.01"))
     total -= bundle_discount_amount
 
+    # Promo code, then loyalty points, each computed on the already-discounted
+    # running total — see bookings/models.py's module docstring for the stacking
+    # order and why both stay total_amount-only deductions. Both are only *validated*
+    # here (no mutation yet) since neither service should touch the account/redemption
+    # ledger until the booking row exists — see the two `apply_*` calls below.
+    promo_discount_amount = Decimal("0")
+    promo_code_row = None
+    if payload.promo_code:
+        promo_discount_amount, promo_code_row = await promotions_service.preview_redemption(
+            db, user, payload.promo_code, total
+        )
+        total -= promo_discount_amount
+
+    loyalty_discount_amount = Decimal("0")
+    if payload.redeem_points > 0:
+        loyalty_discount_amount = await loyalty_service.preview_redemption(db, user, payload.redeem_points, total)
+        total -= loyalty_discount_amount
+
     booking = Booking(
-        user_id=user.id, total_amount=total, tax_service_amount=tax_service_total, bundle_discount_amount=bundle_discount_amount
+        user_id=user.id,
+        total_amount=total,
+        tax_service_amount=tax_service_total,
+        bundle_discount_amount=bundle_discount_amount,
+        promo_discount_amount=promo_discount_amount,
+        loyalty_discount_amount=loyalty_discount_amount,
     )
     db.add(booking)
     await db.flush()
+
+    if promo_code_row is not None:
+        await promotions_service.apply_redemption(db, user, booking.id, promo_code_row, promo_discount_amount)
+    if payload.redeem_points > 0:
+        await loyalty_service.apply_redemption(db, user, booking.id, payload.redeem_points)
 
     for item, unit_price, subtotal in prepared:
         db.add(
@@ -328,6 +358,12 @@ async def _release_and_cancel(db: AsyncSession, booking: Booking, note: str | No
             await _release_vehicle(db, item.vehicle_id, item.check_in_date, item.check_out_date)
         item.status = BookingItemStatus.CANCELLED
 
+    if booking.loyalty_discount_amount and booking.loyalty_discount_amount > 0:
+        await loyalty_service.refund_redeemed_points(db, booking)
+    # Promo redemptions are deliberately NOT refunded on cancellation — see
+    # promotions/models.py's module docstring for why (prevents a book-cancel-rebook
+    # loop reusing a scarce, admin-controlled code).
+
     await _add_status_history(db, booking, BookingStatus.CANCELLED, note=note)
     booking.status = BookingStatus.CANCELLED
     await notifications_service.notify(
@@ -388,6 +424,7 @@ async def _mark_checked_out(db: AsyncSession, booking: Booking) -> None:
     await _add_status_history(db, booking, BookingStatus.COMPLETED, note="Auto-completed on checkout")
     booking.status = BookingStatus.COMPLETED
     await commissions_service.mark_payable_for_booking(db, booking)
+    await loyalty_service.award_points_for_booking(db, booking)
     await notifications_service.notify(
         db,
         user_id=booking.user_id,

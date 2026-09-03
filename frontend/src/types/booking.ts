@@ -30,6 +30,8 @@ export interface Booking {
   total_amount: string;
   tax_service_amount: string;
   bundle_discount_amount: string;
+  loyalty_discount_amount: string;
+  promo_discount_amount: string;
   currency: string;
   created_at: string;
   items: BookingItem[];

@@ -40,6 +40,7 @@ from app.modules.fraud.router import router as fraud_router
 from app.modules.fx.router import router as fx_router
 from app.modules.guides.router import router as guides_router
 from app.modules.locations.router import router as locations_router
+from app.modules.loyalty.router import router as loyalty_router
 from app.modules.notifications.router import admin_router as notifications_admin_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.partners.router import router as partners_router
@@ -48,6 +49,8 @@ from app.modules.payments.router import router as payments_router
 from app.modules.payouts.router import admin_router as payouts_admin_router
 from app.modules.payouts.router import router as payouts_router
 from app.modules.profiles.router import router as profiles_router
+from app.modules.promotions.router import admin_router as promotions_admin_router
+from app.modules.promotions.router import router as promotions_router
 from app.modules.rentcar.router import drivers_router as rentcar_drivers_router
 from app.modules.rentcar.router import router as rentcar_router
 from app.modules.reviews.router import router as reviews_router
@@ -135,6 +138,9 @@ app.include_router(disputes_router)
 app.include_router(disputes_admin_router)
 app.include_router(fraud_router)
 app.include_router(fx_router)
+app.include_router(loyalty_router)
+app.include_router(promotions_router)
+app.include_router(promotions_admin_router)
 app.include_router(admin_router)
 
 

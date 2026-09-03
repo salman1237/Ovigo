@@ -72,6 +72,14 @@ function BookingDetailContent() {
           Package discount applied: −{formatMoney(booking.bundle_discount_amount)} for booking multiple services together
         </p>
       )}
+      {Number(booking.promo_discount_amount) > 0 && (
+        <p className="text-xs font-medium text-emerald-600">Promo code applied: −{formatMoney(booking.promo_discount_amount)}</p>
+      )}
+      {Number(booking.loyalty_discount_amount) > 0 && (
+        <p className="text-xs font-medium text-emerald-600">
+          Loyalty points redeemed: −{formatMoney(booking.loyalty_discount_amount)}
+        </p>
+      )}
 
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 

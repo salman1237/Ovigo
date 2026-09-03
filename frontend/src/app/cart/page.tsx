@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { ShoppingCart, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -15,6 +16,8 @@ import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
 import { cartItemTotal, useCartStore } from "@/stores/cart-store";
 import type { Booking } from "@/types/booking";
+import type { LoyaltyAccount } from "@/types/loyalty";
+import type { PromoCodeValidateResult } from "@/types/promotions";
 
 export default function CartPage() {
   const user = useAuthStore((s) => s.user);
@@ -24,10 +27,42 @@ export default function CartPage() {
   const [guestNames, setGuestNames] = useState<string[]>([""]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [redeemPoints, setRedeemPoints] = useState(0);
 
   const total = items.reduce((sum, item) => sum + cartItemTotal(item), 0);
   const distinctTypes = new Set(items.map((item) => item.item_type));
   const bundleDiscountRate = distinctTypes.size >= 3 ? 0.1 : distinctTypes.size === 2 ? 0.05 : 0;
+  const afterBundle = total * (1 - bundleDiscountRate);
+
+  const { data: loyaltyAccount } = useQuery({
+    queryKey: ["loyalty", "me"],
+    queryFn: () => apiClient.get<LoyaltyAccount>("/api/v1/loyalty/me", { auth: true }),
+    enabled: !!user,
+  });
+
+  const { data: promoValidation } = useQuery({
+    queryKey: ["promo-validate", promoCode],
+    queryFn: () => apiClient.get<PromoCodeValidateResult>(`/api/v1/promotions/validate/${promoCode.trim()}`),
+    enabled: promoCode.trim().length >= 3,
+    retry: false,
+  });
+
+  const promoDiscount =
+    promoValidation?.is_valid && promoValidation.discount_value
+      ? Math.min(
+          promoValidation.discount_type === "percentage"
+            ? (afterBundle * Number(promoValidation.discount_value)) / 100
+            : Number(promoValidation.discount_value),
+          afterBundle
+        )
+      : 0;
+  const afterPromo = afterBundle - promoDiscount;
+
+  const pointValueBdt = Number(loyaltyAccount?.point_value_bdt ?? 1);
+  const maxRedeemablePoints = loyaltyAccount ? Math.min(loyaltyAccount.points_balance, Math.floor(afterPromo / pointValueBdt)) : 0;
+  const loyaltyDiscount = Math.min(redeemPoints * pointValueBdt, afterPromo);
+  const finalTotal = afterPromo - loyaltyDiscount;
 
   const checkout = async () => {
     setError(null);
@@ -46,6 +81,8 @@ export default function CartPage() {
             quantity: item.quantity,
           })),
           guests: guestNames.filter((n) => n.trim()).map((full_name) => ({ full_name })),
+          redeem_points: redeemPoints,
+          promo_code: promoValidation?.is_valid ? promoCode.trim().toUpperCase() : undefined,
         },
         { auth: true }
       );
@@ -157,12 +194,46 @@ export default function CartPage() {
             </div>
           </div>
 
-          <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
-            {bundleDiscountRate > 0 ? (
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <div className="flex-1">
+              <Input
+                label="Promo code"
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value)}
+                placeholder="e.g. WELCOME10"
+              />
+              {promoCode.trim().length >= 3 && promoValidation && (
+                <p className={`mt-1 text-xs ${promoValidation.is_valid ? "text-emerald-600" : "text-red-600"}`}>
+                  {promoValidation.is_valid
+                    ? `Valid — ${
+                        promoValidation.discount_type === "percentage"
+                          ? `${promoValidation.discount_value}% off`
+                          : `৳${promoValidation.discount_value} off`
+                      }`
+                    : promoValidation.reason}
+                </p>
+              )}
+            </div>
+            {!!loyaltyAccount?.points_balance && (
+              <div className="flex-1">
+                <Input
+                  type="number"
+                  label={`Redeem points (you have ${loyaltyAccount.points_balance})`}
+                  min={0}
+                  max={maxRedeemablePoints}
+                  value={redeemPoints}
+                  onChange={(e) => setRedeemPoints(Math.max(0, Math.min(Number(e.target.value), maxRedeemablePoints)))}
+                />
+              </div>
+            )}
+          </div>
+
+          <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+            {bundleDiscountRate > 0 || promoDiscount > 0 || loyaltyDiscount > 0 ? (
               <>
                 Total: <span className="text-zinc-400 line-through">{formatMoney(total.toFixed(2))}</span>{" "}
-                <span className="font-semibold text-emerald-600">{formatMoney((total * (1 - bundleDiscountRate)).toFixed(2))}</span>{" "}
-                <ApproxPrice amountBDT={total * (1 - bundleDiscountRate)} />
+                <span className="font-semibold text-emerald-600">{formatMoney(finalTotal.toFixed(2))}</span>{" "}
+                <ApproxPrice amountBDT={finalTotal} />
               </>
             ) : (
               <>

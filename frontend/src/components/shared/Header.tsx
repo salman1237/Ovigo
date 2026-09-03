@@ -5,6 +5,7 @@ import {
   Briefcase,
   Car,
   ChevronDown,
+  Coins,
   Compass,
   LayoutDashboard,
   LogOut,
@@ -168,6 +169,7 @@ export function Header() {
                   )}
                 >
                   <DropdownLink href="/dashboard/profile" label="My Profile" icon={UserIcon} />
+                  <DropdownLink href="/account/loyalty" label="Loyalty Rewards" icon={Coins} />
                   <DropdownLink href="/account/partner" label="Become a Partner" icon={Briefcase} />
                   {isAdmin && <DropdownLink href="/admin/partners" label="Admin" icon={ShieldCheck} />}
                   <div className="my-1 h-px bg-zinc-100 dark:bg-zinc-800" />
