@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Flag, MapPin, Paperclip, Send, ShieldAlert } from "lucide-react";
+import { Flag, Languages, MapPin, Paperclip, Send, ShieldAlert } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -199,6 +199,26 @@ export default function ChatThreadPage() {
 }
 
 function MessageBubble({ message, isMine, onReport }: { message: ChatMessage; isMine: boolean; onReport: () => void }) {
+  const [translated, setTranslated] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+
+  const translate = async (targetLang: "en" | "bn") => {
+    if (!message.body) return;
+    setTranslating(true);
+    try {
+      const result = await apiClient.post<{ translated_text: string | null }>(
+        "/api/v1/chat/translate",
+        { text: message.body, target_lang: targetLang },
+        { auth: true }
+      );
+      setTranslated(result.translated_text);
+    } catch {
+      setTranslated(null);
+    } finally {
+      setTranslating(false);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -229,14 +249,31 @@ function MessageBubble({ message, isMine, onReport }: { message: ChatMessage; is
           <ChatAttachmentImage threadId={message.thread_id} attachmentId={message.attachment.id} fileName={message.attachment.file_name} />
         )}
         {message.was_redacted && <p className="mt-1 text-[10px] opacity-70">Contact info removed before booking</p>}
+        {translated && <p className="mt-1.5 border-t border-white/20 pt-1.5 text-xs italic opacity-90">{translated}</p>}
       </div>
-      <button
-        onClick={onReport}
-        aria-label="Report message"
-        className="mt-0.5 flex items-center gap-1 text-[10px] text-zinc-400 opacity-0 group-hover:opacity-100"
-      >
-        <Flag className="h-3 w-3" /> Report
-      </button>
+      <div className="mt-0.5 flex items-center gap-3 text-[10px] text-zinc-400 opacity-0 group-hover:opacity-100">
+        {message.message_type === "text" && (
+          <>
+            <button
+              onClick={() => translate("en")}
+              disabled={translating}
+              className="flex items-center gap-1 hover:text-primary-600 disabled:opacity-50 dark:hover:text-primary-400"
+            >
+              <Languages className="h-3 w-3" /> EN
+            </button>
+            <button
+              onClick={() => translate("bn")}
+              disabled={translating}
+              className="flex items-center gap-1 hover:text-primary-600 disabled:opacity-50 dark:hover:text-primary-400"
+            >
+              <Languages className="h-3 w-3" /> বাং
+            </button>
+          </>
+        )}
+        <button onClick={onReport} aria-label="Report message" className="flex items-center gap-1 hover:text-red-500">
+          <Flag className="h-3 w-3" /> Report
+        </button>
+      </div>
     </motion.div>
   );
 }

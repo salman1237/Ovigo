@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import storage
 from app.core.permissions import require_admin
+from app.core.translate import translate_text
 from app.database import get_db
 from app.modules.auth.utils import get_current_user
 from app.modules.chat import service
@@ -18,6 +19,8 @@ from app.modules.chat.schemas import (
     ChatMessageReport,
     ChatThreadCreate,
     ChatThreadRead,
+    TranslateRequest,
+    TranslateResponse,
 )
 from app.modules.users.models import User
 
@@ -108,6 +111,11 @@ async def report_message(
     db: AsyncSession = Depends(get_db),
 ):
     await service.report_message(db, user, message_id, payload)
+
+
+@router.post("/translate", response_model=TranslateResponse)
+async def translate_message(payload: TranslateRequest, user: User = Depends(get_current_user)):
+    return TranslateResponse(translated_text=await translate_text(payload.text, payload.target_lang))
 
 
 @router.websocket("/ws/{thread_id}")

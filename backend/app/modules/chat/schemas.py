@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -78,6 +79,15 @@ class ChatThreadRead(BaseModel):
 
 class ChatMessageReport(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
+
+
+class TranslateRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
+    target_lang: Literal["en", "bn"]
+
+
+class TranslateResponse(BaseModel):
+    translated_text: str | None
 
 
 class AdminChatThreadRead(BaseModel):
