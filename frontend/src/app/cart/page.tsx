@@ -26,6 +26,8 @@ export default function CartPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const total = items.reduce((sum, item) => sum + cartItemTotal(item), 0);
+  const distinctTypes = new Set(items.map((item) => item.item_type));
+  const bundleDiscountRate = distinctTypes.size >= 3 ? 0.1 : distinctTypes.size === 2 ? 0.05 : 0;
 
   const checkout = async () => {
     setError(null);
@@ -78,8 +80,21 @@ export default function CartPage() {
     <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
       <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Cart</h1>
       <p className="mt-1 text-sm text-zinc-500">
-        Combine a tour, a stay, and a vehicle rental into one checkout — one payment, one booking record.
+        Combine a tour, a stay, and a vehicle rental into one checkout — one payment, one booking record, and an
+        automatic package discount.
       </p>
+
+      {bundleDiscountRate > 0 && (
+        <p className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+          You&apos;ve combined {distinctTypes.size} different service types — a {(bundleDiscountRate * 100).toFixed(0)}% package
+          discount will be applied automatically at checkout.
+        </p>
+      )}
+      {distinctTypes.size === 1 && items.length > 0 && (
+        <p className="mt-3 text-xs text-zinc-400">
+          Tip: add a tour, stay, or vehicle rental of a different type to unlock an automatic package discount.
+        </p>
+      )}
 
       {items.length === 0 && (
         <div className="mt-8">
@@ -143,7 +158,17 @@ export default function CartPage() {
           </div>
 
           <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
-            Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total.toFixed(2))}</span> <ApproxPrice amountBDT={total} />
+            {bundleDiscountRate > 0 ? (
+              <>
+                Total: <span className="text-zinc-400 line-through">{formatMoney(total.toFixed(2))}</span>{" "}
+                <span className="font-semibold text-emerald-600">{formatMoney((total * (1 - bundleDiscountRate)).toFixed(2))}</span>{" "}
+                <ApproxPrice amountBDT={total * (1 - bundleDiscountRate)} />
+              </>
+            ) : (
+              <>
+                Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total.toFixed(2))}</span> <ApproxPrice amountBDT={total} />
+              </>
+            )}
           </p>
           {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
           <Button onClick={checkout} loading={submitting} className="mt-4">

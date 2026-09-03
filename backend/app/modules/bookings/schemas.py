@@ -105,6 +105,7 @@ class BookingRead(BaseModel):
     status: BookingStatus
     total_amount: Decimal
     tax_service_amount: Decimal
+    bundle_discount_amount: Decimal
     currency: str
     created_at: datetime
     items: list[BookingItemRead] = []

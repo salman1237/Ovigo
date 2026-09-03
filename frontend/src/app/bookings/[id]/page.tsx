@@ -67,6 +67,11 @@ function BookingDetailContent() {
       {Number(booking.tax_service_amount) > 0 && (
         <p className="text-xs text-zinc-400">Includes {formatMoney(booking.tax_service_amount)} tax &amp; service charge</p>
       )}
+      {Number(booking.bundle_discount_amount) > 0 && (
+        <p className="text-xs font-medium text-emerald-600">
+          Package discount applied: −{formatMoney(booking.bundle_discount_amount)} for booking multiple services together
+        </p>
+      )}
 
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 

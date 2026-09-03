@@ -44,6 +44,15 @@ _EAGER = (
     selectinload(Booking.guests),
 )
 
+# Dynamic packaging (Sprint 25-26): an automatic discount for a booking that spans
+# this many distinct bookable item types (tour_departure/room_type/vehicle_rental —
+# custom_bid is never bundle-eligible, see BookingItemCreate's own validator that
+# already rejects it on this endpoint). Keyed by distinct-type count, not a flat
+# rate, so bundling all three verticals is worth meaningfully more than just two —
+# see bookings/models.py's module docstring for how this interacts with commission.
+BUNDLE_ELIGIBLE_TYPES = {BookingItemType.TOUR_DEPARTURE, BookingItemType.ROOM_TYPE, BookingItemType.VEHICLE_RENTAL}
+BUNDLE_DISCOUNT_RATES: dict[int, Decimal] = {2: Decimal("0.05"), 3: Decimal("0.10")}
+
 
 async def _reserve_tour_departure(db: AsyncSession, item: BookingItemCreate) -> tuple[Decimal, Decimal]:
     result = await db.execute(
@@ -182,6 +191,7 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
 
     total = Decimal("0")
     tax_service_total = Decimal("0")
+    bundle_eligible_subtotal = Decimal("0")
     prepared: list[tuple[BookingItemCreate, Decimal, Decimal]] = []
     for item in payload.items:
         tax_service = Decimal("0")
@@ -201,8 +211,17 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
         prepared.append((item, unit_price, subtotal))
         total += subtotal + tax_service
         tax_service_total += tax_service
+        if item.item_type in BUNDLE_ELIGIBLE_TYPES:
+            bundle_eligible_subtotal += subtotal
 
-    booking = Booking(user_id=user.id, total_amount=total, tax_service_amount=tax_service_total)
+    distinct_bundle_types = {item.item_type for item in payload.items} & BUNDLE_ELIGIBLE_TYPES
+    bundle_discount_rate = BUNDLE_DISCOUNT_RATES.get(len(distinct_bundle_types), Decimal("0"))
+    bundle_discount_amount = (bundle_eligible_subtotal * bundle_discount_rate).quantize(Decimal("0.01"))
+    total -= bundle_discount_amount
+
+    booking = Booking(
+        user_id=user.id, total_amount=total, tax_service_amount=tax_service_total, bundle_discount_amount=bundle_discount_amount
+    )
     db.add(booking)
     await db.flush()
 

@@ -5,7 +5,23 @@ can be marked complete independently of an attached stay (technical document §1
 Currency: BDT only for now — this is a Bangladesh-focused marketplace and every
 price field elsewhere (tour base_price, room_type base_price, ...) is already an
 undated plain Decimal with no currency column, so there's nothing to convert.
-Multi-currency is explicitly a later phase in the technical document.
+Sprint 25-26 added a display-only currency converter for browsing (see
+core/fx.py) — every booking here is still charged and settled in BDT.
+
+Sprint 25-26 ("Dynamic packaging" in the technical document's phase plan) adds
+`bundle_discount_amount`: a booking spanning 2+ distinct bookable item types
+(tour + stay, tour + vehicle, stay + vehicle, or all three) gets an automatic
+percentage discount off its total — see bookings/service.py::create_booking for
+the exact rates. Deliberate design: the discount is subtracted from
+`total_amount` only, never from any `BookingItem.subtotal` — so
+`Commission.gross_amount`/`commission_amount` (both derived from `subtotal`,
+see stays/models.py's docstring on the same principle for tax/service charges)
+are computed on the *full, undiscounted* price. Partners are paid in full;
+Ovigo's own commission margin absorbs the discount. The math still balances:
+what's actually collected from the traveler (`total_amount`, post-discount)
+always equals the sum of every item's `partner_net_amount` plus Ovigo's
+(now-reduced) commission take — there's no shortfall, Ovigo is simply choosing
+to keep less per bundled booking to make the bundle attractive.
 """
 import enum
 import uuid
@@ -57,6 +73,10 @@ class Booking(Base):
     # room revenue. Deliberately not part of any BookingItem.subtotal since
     # Commission.gross_amount is derived from subtotal (see stays/models.py docstring).
     tax_service_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0"))
+    # Subtracted from total_amount, broken out for display only — see module
+    # docstring for why this comes out of Ovigo's own commission margin rather
+    # than any BookingItem.subtotal.
+    bundle_discount_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0"))
     currency: Mapped[str] = mapped_column(String(3), default="BDT")
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
