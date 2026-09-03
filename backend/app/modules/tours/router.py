@@ -5,7 +5,7 @@ from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import storage
+from app.core import recommendations, storage
 from app.core.permissions import require_approved_role
 from app.database import get_db
 from app.modules.auth.utils import get_current_user_optional
@@ -288,3 +288,15 @@ async def set_tour_locations(
 @router.get("/{tour_id}/locations", response_model=list[LocationTagRead])
 async def get_tour_locations(tour_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     return await locations_service.get_tags(db, TaggableEntityType.TOUR, tour_id)
+
+
+@router.get("/{tour_id}/similar", response_model=list[TourSummary])
+async def get_similar_tours(tour_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    tour = await service.get_tour_for_view(db, tour_id, None)
+    return await service.similar_tours(db, tour)
+
+
+@router.get("/{tour_id}/frequently-booked-with", response_model=list[recommendations.RecommendedItem])
+async def get_tour_frequently_booked_with(tour_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    tour = await service.get_tour_for_view(db, tour_id, None)
+    return await recommendations.frequently_booked_with_tour(db, tour)

@@ -6,7 +6,9 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 
 import { ApproxPrice } from "@/components/shared/ApproxPrice";
+import { FrequentlyBookedWith } from "@/components/shared/FrequentlyBookedWith";
 import { MessageButton } from "@/components/shared/MessageButton";
+import { SimilarVehicles } from "@/components/shared/SimilarVehicles";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -45,6 +47,9 @@ export default function VehicleDetailPage() {
       </div>
 
       <BookVehicleSection vehicle={vehicle} />
+
+      <FrequentlyBookedWith endpoint={`/api/v1/vehicles/${vehicle.id}/frequently-booked-with`} />
+      <SimilarVehicles vehicleId={vehicle.id} />
     </div>
   );
 }

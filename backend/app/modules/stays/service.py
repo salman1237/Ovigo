@@ -185,6 +185,57 @@ async def list_published_properties(db: AsyncSession, location_ids: list[uuid.UU
     return await rank_properties(db, properties, location_ids)
 
 
+SIMILAR_PROPERTIES_LIMIT = 6
+
+
+async def similar_properties(db: AsyncSession, prop: Property, limit: int = SIMILAR_PROPERTIES_LIMIT) -> list[Property]:
+    """Content-based "similar properties" (Sprint 25-26 personalization): other
+    PUBLISHED properties sharing at least one of `prop`'s own location tags, ranked
+    by same-property-type match plus price closeness (cheapest room type of each) —
+    see core/recommendations.py's module docstring for why this scoring lives
+    per-module rather than centrally. Requires `prop.room_types` already eager-loaded
+    (true of anything returned by this module's `_EAGER`-loading getters)."""
+    from app.modules.locations.models import LocationTag
+
+    own_tags = await locations_service.get_tags(db, TaggableEntityType.PROPERTY, prop.id)
+    location_ids = [t.location_id for t in own_tags]
+    if not location_ids:
+        return []
+
+    result = await db.execute(
+        select(Property)
+        .join(
+            LocationTag,
+            (LocationTag.entity_id == Property.id) & (LocationTag.entity_type == TaggableEntityType.PROPERTY),
+        )
+        .where(
+            Property.status == PropertyStatus.PUBLISHED,
+            Property.id != prop.id,
+            LocationTag.location_id.in_(location_ids),
+        )
+        .options(*_EAGER)
+        .distinct()
+    )
+    candidates = list(result.scalars().all())
+    if not candidates:
+        return []
+
+    own_price = min((rt.base_price for rt in prop.room_types), default=None)
+
+    def score(candidate: Property) -> float:
+        type_match = 1.0 if candidate.property_type == prop.property_type else 0.0
+        candidate_price = min((rt.base_price for rt in candidate.room_types), default=None)
+        if own_price and candidate_price:
+            relative_gap = abs(float(candidate_price - own_price)) / float(own_price)
+            price_score = max(0.0, 1.0 - relative_gap)
+        else:
+            price_score = 0.5
+        return 0.5 * type_match + 0.5 * price_score
+
+    candidates.sort(key=score, reverse=True)
+    return candidates[:limit]
+
+
 async def update_property(
     db: AsyncSession, role: PartnerRole, property_id: uuid.UUID, payload: PropertyUpdate
 ) -> Property:

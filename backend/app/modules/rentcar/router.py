@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import recommendations
 from app.core.permissions import require_approved_role
 from app.database import get_db
 from app.modules.auth.utils import get_current_user_optional
@@ -132,6 +133,18 @@ async def set_vehicle_locations(
 @router.get("/{vehicle_id}/locations", response_model=list[LocationTagRead])
 async def get_vehicle_locations(vehicle_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     return await locations_service.get_tags(db, TaggableEntityType.VEHICLE, vehicle_id)
+
+
+@router.get("/{vehicle_id}/similar", response_model=list[VehicleRead])
+async def get_similar_vehicles(vehicle_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    vehicle = await service.get_vehicle_for_view(db, vehicle_id, None)
+    return await service.similar_vehicles(db, vehicle)
+
+
+@router.get("/{vehicle_id}/frequently-booked-with", response_model=list[recommendations.RecommendedItem])
+async def get_vehicle_frequently_booked_with(vehicle_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    vehicle = await service.get_vehicle_for_view(db, vehicle_id, None)
+    return await recommendations.frequently_booked_with_vehicle(db, vehicle)
 
 
 @drivers_router.post("", response_model=DriverRead, status_code=201)

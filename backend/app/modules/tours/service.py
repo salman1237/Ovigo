@@ -180,6 +180,44 @@ async def list_published_tours(db: AsyncSession, location_ids: list[uuid.UUID] |
     return tours
 
 
+SIMILAR_TOURS_LIMIT = 6
+
+
+async def similar_tours(db: AsyncSession, tour: Tour, limit: int = SIMILAR_TOURS_LIMIT) -> list[Tour]:
+    """Content-based "similar tours" (Sprint 25-26 personalization): other PUBLISHED
+    tours sharing at least one of `tour`'s own location tags, ranked by price
+    closeness to `tour.base_price` — see core/recommendations.py's module docstring
+    for why this scoring lives per-module rather than centrally. Tours have no
+    category field, so price is the only similarity signal here (properties/vehicles
+    add a same-category bonus)."""
+    from app.modules.locations.models import LocationTag
+
+    own_tags = await locations_service.get_tags(db, TaggableEntityType.TOUR, tour.id)
+    location_ids = [t.location_id for t in own_tags]
+    if not location_ids:
+        return []
+
+    result = await db.execute(
+        select(Tour)
+        .join(LocationTag, (LocationTag.entity_id == Tour.id) & (LocationTag.entity_type == TaggableEntityType.TOUR))
+        .where(Tour.status == TourStatus.PUBLISHED, Tour.id != tour.id, LocationTag.location_id.in_(location_ids))
+        .options(*_EAGER)
+        .distinct()
+    )
+    candidates = list(result.scalars().all())
+    if not candidates:
+        return []
+
+    def price_closeness(candidate: Tour) -> float:
+        if tour.base_price == 0:
+            return 0.5
+        relative_gap = abs(float(candidate.base_price - tour.base_price)) / float(tour.base_price)
+        return max(0.0, 1.0 - relative_gap)
+
+    candidates.sort(key=price_closeness, reverse=True)
+    return candidates[:limit]
+
+
 async def update_tour(db: AsyncSession, role: PartnerRole, tour_id: uuid.UUID, payload: TourUpdate) -> Tour:
     tour = await get_own_tour_or_404(db, role, tour_id)
     for field, value in payload.model_dump(exclude_unset=True).items():

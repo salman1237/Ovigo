@@ -7,8 +7,10 @@ import { useState } from "react";
 import Link from "next/link";
 
 import { ApproxPrice } from "@/components/shared/ApproxPrice";
+import { FrequentlyBookedWith } from "@/components/shared/FrequentlyBookedWith";
 import { MessageButton } from "@/components/shared/MessageButton";
 import { ReviewsList } from "@/components/shared/ReviewsList";
+import { SimilarTours } from "@/components/shared/SimilarTours";
 import { TrustBadges } from "@/components/shared/TrustBadges";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -128,6 +130,9 @@ export default function TourDetailPage() {
           <ReviewsList tourId={tour.id} />
         </div>
       </div>
+
+      <FrequentlyBookedWith endpoint={`/api/v1/tours/${tour.id}/frequently-booked-with`} />
+      <SimilarTours tourId={tour.id} />
     </div>
   );
 }

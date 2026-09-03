@@ -7,8 +7,10 @@ import { useState } from "react";
 import Link from "next/link";
 
 import { ApproxPrice } from "@/components/shared/ApproxPrice";
+import { FrequentlyBookedWith } from "@/components/shared/FrequentlyBookedWith";
 import { MessageButton } from "@/components/shared/MessageButton";
 import { ReviewsList } from "@/components/shared/ReviewsList";
+import { SimilarProperties } from "@/components/shared/SimilarProperties";
 import { TrustBadges } from "@/components/shared/TrustBadges";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -92,6 +94,9 @@ export default function StayDetailPage() {
           <ReviewsList propertyId={property.id} />
         </div>
       </div>
+
+      <FrequentlyBookedWith endpoint={`/api/v1/properties/${property.id}/frequently-booked-with`} />
+      <SimilarProperties propertyId={property.id} />
     </div>
   );
 }

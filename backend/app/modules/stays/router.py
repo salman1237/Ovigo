@@ -6,7 +6,7 @@ from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import storage
+from app.core import recommendations, storage
 from app.core.permissions import require_approved_role
 from app.database import get_db
 from app.modules.auth.utils import get_current_user, get_current_user_optional
@@ -275,6 +275,18 @@ async def set_property_locations(
 @router.get("/{property_id}/locations", response_model=list[LocationTagRead])
 async def get_property_locations(property_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     return await locations_service.get_tags(db, TaggableEntityType.PROPERTY, property_id)
+
+
+@router.get("/{property_id}/similar", response_model=list[PropertySummary])
+async def get_similar_properties(property_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    prop = await service.get_property_for_view(db, property_id, None)
+    return await service.similar_properties(db, prop)
+
+
+@router.get("/{property_id}/frequently-booked-with", response_model=list[recommendations.RecommendedItem])
+async def get_property_frequently_booked_with(property_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    prop = await service.get_property_for_view(db, property_id, None)
+    return await recommendations.frequently_booked_with_property(db, prop)
 
 
 @router.post("/{property_id}/staff", response_model=StaffRead, status_code=201)

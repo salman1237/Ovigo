@@ -144,6 +144,48 @@ async def list_published_vehicles(db: AsyncSession, location_ids: list[uuid.UUID
     return await rank_vehicles(db, vehicles, location_ids)
 
 
+SIMILAR_VEHICLES_LIMIT = 6
+
+
+async def similar_vehicles(db: AsyncSession, vehicle: Vehicle, limit: int = SIMILAR_VEHICLES_LIMIT) -> list[Vehicle]:
+    """Content-based "similar vehicles" (Sprint 25-26 personalization): other
+    PUBLISHED vehicles sharing at least one of `vehicle`'s own location tags, ranked
+    by same-vehicle-type match plus price closeness — see core/recommendations.py's
+    module docstring for why this scoring lives per-module rather than centrally."""
+    own_tags = await locations_service.get_tags(db, TaggableEntityType.VEHICLE, vehicle.id)
+    location_ids = [t.location_id for t in own_tags]
+    if not location_ids:
+        return []
+
+    result = await db.execute(
+        select(Vehicle)
+        .join(
+            LocationTag, (LocationTag.entity_id == Vehicle.id) & (LocationTag.entity_type == TaggableEntityType.VEHICLE)
+        )
+        .where(
+            Vehicle.status == VehicleStatus.PUBLISHED,
+            Vehicle.id != vehicle.id,
+            LocationTag.location_id.in_(location_ids),
+        )
+        .distinct()
+    )
+    candidates = list(result.scalars().all())
+    if not candidates:
+        return []
+
+    def score(candidate: Vehicle) -> float:
+        type_match = 1.0 if candidate.vehicle_type == vehicle.vehicle_type else 0.0
+        if vehicle.price_per_day:
+            relative_gap = abs(float(candidate.price_per_day - vehicle.price_per_day)) / float(vehicle.price_per_day)
+            price_score = max(0.0, 1.0 - relative_gap)
+        else:
+            price_score = 0.5
+        return 0.5 * type_match + 0.5 * price_score
+
+    candidates.sort(key=score, reverse=True)
+    return candidates[:limit]
+
+
 async def update_vehicle(db: AsyncSession, role: PartnerRole, vehicle_id: uuid.UUID, payload: VehicleUpdate) -> Vehicle:
     vehicle = await get_own_vehicle_or_404(db, role, vehicle_id)
     if vehicle.status == VehicleStatus.PENDING_REVIEW:
