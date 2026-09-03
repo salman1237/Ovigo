@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-03 (Sprint 25-26 Part 1 complete — Multi-Currency Display & International Destinations shipped)_
+_Last updated: 2026-09-03 (Sprint 25-26 Part 2a complete — Dynamic Packaging shipped)_
 
 ## Infrastructure & deployment status
 
@@ -441,6 +441,23 @@ Split given the sprint's breadth: Part 1 (this section) is iCal import/export; P
 **No new tables** — FX rates aren't persisted; the location seed script only adds rows (idempotent, skips existing slugs by design).
 
 **Verified:** the live FX endpoint returns real current rates; the seeded international locations appear correctly in the existing locations-hierarchy endpoint (proving the tree is genuinely country-agnostic, not just in theory). `npm run lint` and `npm run build` both pass clean, all 44 routes generated. Both the Dokploy backend and Vercel frontend confirmed live post-deploy (GitHub Actions → Dokploy auto-deploy verified green).
+
+### Sprint 25-26 Part 2a — Dynamic Packaging (Bundle Discount) (Wk 49-52)
+
+| Task | Status |
+| --- | --- |
+| Bundle-eligible item types (tour departure, room type, vehicle rental) | Done |
+| Discount tiers: 2 distinct types → 5% off, 3 distinct types → 10% off | Done |
+| `bookings.bundle_discount_amount` column + migration | Done |
+| `create_booking` computes and applies the discount at checkout | Done |
+| Cart page: live discount preview banner + strikethrough total | Done |
+| Booking detail page: discount line item | Done |
+
+**Design:** the discount is subtracted only from `Booking.total_amount`, never from any `BookingItem.subtotal`. This preserves the commission-basis-integrity rule established earlier this project (taxes/service charges added, and now bundle discounts subtracted, both bypass `subtotal`): `Commission.gross_amount` is always computed on the full undiscounted subtotal, so partners are paid in full regardless of the promotion, and Ovigo's own commission margin absorbs the discount's cost. The discount rate is keyed off the count of *distinct* bundle-eligible item types in the booking (not raw item count), so two room bookings of the same type never trigger it — only genuinely combining different service categories does.
+
+**New column:** `bookings.bundle_discount_amount` (`Numeric(10,2)`, default `0`) — added via migration `0efda2ae6204` with an explicit `server_default='0'` (required for a NOT NULL column against a table with existing rows, per the Alembic lesson learned earlier this project). Applied successfully to Neon.
+
+**Verified:** a Neon smoke test covering single-type (no discount), two-type (5% off, tour+room), and three-type (10% off, tour+room+vehicle) bookings — confirming exact discount amounts, that every `BookingItem.subtotal` stays at full price, that a same-type-only booking with `quantity > 1` never triggers a discount, and that `Commission.gross_amount` for all three items matches the full undiscounted subtotal after walking a real booking through check-in/check-out. Frontend cart page shows a live discount-eligibility banner as items are added and a strikethrough-total view once eligible; booking detail page shows the applied discount line. `npm run lint` and `npm run build` both pass clean, all 44 routes generated. Both the Dokploy backend and Vercel frontend confirmed live post-deploy.
 
 ## Infrastructure note — Dokploy VPS backend (2026-09-03)
 
