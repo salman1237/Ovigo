@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import Link from "next/link";
 
+import { ApproxPrice } from "@/components/shared/ApproxPrice";
 import { MessageButton } from "@/components/shared/MessageButton";
 import { ReviewsList } from "@/components/shared/ReviewsList";
 import { TrustBadges } from "@/components/shared/TrustBadges";
@@ -39,7 +40,7 @@ export default function TourDetailPage() {
     <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
       <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{tour.title}</h1>
       <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">
-        {tour.duration_days} days · from {formatMoney(tour.base_price)} · up to {tour.max_group_size} people
+        {tour.duration_days} days · from {formatMoney(tour.base_price)} <ApproxPrice amountBDT={tour.base_price} /> · up to {tour.max_group_size} people
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <TrustBadges entityType="tour" entityId={tour.id} />
@@ -236,7 +237,7 @@ function BookTourSection({ tour }: { tour: Tour }) {
           ))}
         </div>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span>
+          Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span> <ApproxPrice amountBDT={total} />
         </p>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex flex-wrap items-center gap-3">

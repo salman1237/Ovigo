@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import Link from "next/link";
 
+import { ApproxPrice } from "@/components/shared/ApproxPrice";
 import { MessageButton } from "@/components/shared/MessageButton";
 import { ReviewsList } from "@/components/shared/ReviewsList";
 import { TrustBadges } from "@/components/shared/TrustBadges";
@@ -198,7 +199,7 @@ function BookStaySection({ property }: { property: Property }) {
         </div>
         {nights > 0 && (
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            {nights} night(s) × {quantity} room(s) — Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span>
+            {nights} night(s) × {quantity} room(s) — Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span> <ApproxPrice amountBDT={total} />
           </p>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}

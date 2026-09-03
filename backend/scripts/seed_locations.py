@@ -35,6 +35,26 @@ SEED_DATA = [
         "latitude": 21.9497,
         "longitude": 89.1833,
     },
+    # International destinations (Sprint 25-26, "International destination
+    # support") — the Location model was always country-agnostic (a plain
+    # self-referential tree with no Bangladesh-only assumption baked in), so
+    # this is genuinely just seed data proving that out end-to-end, not a
+    # schema or code change. Picked for relevance to Ovigo's actual market:
+    # popular outbound destinations for Bangladeshi travelers.
+    {"name": "Thailand", "slug": "thailand", "type": LocationType.COUNTRY, "parent_slug": None},
+    {"name": "Bangkok", "slug": "bangkok", "type": LocationType.CITY, "parent_slug": "thailand"},
+    {"name": "Phuket", "slug": "phuket", "type": LocationType.CITY, "parent_slug": "thailand"},
+    {
+        "name": "Phi Phi Islands",
+        "slug": "phi-phi-islands",
+        "type": LocationType.ATTRACTION,
+        "parent_slug": "phuket",
+        "latitude": 7.7407,
+        "longitude": 98.7784,
+    },
+    {"name": "India", "slug": "india", "type": LocationType.COUNTRY, "parent_slug": None},
+    {"name": "Kolkata", "slug": "kolkata", "type": LocationType.CITY, "parent_slug": "india"},
+    {"name": "Darjeeling", "slug": "darjeeling", "type": LocationType.CITY, "parent_slug": "india"},
 ]
 
 

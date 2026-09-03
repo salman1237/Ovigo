@@ -29,7 +29,11 @@ import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCartStore } from "@/stores/cart-store";
+import { useCurrencyStore } from "@/stores/currency-store";
 import type { ChatThread } from "@/types/chat";
+import { CURRENCY_LABELS } from "@/types/fx";
+
+const DISPLAY_CURRENCIES = ["BDT", "USD", "EUR", "GBP", "INR", "AED", "SAR", "MYR", "SGD", "AUD", "CAD"];
 
 const PRIMARY_NAV = [
   { href: "/tours", label: "Tours", icon: Map },
@@ -139,6 +143,7 @@ export function Header() {
           </nav>
 
           <div className="flex items-center gap-1">
+            <CurrencySwitcher />
             {user ? (
               <>
                 <IconLink href="/cart" label="Cart" icon={ShoppingCart} count={cartCount} className="hidden sm:inline-flex" />
@@ -261,6 +266,47 @@ function IconLink({
         </span>
       )}
     </Link>
+  );
+}
+
+function CurrencySwitcher() {
+  const displayCurrency = useCurrencyStore((s) => s.displayCurrency);
+  const setDisplayCurrency = useCurrencyStore((s) => s.setDisplayCurrency);
+
+  return (
+    <Popover
+      align="right"
+      trigger={({ toggle, open }) => (
+        <button
+          onClick={toggle}
+          aria-label="Display currency"
+          className={cn(
+            "hidden items-center gap-1 rounded-full px-2.5 py-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50 sm:flex",
+            open && "bg-zinc-100 text-zinc-900 dark:bg-zinc-900 dark:text-zinc-50"
+          )}
+        >
+          {displayCurrency}
+          <ChevronDown className="h-3 w-3" />
+        </button>
+      )}
+    >
+      <DropdownSectionLabel>Display currency</DropdownSectionLabel>
+      <p className="px-3 pb-2 text-[11px] leading-snug text-zinc-400">
+        Prices are always charged in BDT — this only shows an approximate conversion.
+      </p>
+      {DISPLAY_CURRENCIES.map((code) => (
+        <button
+          key={code}
+          onClick={() => setDisplayCurrency(code)}
+          className={cn(
+            "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-zinc-700 hover:bg-primary-50 hover:text-primary-700 dark:text-zinc-300 dark:hover:bg-primary-950/40 dark:hover:text-primary-300",
+            displayCurrency === code && "font-semibold text-primary-700 dark:text-primary-300"
+          )}
+        >
+          {CURRENCY_LABELS[code] ?? code}
+        </button>
+      ))}
+    </Popover>
   );
 }
 

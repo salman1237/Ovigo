@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
+import { ApproxPrice } from "@/components/shared/ApproxPrice";
 import { MessageButton } from "@/components/shared/MessageButton";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -34,7 +35,7 @@ export default function VehicleDetailPage() {
     <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
       <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{vehicle.make} {vehicle.model} ({vehicle.year})</h1>
       <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">
-        {VEHICLE_TYPE_LABELS[vehicle.vehicle_type]} · {vehicle.transmission} · {vehicle.seats} seats · {formatMoney(vehicle.price_per_day)}/day
+        {VEHICLE_TYPE_LABELS[vehicle.vehicle_type]} · {vehicle.transmission} · {vehicle.seats} seats · {formatMoney(vehicle.price_per_day)}/day <ApproxPrice amountBDT={vehicle.price_per_day} />
         {vehicle.with_driver && " · comes with a driver"}
       </p>
       {vehicle.description && <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">{vehicle.description}</p>}
@@ -121,7 +122,7 @@ function BookVehicleSection({ vehicle }: { vehicle: Vehicle }) {
         </div>
         {days > 0 && (
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            {days} day(s) — Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span>
+            {days} day(s) — Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span> <ApproxPrice amountBDT={total} />
           </p>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}

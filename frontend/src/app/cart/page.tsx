@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { ApproxPrice } from "@/components/shared/ApproxPrice";
 import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
 import { cartItemTotal, useCartStore } from "@/stores/cart-store";
@@ -142,7 +143,7 @@ export default function CartPage() {
           </div>
 
           <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
-            Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total.toFixed(2))}</span>
+            Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total.toFixed(2))}</span> <ApproxPrice amountBDT={total} />
           </p>
           {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
           <Button onClick={checkout} loading={submitting} className="mt-4">

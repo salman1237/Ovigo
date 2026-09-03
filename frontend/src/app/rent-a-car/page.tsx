@@ -14,6 +14,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { Input } from "@/components/ui/Input";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { apiClient } from "@/lib/api-client";
+import { ApproxPrice } from "@/components/shared/ApproxPrice";
 import { formatMoney } from "@/lib/format";
 import { VEHICLE_TYPE_LABELS, type Vehicle } from "@/types/rentcar";
 
@@ -79,7 +80,7 @@ export default function RentACarSearchPage() {
                   {v.make} {v.model} ({v.year})
                 </h3>
                 <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">
-                  {VEHICLE_TYPE_LABELS[v.vehicle_type]} · {v.seats} seats · {formatMoney(v.price_per_day)}/day
+                  {VEHICLE_TYPE_LABELS[v.vehicle_type]} · {v.seats} seats · {formatMoney(v.price_per_day)}/day <ApproxPrice amountBDT={v.price_per_day} />
                   {v.with_driver && " · with driver"}
                 </p>
               </Card>

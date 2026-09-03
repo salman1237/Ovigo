@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams, useParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
+import { ApproxPrice } from "@/components/shared/ApproxPrice";
 import { MessageButton } from "@/components/shared/MessageButton";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -62,7 +63,7 @@ function BookingDetailContent() {
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Booking</h1>
         <Badge variant="primary">{BOOKING_STATUS_LABELS[booking.status]}</Badge>
       </div>
-      <p className="mt-1 text-sm text-zinc-500">Total: {formatMoney(booking.total_amount)}</p>
+      <p className="mt-1 text-sm text-zinc-500">Total: {formatMoney(booking.total_amount)} <ApproxPrice amountBDT={booking.total_amount} /></p>
       {Number(booking.tax_service_amount) > 0 && (
         <p className="text-xs text-zinc-400">Includes {formatMoney(booking.tax_service_amount)} tax &amp; service charge</p>
       )}

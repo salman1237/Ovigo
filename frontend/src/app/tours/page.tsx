@@ -14,6 +14,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { Input } from "@/components/ui/Input";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { apiClient } from "@/lib/api-client";
+import { ApproxPrice } from "@/components/shared/ApproxPrice";
 import { formatMoney } from "@/lib/format";
 import type { TourSummary } from "@/types/tour";
 
@@ -77,7 +78,7 @@ export default function ToursSearchPage() {
               <Card hoverable className="flex h-full flex-col">
                 <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">{tour.title}</h3>
                 <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">
-                  {tour.duration_days} days · from {formatMoney(tour.base_price)}
+                  {tour.duration_days} days · from {formatMoney(tour.base_price)} <ApproxPrice amountBDT={tour.base_price} />
                 </p>
                 {tour.description && <p className="mt-2 line-clamp-2 text-xs text-zinc-500">{tour.description}</p>}
               </Card>
