@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-03 (Sprint 23-24 Part 2a complete — Bank Transfer shipped; backend also deployed to Dokploy VPS after a FastAPI Cloud outage, live site now points there)_
+_Last updated: 2026-09-03 (Sprint 25-26 Part 1 complete — Multi-Currency Display & International Destinations shipped)_
 
 ## Infrastructure & deployment status
 
@@ -424,6 +424,23 @@ Split given the sprint's breadth: Part 1 (this section) is iCal import/export; P
 **Verified:** a comprehensive scripted smoke test against Neon covering initiate → submit reference → admin verify (identical outcome to the SSLCommerz path: booking confirmed, escrow opened, commission created), a non-owner denied submitting someone else's reference, resubmitting a reference before verification allowed (fix a typo) but rejected after verification, re-verifying an already-validated payment rejected, and the reject flow correctly failing the payment and cancelling the booking. Also verified at the HTTP layer: all 5 new routes registered, auth-gated, no new duplicate-operation-ID warnings. Frontend adds a "Pay by bank transfer" flow to the booking detail page and a "Pending Bank Transfers" verify/reject panel to the admin payments page.
 
 **Channel manager integration API and PMS integration hooks remain not started** — the natural next slice of Sprint 23-24 (an API-key-authenticated integration surface external systems could call to push/pull availability and rates), not yet designed.
+
+### Sprint 25-26 Part 1 — Multi-Currency Display & International Destinations (Wk 49-52)
+
+| Task | Status |
+|---|---|
+| Multi-currency support | Done as **display only** — every booking still settles in BDT via SSLCommerz, which has no real multi-currency settlement path, and no other gateway credential exists to change that (same "provider not configured" gap as Stripe/SMS/email/push). A traveler picks a display currency from the header; listing cards, detail pages, cart, and booking totals show an "≈ $12.34" hint alongside the real BDT price |
+| International destination support | Done — proven with genuine seed data (Thailand/Bangkok/Phuket, India/Kolkata/Darjeeling), not a schema change. The `Location` model was always a country-agnostic self-referential tree; audited for and found no hardcoded Bangladesh-only assumptions elsewhere (phone validation, etc.) |
+| Multilingual interface (i18n) | Not yet started |
+| Translation-assisted chat | Not yet started — but *not* blocked on a missing credential like the items above: `api.mymemory.translated.net` is a genuinely free, keyless translation API confirmed working for English↔Bengali, so this is buildable in a later slice |
+| Dynamic packaging | Not yet started |
+| Smart recommendations engine | Not yet started |
+
+**Design:** live FX rates come from `open.er-api.com` (free, keyless, and — unlike Frankfurter, which only tracks ECB-listed currencies — one of the few free FX APIs that actually supports BDT as a base currency), cached 6h via the existing in-process TTL cache (`core/cache.py`). A failed fetch degrades to no conversion hint shown, never a broken page.
+
+**No new tables** — FX rates aren't persisted; the location seed script only adds rows (idempotent, skips existing slugs by design).
+
+**Verified:** the live FX endpoint returns real current rates; the seeded international locations appear correctly in the existing locations-hierarchy endpoint (proving the tree is genuinely country-agnostic, not just in theory). `npm run lint` and `npm run build` both pass clean, all 44 routes generated. Both the Dokploy backend and Vercel frontend confirmed live post-deploy (GitHub Actions → Dokploy auto-deploy verified green).
 
 ## Infrastructure note — Dokploy VPS backend (2026-09-03)
 
