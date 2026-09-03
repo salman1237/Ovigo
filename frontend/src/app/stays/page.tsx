@@ -18,16 +18,18 @@ import { PROPERTY_TYPE_LABELS, type Property } from "@/types/stay";
 
 export default function StaysSearchPage() {
   const [locationSlug, setLocationSlug] = useState("");
+  const [keyword, setKeyword] = useState("");
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [guests, setGuests] = useState(1);
-  const [params, setParams] = useState<{ slug: string; checkIn: string; checkOut: string; guests: number } | null>(null);
+  const [params, setParams] = useState<{ slug: string; keyword: string; checkIn: string; checkOut: string; guests: number } | null>(null);
 
   const { data: stays, isLoading, isError } = useQuery({
     queryKey: ["stays-search", params],
     queryFn: () => {
       const qs = new URLSearchParams();
       if (params?.slug) qs.set("location_slug", params.slug);
+      if (params?.keyword) qs.set("q", params.keyword);
       if (params?.checkIn) qs.set("check_in", params.checkIn);
       if (params?.checkOut) qs.set("check_out", params.checkOut);
       qs.set("guests", String(params?.guests ?? 1));
@@ -44,11 +46,12 @@ export default function StaysSearchPage() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          setParams({ slug: locationSlug, checkIn, checkOut, guests });
+          setParams({ slug: locationSlug, keyword, checkIn, checkOut, guests });
         }}
         className="mt-6 flex flex-wrap items-end gap-2"
       >
         <Input value={locationSlug} onChange={(e) => setLocationSlug(e.target.value)} placeholder="Destination slug" className="flex-1 min-w-[10rem]" />
+        <Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="Keyword, e.g. pool, homestay" className="flex-1 min-w-[10rem]" />
         <Input type="date" label="Check-in" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} />
         <Input type="date" label="Check-out" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} />
         <Input type="number" label="Guests" min={1} value={guests} onChange={(e) => setGuests(Number(e.target.value))} className="w-20" />

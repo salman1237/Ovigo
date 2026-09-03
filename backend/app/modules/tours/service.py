@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core import storage
+from app.core import search_engine, storage
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.ranking import RankingFactors, composite_score, relevance_for
 from app.core.slugs import slugify, unique_suffix
@@ -130,11 +130,17 @@ async def _tour_conversion_map(db: AsyncSession, tour_ids: list[uuid.UUID]) -> d
     return dict(result.all())
 
 
-async def list_published_tours(db: AsyncSession, location_ids: list[uuid.UUID] | None = None) -> list[Tour]:
+async def list_published_tours(
+    db: AsyncSession, location_ids: list[uuid.UUID] | None = None, search_query: str | None = None
+) -> list[Tour]:
     """Ranked by core/ranking.py's composite score (relevance/rating/conversion/
     completeness) — see that module's docstring for the formula and what each factor
     means here. `created_at desc` is only the final tiebreaker now, not the primary
-    order."""
+    order. `search_query`, if given, filters to matching tours via Elasticsearch
+    (title/description) — see core/search_engine.py's module docstring for the
+    plain-Postgres ILIKE fallback when Elasticsearch is unreachable. Filtering, not
+    re-ranking: a text match doesn't feed into the composite score above, it only
+    narrows which tours are scored at all."""
     from app.modules.locations.models import LocationTag
 
     query = (
@@ -147,6 +153,15 @@ async def list_published_tours(db: AsyncSession, location_ids: list[uuid.UUID] |
             LocationTag,
             (LocationTag.entity_id == Tour.id) & (LocationTag.entity_type == TaggableEntityType.TOUR),
         ).where(LocationTag.location_id.in_(location_ids))
+    if search_query:
+        matched_ids = await search_engine.search_tour_ids(search_query)
+        if matched_ids is not None:
+            if not matched_ids:
+                return []
+            query = query.where(Tour.id.in_(matched_ids))
+        else:
+            pattern = f"%{search_query}%"
+            query = query.where(Tour.title.ilike(pattern) | Tour.description.ilike(pattern))
     result = await db.execute(query.distinct())
     tours = list(result.scalars().all())
     if not tours:
@@ -223,6 +238,8 @@ async def update_tour(db: AsyncSession, role: PartnerRole, tour_id: uuid.UUID, p
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(tour, field, value)
     await db.commit()
+    if tour.status == TourStatus.PUBLISHED:
+        await search_engine.index_tour(tour.id, tour.title, tour.description, tour.base_price)
     return await get_own_tour_or_404(db, role, tour_id)
 
 

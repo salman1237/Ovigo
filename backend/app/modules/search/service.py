@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core import search_engine
 from app.core.ranking import RankingFactors, composite_score, relevance_for
 from app.modules.bookings.models import BookingItem, BookingItemStatus
 from app.modules.locations import service as locations_service
@@ -36,6 +37,7 @@ async def search_stays(
     check_in: date | None,
     check_out: date | None,
     guests: int,
+    search_query: str | None = None,
 ) -> list[Property]:
     query = select(Property).where(Property.status == PropertyStatus.PUBLISHED).options(
         selectinload(Property.room_types), selectinload(Property.amenities), selectinload(Property.images)
@@ -45,6 +47,15 @@ async def search_stays(
             LocationTag,
             (LocationTag.entity_id == Property.id) & (LocationTag.entity_type == TaggableEntityType.PROPERTY),
         ).where(LocationTag.location_id.in_(location_ids))
+    if search_query:
+        matched_ids = await search_engine.search_property_ids(search_query)
+        if matched_ids is not None:
+            if not matched_ids:
+                return []
+            query = query.where(Property.id.in_(matched_ids))
+        else:
+            pattern = f"%{search_query}%"
+            query = query.where(Property.name.ilike(pattern) | Property.description.ilike(pattern))
     result = await db.execute(query.distinct())
     properties = list(result.scalars().all())
 

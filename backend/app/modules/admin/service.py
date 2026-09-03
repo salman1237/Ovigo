@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core import audit
+from app.core import audit, search_engine
 from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.admin.schemas import (
     AdminBookingRead,
@@ -263,6 +263,7 @@ async def approve_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID) -> Adm
         link=f"/tours/{tour.id}",
     )
     await db.commit()
+    await search_engine.index_tour(tour.id, tour.title, tour.description, tour.base_price)
     await audit.record(db, actor_id=admin.id, action="tour.approve", entity_type="tour", entity_id=tour.id)
     return _to_admin_tour_read(tour)
 
@@ -340,6 +341,7 @@ async def approve_property(db: AsyncSession, admin: User, property_id: uuid.UUID
         link=f"/stays/{prop.id}",
     )
     await db.commit()
+    await search_engine.index_property(prop.id, prop.name, prop.description, prop.property_type.value)
     await audit.record(db, actor_id=admin.id, action="property.approve", entity_type="property", entity_id=prop.id)
     return _to_admin_property_read(prop)
 
@@ -443,6 +445,7 @@ async def approve_vehicle(db: AsyncSession, admin: User, vehicle_id: uuid.UUID) 
         link=f"/rent-a-car/{vehicle.id}",
     )
     await db.commit()
+    await search_engine.index_vehicle(vehicle.id, vehicle.make, vehicle.model, vehicle.description, vehicle.vehicle_type.value)
     await audit.record(db, actor_id=admin.id, action="vehicle.approve", entity_type="vehicle", entity_id=vehicle.id)
     return _to_admin_vehicle_read(vehicle)
 

@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import search_engine
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.ranking import RankingFactors, composite_score, relevance_for
 from app.modules.bookings.models import BookingItem, BookingItemStatus
@@ -133,12 +134,28 @@ async def rank_vehicles(db: AsyncSession, vehicles: list[Vehicle], location_ids:
     return vehicles
 
 
-async def list_published_vehicles(db: AsyncSession, location_ids: list[uuid.UUID] | None = None) -> list[Vehicle]:
+async def list_published_vehicles(
+    db: AsyncSession, location_ids: list[uuid.UUID] | None = None, search_query: str | None = None
+) -> list[Vehicle]:
+    """`search_query`, if given, filters to matching vehicles via Elasticsearch
+    (make/model/description/type) — see core/search_engine.py's module docstring
+    for the plain-Postgres ILIKE fallback when Elasticsearch is unreachable."""
     query = select(Vehicle).where(Vehicle.status == VehicleStatus.PUBLISHED)
     if location_ids is not None:
         query = query.join(
             LocationTag, (LocationTag.entity_id == Vehicle.id) & (LocationTag.entity_type == TaggableEntityType.VEHICLE)
         ).where(LocationTag.location_id.in_(location_ids))
+    if search_query:
+        matched_ids = await search_engine.search_vehicle_ids(search_query)
+        if matched_ids is not None:
+            if not matched_ids:
+                return []
+            query = query.where(Vehicle.id.in_(matched_ids))
+        else:
+            pattern = f"%{search_query}%"
+            query = query.where(
+                Vehicle.make.ilike(pattern) | Vehicle.model.ilike(pattern) | Vehicle.description.ilike(pattern)
+            )
     result = await db.execute(query.distinct())
     vehicles = list(result.scalars().all())
     return await rank_vehicles(db, vehicles, location_ids)
@@ -193,6 +210,8 @@ async def update_vehicle(db: AsyncSession, role: PartnerRole, vehicle_id: uuid.U
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(vehicle, field, value)
     await db.commit()
+    if vehicle.status == VehicleStatus.PUBLISHED:
+        await search_engine.index_vehicle(vehicle.id, vehicle.make, vehicle.model, vehicle.description, vehicle.vehicle_type.value)
     return await get_own_vehicle_or_404(db, role, vehicle_id)
 
 

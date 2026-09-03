@@ -20,12 +20,19 @@ import type { TourSummary } from "@/types/tour";
 
 export default function ToursSearchPage() {
   const [locationSlug, setLocationSlug] = useState("");
+  const [keyword, setKeyword] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchKeyword, setSearchKeyword] = useState("");
 
   const { data: tours, isLoading, isError } = useQuery({
-    queryKey: ["tours-search", searchTerm],
-    queryFn: () =>
-      apiClient.get<TourSummary[]>(`/api/v1/tours${searchTerm ? `?location_slug=${searchTerm}` : ""}`),
+    queryKey: ["tours-search", searchTerm, searchKeyword],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (searchTerm) params.set("location_slug", searchTerm);
+      if (searchKeyword) params.set("q", searchKeyword);
+      const qs = params.toString();
+      return apiClient.get<TourSummary[]>(`/api/v1/tours${qs ? `?${qs}` : ""}`);
+    },
   });
 
   return (
@@ -37,6 +44,7 @@ export default function ToursSearchPage() {
         onSubmit={(e) => {
           e.preventDefault();
           setSearchTerm(locationSlug);
+          setSearchKeyword(keyword);
         }}
         className="mt-6 flex flex-col gap-2 sm:flex-row"
       >
@@ -44,6 +52,12 @@ export default function ToursSearchPage() {
           value={locationSlug}
           onChange={(e) => setLocationSlug(e.target.value)}
           placeholder="Destination slug, e.g. bangladesh, coxs-bazar"
+          className="flex-1"
+        />
+        <Input
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          placeholder="Keyword, e.g. mangrove, trekking"
           className="flex-1"
         />
         <Button type="submit">

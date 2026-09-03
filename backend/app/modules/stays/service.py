@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core import ical as ical_core
-from app.core import storage
+from app.core import search_engine, storage
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.ranking import RankingFactors, composite_score, relevance_for
 from app.core.slugs import slugify, unique_suffix
@@ -171,7 +171,12 @@ async def rank_properties(
     return properties
 
 
-async def list_published_properties(db: AsyncSession, location_ids: list[uuid.UUID] | None = None) -> list[Property]:
+async def list_published_properties(
+    db: AsyncSession, location_ids: list[uuid.UUID] | None = None, search_query: str | None = None
+) -> list[Property]:
+    """`search_query`, if given, filters to matching properties via Elasticsearch
+    (name/description) — see core/search_engine.py's module docstring for the
+    plain-Postgres ILIKE fallback when Elasticsearch is unreachable."""
     query = select(Property).where(Property.status == PropertyStatus.PUBLISHED)
     if location_ids is not None:
         from app.modules.locations.models import LocationTag
@@ -180,6 +185,15 @@ async def list_published_properties(db: AsyncSession, location_ids: list[uuid.UU
             LocationTag,
             (LocationTag.entity_id == Property.id) & (LocationTag.entity_type == TaggableEntityType.PROPERTY),
         ).where(LocationTag.location_id.in_(location_ids))
+    if search_query:
+        matched_ids = await search_engine.search_property_ids(search_query)
+        if matched_ids is not None:
+            if not matched_ids:
+                return []
+            query = query.where(Property.id.in_(matched_ids))
+        else:
+            pattern = f"%{search_query}%"
+            query = query.where(Property.name.ilike(pattern) | Property.description.ilike(pattern))
     result = await db.execute(query.options(*_EAGER).distinct())
     properties = list(result.scalars().all())
     return await rank_properties(db, properties, location_ids)
@@ -243,6 +257,8 @@ async def update_property(
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(prop, field, value)
     await db.commit()
+    if prop.status == PropertyStatus.PUBLISHED:
+        await search_engine.index_property(prop.id, prop.name, prop.description, prop.property_type.value)
     return await get_own_property_or_404(db, role, property_id)
 
 

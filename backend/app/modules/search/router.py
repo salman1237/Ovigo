@@ -20,6 +20,7 @@ async def search_stays(
     check_in: date | None = None,
     check_out: date | None = None,
     guests: int = 1,
+    q: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     location_ids = None
@@ -27,7 +28,7 @@ async def search_stays(
         location_ids = await locations_service.resolve_slug_to_subtree_ids(db, location_slug)
         if location_ids is None:
             return []
-    return await service.search_stays(db, location_ids, check_in, check_out, guests)
+    return await service.search_stays(db, location_ids, check_in, check_out, guests, q)
 
 
 @router.get("/vehicles", response_model=list[VehicleRead])

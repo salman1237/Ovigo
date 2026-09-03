@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     def r2_configured(self) -> bool:
         return all([self.r2_access_key_id, self.r2_secret_access_key, self.r2_bucket_name, self.r2_endpoint_url])
 
+    # Elasticsearch (Sprint 27-28: free-text search) — a single-node container on the
+    # same Dokploy VPS/Docker network as this API, reachable by its container name.
+    # No credentials: internal-only, never publicly exposed. See core/search_engine.py
+    # for the graceful-degradation behavior when it's unreachable (e.g. local dev).
+    elasticsearch_url: str = "http://ovigo-elasticsearch:9200"
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

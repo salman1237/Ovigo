@@ -70,13 +70,15 @@ async def create_property(
 
 
 @router.get("", response_model=list[PropertySummary])
-async def list_published_properties(location_slug: str | None = None, db: AsyncSession = Depends(get_db)):
+async def list_published_properties(
+    location_slug: str | None = None, q: str | None = None, db: AsyncSession = Depends(get_db)
+):
     if location_slug:
         location_ids = await locations_service.resolve_slug_to_subtree_ids(db, location_slug)
         if location_ids is None:
             return []
-        return await service.list_published_properties(db, location_ids)
-    return await service.list_published_properties(db, None)
+        return await service.list_published_properties(db, location_ids, q)
+    return await service.list_published_properties(db, None, q)
 
 
 @router.get("/mine", response_model=list[PropertyRead])

@@ -38,13 +38,13 @@ async def create_vehicle(
 
 
 @router.get("", response_model=list[VehicleRead])
-async def list_published_vehicles(location_slug: str | None = None, db: AsyncSession = Depends(get_db)):
+async def list_published_vehicles(location_slug: str | None = None, q: str | None = None, db: AsyncSession = Depends(get_db)):
     location_ids = None
     if location_slug:
         location_ids = await locations_service.resolve_slug_to_subtree_ids(db, location_slug)
         if location_ids is None:
             return []
-    return await service.list_published_vehicles(db, location_ids)
+    return await service.list_published_vehicles(db, location_ids, q)
 
 
 @router.get("/mine", response_model=list[VehicleRead])

@@ -20,12 +20,19 @@ import { VEHICLE_TYPE_LABELS, type Vehicle } from "@/types/rentcar";
 
 export default function RentACarSearchPage() {
   const [locationSlug, setLocationSlug] = useState("");
+  const [keyword, setKeyword] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchKeyword, setSearchKeyword] = useState("");
 
   const { data: vehicles, isLoading, isError } = useQuery({
-    queryKey: ["vehicles-search", searchTerm],
-    queryFn: () =>
-      apiClient.get<Vehicle[]>(`/api/v1/vehicles${searchTerm ? `?location_slug=${searchTerm}` : ""}`),
+    queryKey: ["vehicles-search", searchTerm, searchKeyword],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (searchTerm) params.set("location_slug", searchTerm);
+      if (searchKeyword) params.set("q", searchKeyword);
+      const qs = params.toString();
+      return apiClient.get<Vehicle[]>(`/api/v1/vehicles${qs ? `?${qs}` : ""}`);
+    },
   });
 
   return (
@@ -37,6 +44,7 @@ export default function RentACarSearchPage() {
         onSubmit={(e) => {
           e.preventDefault();
           setSearchTerm(locationSlug);
+          setSearchKeyword(keyword);
         }}
         className="mt-6 flex flex-col gap-2 sm:flex-row"
       >
@@ -44,6 +52,12 @@ export default function RentACarSearchPage() {
           value={locationSlug}
           onChange={(e) => setLocationSlug(e.target.value)}
           placeholder="Destination slug, e.g. dhaka, coxs-bazar"
+          className="flex-1"
+        />
+        <Input
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          placeholder="Keyword, e.g. SUV, sedan"
           className="flex-1"
         />
         <Button type="submit">

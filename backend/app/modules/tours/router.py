@@ -54,13 +54,13 @@ async def create_tour(
 
 
 @router.get("", response_model=list[TourSummary])
-async def list_published_tours(location_slug: str | None = None, db: AsyncSession = Depends(get_db)):
+async def list_published_tours(location_slug: str | None = None, q: str | None = None, db: AsyncSession = Depends(get_db)):
     if location_slug:
         location_ids = await locations_service.resolve_slug_to_subtree_ids(db, location_slug)
         if location_ids is None:
             return []  # unknown destination slug — no matches, not "no filter"
-        return await service.list_published_tours(db, location_ids)
-    return await service.list_published_tours(db, None)
+        return await service.list_published_tours(db, location_ids, q)
+    return await service.list_published_tours(db, None, q)
 
 
 @router.get("/mine", response_model=list[TourRead])
