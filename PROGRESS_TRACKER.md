@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-03 (Sprint 27-28 Part 2 complete — Elasticsearch-Backed Free-Text Search shipped)_
+_Last updated: 2026-09-04 (Sprint 29-30 Part 1 complete — API Documentation for External Partners shipped)_
 
 ## Infrastructure & deployment status
 
@@ -539,6 +539,26 @@ The user's third selected item. Before this, `core/ranking.py`'s own docstring n
 **Known scope trim:** the default Elasticsearch analyzer keeps a possessive like "Cox's" as one token, so a bare query for `cox` won't match "Cox's Bazar..." (fuzziness AUTO's edit-distance budget isn't enough to bridge the apostrophe+s) — `bazar`, `sunset`, or any other whole word in the same title matches correctly. A custom analyzer (word-delimiter filter) would fix this but wasn't worth the added indexing complexity for what's a minor, narrow edge case; noted here rather than silently left undiscovered.
 
 **Verified:** a Neon + production-Elasticsearch smoke test (via an SSH tunnel to the VPS's loopback-bound ES port) confirming a "mangrove" query matches only the tour whose description mentions it, a "trekking hills" query matches only the other, a nonsense query correctly returns an empty list (not `None` — a real zero-result search, distinguishable from "search unavailable"), `list_published_tours(q=...)` correctly filters at the service layer, and — with a broken Elasticsearch client injected directly — `search_tour_ids` correctly returns `None` and `list_published_tours` correctly falls back to its Postgres ILIKE path instead of raising or silently dropping the filter. Ran the backfill script against the real production database and Elasticsearch, then verified end-to-end on the live API (`https://ovigo-api.salmandev.io/api/v1/tours?q=sunset` correctly returning the one real published tour matching it). `npm run lint` and `npm run build` both pass clean, all 46 routes generated. Both the Dokploy backend and Vercel frontend confirmed live post-deploy.
+
+## Phase 4 — Sprint 29-30 (Hardening & Optimization)
+
+### Sprint 29-30 Part 1 — API Documentation for External Partners (Wk 57-60)
+
+User explicitly picked this single item from the sprint's full list. Not attempted: load testing & performance tuning, security audit & penetration testing, GDPR/privacy compliance review, disaster recovery setup, general internal documentation/knowledge base — all remain **Not started**.
+
+| Task | Status |
+|---|---|
+| `API_DOCUMENTATION.md` — external-partner guide (auth, conventions, endpoint map, gaps) | Done |
+| `/partner-docs` — Swagger UI scoped to partner-relevant endpoints only | Done |
+| `/api/v1/partner-docs/openapi.json` — the same schema, machine-readable | Done |
+| `OPENAPI_TAGS` — real descriptions for every public/partner-facing tag | Done |
+| Fixed stale "FastAPI Cloud only" hosting claim in both README.md files | Done |
+
+**Design:** `/docs` (FastAPI's default, unchanged) still shows the entire schema, admin/internal endpoints included — useful for anyone working on this codebase. `/partner-docs` is a second, filtered Swagger UI built from the same `app.routes`, with every path under `/api/v1/admin/...` or `/api/v1/properties/{id}/front-desk/...` stripped out before rendering — filtered by **path prefix, not by tag**, since a couple of admin-only routers (`fraud/router.py`) don't carry an `"admin"` tag despite living under `/admin/`. `API_DOCUMENTATION.md` is the narrative companion: what `/partner-docs` can't convey on its own (the auth/refresh flow end to end, which rate limits apply where, the error-response shape, how the three stackable checkout discounts interact) plus an explicit, honest **"what's not available yet"** section — no channel-manager/PMS push-pull API, no webhooks, no machine-to-machine API-key auth, card payments still unconfigured — so an external developer hits a documented boundary instead of a silent gap.
+
+**No new tables or migrations** — this is a docs + OpenAPI-schema-shaping change only, no runtime data model touched.
+
+**Verified:** confirmed the app still imports cleanly and registers all 284 routes (up from 280 pre-change, the 4 new docs endpoints); called `_partner_openapi_schema()` directly and confirmed 169 partner-scoped paths with zero `/admin` or `front-desk` paths leaking through. Re-verified the same on the live production API post-deploy (`GET /api/v1/partner-docs/openapi.json`, `/partner-docs`, and `/docs` all `200`, the live filtered schema showing the same 169-path/zero-leak result as local testing). No frontend changes — no lint/build needed for this slice.
 
 ## Infrastructure note — Dokploy VPS backend (2026-09-03)
 
