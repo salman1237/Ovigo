@@ -1,6 +1,9 @@
 """FastAPI application entrypoint."""
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -63,10 +66,54 @@ from app.modules.users.router import router as users_router
 
 settings = get_settings()
 
+# Tag descriptions shown in the interactive docs (both the full /docs and the
+# partner-filtered /partner-docs below) — most tags here are the public/traveler-
+# and-partner-facing surface an external developer would actually use; `admin*`
+# tags are internal-only and stripped entirely from /partner-docs (see below).
+OPENAPI_TAGS = [
+    {"name": "health", "description": "Uptime checks — no auth required."},
+    {"name": "auth", "description": "Register, log in, refresh an access token, and verify email/phone via OTP."},
+    {"name": "users", "description": "The current user's own profile."},
+    {"name": "locations", "description": "The Country → Region → City → Attraction hierarchy every listing is tagged to."},
+    {"name": "tours", "description": "Fixed-date tours run by Local Experts — CRUD for owners, browse for everyone."},
+    {"name": "stays", "description": "Properties, room types, availability, and rate plans run by Hosts/Hotels."},
+    {"name": "rent-a-car", "description": "Vehicles and drivers offered by Rent-a-Car partners."},
+    {"name": "search", "description": "Cross-cutting search: date-filtered stays/vehicles, Local Experts, and destinations."},
+    {"name": "bookings", "description": "Create and manage bookings spanning tours, stays, vehicles, and custom bids."},
+    {"name": "payments", "description": "SSLCommerz checkout and bank-transfer payment flows."},
+    {"name": "payouts", "description": "A partner's own payout history and balance."},
+    {"name": "commissions", "description": "A partner's own earnings/commission breakdown."},
+    {"name": "reviews", "description": "Traveler reviews left on a completed booking item."},
+    {"name": "chat", "description": "In-app messaging between travelers and partners, plus REST + WebSocket message delivery."},
+    {"name": "loyalty", "description": "A traveler's reward-points balance and history."},
+    {"name": "promotions", "description": "Validate a promo code before checkout."},
+    {"name": "fx", "description": "Live currency-conversion rates for display only — every booking is still charged in BDT."},
+    {"name": "guides", "description": "Guide invitations and assignments a Local Expert manages."},
+    {"name": "custom-tour-bidding", "description": "A traveler's custom trip request and the bids Local Experts submit on it."},
+    {"name": "business-network", "description": "Partner-to-partner referrals."},
+    {"name": "partners", "description": "Applying for and managing a partner role (Local Expert, Host, Rent-a-Car, ...)."},
+    {"name": "badges", "description": "Trust badge applications a partner submits for admin review."},
+    {"name": "notifications", "description": "A user's own in-app notification feed."},
+    {"name": "ads", "description": "A partner's sponsored-placement ad campaigns, plus public sponsored-result placements."},
+    {"name": "disputes", "description": "A traveler's dispute on a booking and its resolution."},
+    {"name": "profiles", "description": "A Local Expert's public profile."},
+    {"name": "analytics", "description": "A partner's own performance analytics."},
+]
+
 app = FastAPI(
     title="Ovigo API",
-    description="Local Expert, Host & Stay Booking Platform — backend API",
+    description=(
+        "Local Expert, Host & Stay Booking Platform — backend API.\n\n"
+        "**Base URL (production):** `https://ovigo-api.salmandev.io`\n\n"
+        "**Authentication:** most endpoints require a JWT bearer token from "
+        "`POST /api/v1/auth/login` or `/register`, sent as `Authorization: Bearer <access_token>`. "
+        "See [API_DOCUMENTATION.md](https://github.com/salman1237/Ovigo/blob/main/API_DOCUMENTATION.md) "
+        "in the repo for a full external-partner guide, or browse "
+        "[/partner-docs](/partner-docs) for a docs view scoped to the partner-relevant "
+        "endpoints only (this page includes internal admin/staff endpoints too)."
+    ),
     version="0.1.0",
+    openapi_tags=OPENAPI_TAGS,
 )
 
 app.state.limiter = limiter
@@ -152,3 +199,38 @@ async def root() -> dict[str, str]:
 @app.get("/health", tags=["health"])
 async def health() -> dict[str, str]:
     return {"status": "healthy"}
+
+
+# --- Partner-facing docs: the same schema as /docs, minus every /api/v1/admin/*
+# path and the front-desk (property-staff) surface — neither is relevant to an
+# external integration partner, and admin endpoints in particular shouldn't be
+# advertised on a page meant to be shared outside the company. Path-prefix
+# filtering (not tag filtering) since a couple of admin-only routers — e.g.
+# fraud/router.py — don't carry an "admin" tag despite living under /admin/.
+_INTERNAL_PATH_PREFIXES = ("/api/v1/admin", "/api/v1/properties/{property_id}/front-desk")
+
+
+def _partner_openapi_schema() -> dict:
+    full_schema = get_openapi(
+        title="Ovigo Partner API",
+        version=app.version,
+        description="The subset of the Ovigo API relevant to an external integration partner — see API_DOCUMENTATION.md in the repo for a full guide.",
+        routes=app.routes,
+        tags=[t for t in OPENAPI_TAGS if t["name"] != "health"],
+    )
+    full_schema["paths"] = {
+        path: item
+        for path, item in full_schema["paths"].items()
+        if not any(path.startswith(prefix) for prefix in _INTERNAL_PATH_PREFIXES)
+    }
+    return full_schema
+
+
+@app.get("/api/v1/partner-docs/openapi.json", include_in_schema=False)
+async def partner_openapi() -> JSONResponse:
+    return JSONResponse(_partner_openapi_schema())
+
+
+@app.get("/partner-docs", include_in_schema=False)
+async def partner_docs():
+    return get_swagger_ui_html(openapi_url="/api/v1/partner-docs/openapi.json", title="Ovigo Partner API Docs")
