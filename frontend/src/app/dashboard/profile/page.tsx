@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
 import { Textarea } from "@/components/ui/Textarea";
@@ -65,13 +66,19 @@ function ExpertProfileCard() {
   });
 
   const notEligible = isError && queryError instanceof ApiError && queryError.status === 403;
+  const otherError = isError && !notEligible;
 
   return (
     <Card>
       <h2 className="font-medium text-zinc-900 dark:text-zinc-50">Local Expert Profile</h2>
       {isLoading && <Spinner />}
       {notEligible && <p className="mt-2 text-sm text-zinc-500">You need an approved Local Expert role to set this up.</p>}
-      {!isLoading && !notEligible && (
+      {otherError && (
+        <div className="mt-2">
+          <ErrorState message="Couldn't load your expert profile. Try signing out and back in." />
+        </div>
+      )}
+      {!isLoading && !notEligible && !otherError && (
         <ExpertProfileForm key={profile?.id ?? "new"} profile={profile ?? null} />
       )}
     </Card>
@@ -166,13 +173,19 @@ function HostProfileCard() {
   });
 
   const notEligible = isError && queryError instanceof ApiError && queryError.status === 403;
+  const otherError = isError && !notEligible;
 
   return (
     <Card>
       <h2 className="font-medium text-zinc-900 dark:text-zinc-50">Host Profile</h2>
       {isLoading && <Spinner />}
       {notEligible && <p className="mt-2 text-sm text-zinc-500">You need an approved Host or Hotel role to set this up.</p>}
-      {!isLoading && !notEligible && (
+      {otherError && (
+        <div className="mt-2">
+          <ErrorState message="Couldn't load your host profile. Try signing out and back in." />
+        </div>
+      )}
+      {!isLoading && !notEligible && !otherError && (
         <HostProfileForm key={profile?.id ?? "new"} profile={profile ?? null} />
       )}
     </Card>
