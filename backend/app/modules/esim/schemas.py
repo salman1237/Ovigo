@@ -13,7 +13,7 @@ from app.modules.esim.models import EsimOrderStatus
 class EsimCountryRead(BaseModel):
     id: int
     iso2: str
-    iso3: str
+    iso3: str | None
     name_en: str
     name_bn: str | None
     flag_url: str | None
