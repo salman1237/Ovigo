@@ -36,6 +36,7 @@ export function MobileMenu({
     { href: "/cart", label: "Cart" },
     { href: "/chat", label: "Messages" },
     { href: "/custom-requests", label: "Custom Trip" },
+    { href: "/esim/orders", label: "My eSIMs" },
   ];
 
   const partner: NavItem[] = [
@@ -89,6 +90,7 @@ export function MobileMenu({
                 <MobileLink href="/tours" label="Tours" onClose={onClose} />
                 <MobileLink href="/stays" label="Stays" onClose={onClose} />
                 <MobileLink href="/rent-a-car" label="Rent a Car" onClose={onClose} />
+                <MobileLink href="/esim" label="eSIM" onClose={onClose} />
               </Section>
 
               {isLoggedIn && (

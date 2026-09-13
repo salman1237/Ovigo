@@ -39,6 +39,8 @@ from app.modules.commissions.router import admin_router as commissions_admin_rou
 from app.modules.commissions.router import router as commissions_router
 from app.modules.disputes.router import admin_router as disputes_admin_router
 from app.modules.disputes.router import router as disputes_router
+from app.modules.esim.router import admin_router as esim_admin_router
+from app.modules.esim.router import router as esim_router
 from app.modules.fraud.router import router as fraud_router
 from app.modules.fx.router import router as fx_router
 from app.modules.guides.router import router as guides_router
@@ -98,6 +100,7 @@ OPENAPI_TAGS = [
     {"name": "disputes", "description": "A traveler's dispute on a booking and its resolution."},
     {"name": "profiles", "description": "A Local Expert's public profile."},
     {"name": "analytics", "description": "A partner's own performance analytics."},
+    {"name": "esim", "description": "eSIM data plan catalog, ordering, and delivery — resold from Triptel's Partner Reseller API, paid for via Ovigo's own SSLCommerz checkout."},
 ]
 
 app = FastAPI(
@@ -188,6 +191,8 @@ app.include_router(fx_router)
 app.include_router(loyalty_router)
 app.include_router(promotions_router)
 app.include_router(promotions_admin_router)
+app.include_router(esim_router)
+app.include_router(esim_admin_router)
 app.include_router(admin_router)
 
 

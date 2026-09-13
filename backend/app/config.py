@@ -67,6 +67,16 @@ class Settings(BaseSettings):
     # for the graceful-degradation behavior when it's unreachable (e.g. local dev).
     elasticsearch_url: str = "http://ovigo-elasticsearch:9200"
 
+    # Triptel Partner Reseller API (Phase 5: eSIM store) — see TRIPTEL_PARTNER_API.md.
+    # Optional so the app boots with the store simply unavailable when unset.
+    triptel_api_base_url: str = "https://triptel.co/api/v1/partner"
+    triptel_api_key: str | None = None
+    triptel_webhook_secret: str | None = None
+
+    @property
+    def triptel_configured(self) -> bool:
+        return bool(self.triptel_api_key)
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

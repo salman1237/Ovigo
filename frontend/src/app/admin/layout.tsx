@@ -23,6 +23,7 @@ const NAV = [
   { href: "/admin/badges", label: "Trust Badges" },
   { href: "/admin/ads", label: "Ad Campaigns" },
   { href: "/admin/promotions", label: "Promo Codes" },
+  { href: "/admin/esim", label: "eSIM Orders" },
   { href: "/admin/fraud", label: "Fraud & Risk" },
   { href: "/admin/notifications", label: "Notifications" },
   { href: "/admin/reports", label: "Reports" },

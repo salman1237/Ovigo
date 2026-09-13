@@ -14,6 +14,7 @@ import {
   MessageCircle,
   ShieldCheck,
   ShoppingCart,
+  Smartphone,
   Sparkles,
   User as UserIcon,
   type LucideIcon,
@@ -40,6 +41,7 @@ const PRIMARY_NAV = [
   { href: "/tours", label: "Tours", icon: Map },
   { href: "/stays", label: "Stays", icon: Compass },
   { href: "/rent-a-car", label: "Rent a Car", icon: Car },
+  { href: "/esim", label: "eSIM", icon: Smartphone },
 ];
 
 const PARTNER_LINKS = [
@@ -60,6 +62,7 @@ const PARTNER_LINKS = [
 const TRAVELER_LINKS = [
   { href: "/bookings", label: "My Bookings" },
   { href: "/custom-requests", label: "Custom Trip" },
+  { href: "/esim/orders", label: "My eSIMs" },
 ];
 
 export function Header() {

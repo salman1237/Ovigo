@@ -29,7 +29,10 @@ Ovigo/
 ├── .github/workflows/       # CI (lint/test on PR, backend+frontend)
 ├── OVIGO_TECHNICAL_DOCUMENT.md
 ├── IMPLEMENTATION_PLAN.md   # this file
-└── PROGRESS_TRACKER.md      # live status, updated every sprint
+├── PROGRESS_TRACKER.md      # live status, updated every sprint
+├── API_DOCUMENTATION.md     # external-partner API guide (Sprint 29-30)
+├── TRIPTEL_PARTNER_API.md              # Phase 5: third-party eSIM reseller API contract
+└── TRIPTEL_ESIM_INTEGRATION_PROMPT.md  # Phase 5: ready-to-execute build spec for the eSIM store
 ```
 
 Rationale for `backend/` + `frontend/` (rather than the doc's `fastapi-app/` / `nextjs-app/`): matches the
@@ -43,6 +46,7 @@ Rationale for `backend/` + `frontend/` (rather than the doc's `fastapi-app/` / `
 | Backend API | **FastAPI Cloud** | Deploy via `fastapi deploy` from `backend/`, or GitHub auto-deploy once the repo is connected in the FastAPI Cloud dashboard. |
 | Frontend | **Vercel** | Project root = `frontend/`. Connected to GitHub for auto-deploy on push to `main` (preview deploys on branches/PRs). |
 | Source control | **GitHub** — `salman1237/Ovigo` | Already connected (`gh` authenticated locally). |
+| eSIM provisioning (Phase 5) | **Triptel Partner Reseller API** | Third-party, not self-hosted. Requires a Triptel-issued API key and a funded USD reseller wallet before Sprint 31-32 can go live — see `TRIPTEL_PARTNER_API.md` and the manual step below. The app must run with this entirely unset (`TRIPTEL_API_KEY` absent) for local dev and for anyone without wallet access; every eSIM endpoint degrades to `503` in that case. |
 
 ### One-time manual steps (require a human/browser — cannot be done from this session)
 
@@ -52,6 +56,11 @@ Rationale for `backend/` + `frontend/` (rather than the doc's `fastapi-app/` / `
 2. **Vercel**: project will be linked via `vercel link` / `vercel git connect` from this session (CLI is
    already authenticated as `salman1237`), root directory `frontend`. Environment variables (`NEXT_PUBLIC_API_URL`,
    `NEXTAUTH_SECRET`, etc.) need to be confirmed/added in the Vercel dashboard once real values exist.
+3. **Triptel (Phase 5 only)**: the user obtains an API key and tops up the reseller wallet directly with
+   Triptel (no self-service signup — a Triptel Super Admin issues the key). Set `TRIPTEL_API_KEY` on the
+   backend host, then run `backend/scripts/configure_triptel_webhook.py` once the module is deployed to
+   register the webhook and receive `TRIPTEL_WEBHOOK_SECRET`. Full sequence in
+   `TRIPTEL_ESIM_INTEGRATION_PROMPT.md` §8.
 3. **Secrets hygiene**: the NeonDB connection string is kept only in `backend/.env` (gitignored) and in each
    host's environment-variable settings — never committed, never printed in full again after initial setup.
 

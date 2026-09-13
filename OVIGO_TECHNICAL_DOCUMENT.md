@@ -68,6 +68,7 @@ Destination Discovery → Local Expert → Tour/Stay Selection → Booking → P
 - Sponsored search placement
 - Advertising campaigns
 - Optional subscription / premium partner plans
+- eSIM data plan resale margin (Triptel Partner Reseller API — see §5.1 "eSIM Store" and Phase 5)
 
 ### 1.4 Product Scope — Included
 
@@ -92,6 +93,7 @@ Destination Discovery → Local Expert → Tour/Stay Selection → Booking → P
 - Super Admin management
 - Partner App dashboards
 - Analytics and financial reporting
+- eSIM data plan sales for international travelers, sourced live from Triptel's Partner Reseller API (Ovigo resells at a markup from a prepaid USD wallet — fulfillment stays with Triptel, consistent with §1.5's "no full local-product e-commerce fulfillment" boundary)
 
 ### 1.5 Product Scope — Excluded
 
@@ -481,6 +483,7 @@ graph LR
 | ID Verification | Shufti Pro / manual review | KYC/identity checks |
 | CDN | Cloudflare / Vercel Edge | Static asset delivery |
 | Monitoring | Sentry + Uptime Robot | Error tracking & uptime |
+| eSIM Provisioning | Triptel Partner Reseller API (`https://triptel.co`) | eSIM data-plan catalog, ordering, and delivery — see `TRIPTEL_PARTNER_API.md` for the full contract. Ovigo is a reseller drawing down a prepaid USD wallet, not the eSIM issuer. |
 
 ---
 
@@ -755,6 +758,19 @@ The following 60+ tables represent the minimum required data entities organized 
 | `ad_impressions` | Impression tracking |
 | `ad_clicks` | Click tracking |
 
+#### eSIM Store
+
+Deliberately **not** a `BookingItem` type: an eSIM order has no check-in/out, no partner,
+no commission, no escrow, and no inventory to reserve — it's a direct Ovigo-to-traveler
+resale sourced live from Triptel, kept in its own module so nothing about the existing
+booking engine has to bend to accommodate it. See Phase 5 (§8) and `TRIPTEL_PARTNER_API.md`
+for the full design.
+
+| Table | Description |
+|---|---|
+| `esim_orders` | One eSIM purchase: product snapshot, BDT price charged to the traveler, USD cost at Triptel, SSLCommerz payment fields, Triptel order/delivery fields (ICCID, activation code, QR data, install links), and a status machine (`pending_payment → paid → provisioning → completed`, with `refund_pending → refunded` and `cancelled` off-ramps) |
+| `esim_pricing_config` | Single-row config an admin edits: USD→BDT exchange rate, markup %, rounding step, and an enable/disable flag for the whole store |
+
 #### System
 
 | Table | Description |
@@ -902,6 +918,7 @@ Each follows the same RESTful pattern with full CRUD + status management + admin
 | Badge | `/api/v1/badges` | Types, applications, approvals |
 | Business Network | `/api/v1/business-network` | Referrals, attribution, commissions |
 | Fraud | `/api/v1/fraud` | Risk scores, flags, alerts |
+| eSIM | `/api/v1/esim` + `/api/v1/admin/esim` | Country/product catalog (proxied from Triptel), order creation, SSLCommerz payment + Triptel webhook, admin pricing/margin/refund tools — see `TRIPTEL_PARTNER_API.md` |
 | Admin | `/api/v1/admin/*` | All management operations |
 
 > Detailed endpoint specs will be maintained in the auto-generated OpenAPI/Swagger documentation.
@@ -1190,6 +1207,32 @@ Each follows the same RESTful pattern with full CRUD + status management + admin
 
 ---
 
+### Phase 5: Platform Extensions
+
+> **Estimated Duration: 3-4 weeks**
+> **Goal:** Diversify revenue beyond the core tour/stay/vehicle marketplace by reselling a
+> third-party digital product travelers already need — mobile data abroad — without taking
+> on fulfillment risk. Full build spec: `TRIPTEL_ESIM_INTEGRATION_PROMPT.md`; API contract:
+> `TRIPTEL_PARTNER_API.md` (both at the repo root).
+
+| Sprint | Weeks | Deliverables |
+|---|---|---|
+| **Sprint 31-32** | Wk 61-64 | **eSIM Data Plan Store (Triptel Partner Reseller API)** |
+| | | - Country/product catalog browsing, priced live in BDT from Triptel's USD `retail_price` |
+| | | - SSLCommerz checkout reusing the existing gateway client (own `tran_id` namespace, no changes to the `bookings`/`payments` modules) |
+| | | - Idempotent order placement at Triptel (`customer_reference` = Ovigo order ID), webhook + polling delivery, so an order always resolves to `completed` or `refund_pending` |
+| | | - Traveler order page: QR code, activation code, SM-DP+/matching ID for manual entry, one-tap iOS/Android install links, print-friendly instructions |
+| | | - Admin console: Triptel wallet balance & commission visibility, editable pricing/markup (Super Admin only), order search with cost/price/margin, manual "mark refunded" workflow (refunds are traveler-side manual — Triptel refunds Ovigo's wallet automatically on a failed order, but Ovigo has no automated traveler-refund rail yet) |
+| | | - Ships additively: a new `esim` module only, with the app required to boot and every existing page to keep working even when Triptel isn't configured |
+
+#### Phase 5 Deliverables Summary
+
+- eSIM data plan store, sourced live from Triptel, sold in BDT via the existing SSLCommerz gateway
+- Admin pricing, margin visibility, and manual refund tooling for eSIM orders
+- Zero behavioral change to any existing module (bookings, payments, commissions, payouts, loyalty, promotions, disputes, reviews)
+
+---
+
 ## 9. Non-Functional Requirements & Compliance
 
 ### 9.1 Performance
@@ -1357,6 +1400,7 @@ The MVP (Phase 1) is considered **functionally ready** when all of the following
 | Multi-role complexity | Medium | Medium | Thorough RBAC testing; role-specific E2E test suites |
 | Third-party API failures | Medium | Medium | Circuit breakers; retry logic; fallback SMS/email providers |
 | Data privacy violations | Critical | Low | RLS policies; encrypted storage; access logging; regular audits |
+| Triptel wallet depletion or outage mid-sale (traveler paid, eSIM can't be issued) | High | Medium | Live wallet-balance check before checkout starts; idempotent `customer_reference`-keyed ordering with webhook + page-driven polling so a paid order always resolves to `completed` or `refund_pending`, never stuck; admin visibility into wallet balance and a manual refund workflow |
 
 ---
 
@@ -1393,6 +1437,9 @@ gantt
     i18n and Personalization         :p4s2, after p4s1, 4w
     Loyalty Mobile and Maturity      :p4s3, after p4s2, 4w
     Hardening and Optimization       :p4s4, after p4s3, 4w
+
+    section Phase 5 - Extensions
+    eSIM Data Plan Store             :p5s1, after p4s4, 4w
 ```
 
 ### Phase Summary Table
@@ -1403,7 +1450,8 @@ gantt
 | **Phase 2** - Customization & Network | 14 weeks | Feb 2027 | Apr 2027 | Full Marketplace |
 | **Phase 3** - Growth & Monetization | 12 weeks | May 2027 | Jul 2027 | Revenue Engine |
 | **Phase 4** - Scale & Expansion | 16 weeks | Aug 2027 | Nov 2027 | Global Ready |
-| **Total** | **~60 weeks** | **Sep 2026** | **Nov 2027** | **Full Platform** |
+| **Phase 5** - Platform Extensions | 3-4 weeks | Dec 2027 | Dec 2027 | eSIM Store Live |
+| **Total** | **~64 weeks** | **Sep 2026** | **Dec 2027** | **Full Platform** |
 
 ### Team Requirements
 

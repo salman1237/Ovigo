@@ -139,6 +139,7 @@ for it.
 | Partners | `/api/v1/partners` | Apply for a partner role, manage documents |
 | Business network | `/api/v1/business-network` | Partner-to-partner referrals |
 | FX rates | `/api/v1/fx/rates` | Live BDT → foreign-currency display rates (informational only) |
+| eSIM | `/api/v1/esim` | Browse eSIM data plans by country, buy one (SSLCommerz checkout, separate from the booking engine), track delivery (QR code, install links, activation details) |
 
 ### A booking's shape, in brief
 

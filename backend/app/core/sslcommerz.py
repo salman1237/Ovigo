@@ -31,6 +31,8 @@ async def initiate_session(
     customer_name: str,
     customer_email: str,
     customer_phone: str,
+    product_name: str = "Ovigo Booking",
+    product_category: str = "Travel",
 ) -> dict:
     if not settings.sslcommerz_configured:
         raise SSLCommerzError("Payment gateway is not configured")
@@ -53,8 +55,8 @@ async def initiate_session(
         "cus_country": "Bangladesh",
         "cus_phone": customer_phone or "N/A",
         "shipping_method": "NO",
-        "product_name": "Ovigo Booking",
-        "product_category": "Travel",
+        "product_name": product_name,
+        "product_category": product_category,
         "product_profile": "general",
     }
 

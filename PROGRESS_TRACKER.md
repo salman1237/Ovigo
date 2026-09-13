@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-04 (Sprint 29-30 Part 1 complete — API Documentation for External Partners shipped)_
+_Last updated: 2026-09-13 (Phase 5 — eSIM Store via Triptel Partner API implemented: backend module, migration, tests, and frontend pages built; migration not yet applied and awaiting user's `DATABASE_URL` confirmation — see below)_
 
 ## Infrastructure & deployment status
 
@@ -559,6 +559,39 @@ User explicitly picked this single item from the sprint's full list. Not attempt
 **No new tables or migrations** — this is a docs + OpenAPI-schema-shaping change only, no runtime data model touched.
 
 **Verified:** confirmed the app still imports cleanly and registers all 284 routes (up from 280 pre-change, the 4 new docs endpoints); called `_partner_openapi_schema()` directly and confirmed 169 partner-scoped paths with zero `/admin` or `front-desk` paths leaking through. Re-verified the same on the live production API post-deploy (`GET /api/v1/partner-docs/openapi.json`, `/partner-docs`, and `/docs` all `200`, the live filtered schema showing the same 169-path/zero-leak result as local testing). No frontend changes — no lint/build needed for this slice.
+
+## Phase 5 — eSIM Store (Triptel Partner API)
+
+### Sprint 31-32 — eSIM Data Plan Store (Triptel Partner Reseller API) (Wk 61-64)
+
+**Status: Implemented — backend, migration, tests, and frontend all built. Migration NOT yet applied to any database (see Deployment below); no live Triptel API key exists to test the real upstream calls against.**
+
+Two documents were added to the repo root as the source of truth for this feature:
+- `TRIPTEL_PARTNER_API.md` — the full third-party API contract (auth, catalog, orders, webhook signing, rate limits, errors). Read this before touching anything eSIM-related; the technical document and this tracker summarize it, they don't replace it.
+- `TRIPTEL_ESIM_INTEGRATION_PROMPT.md` — a complete, ready-to-execute build spec (models, service flow, routers, frontend pages, tests, deployment checklist) written to be handed to a coding agent as-is. Treat it as the authoritative implementation plan for this sprint once work starts.
+
+The technical document (`OVIGO_TECHNICAL_DOCUMENT.md`) has been updated to reflect this as a planned feature: a new §1.3/§1.4 revenue-stream and scope entry, a §3.4 External Services row for Triptel, a new "eSIM Store" data-entities subsection in §5.1 (`esim_orders`, `esim_pricing_config`), a new eSIM row in §6.10's API module table, a new **Phase 5: Platform Extensions** in §8 (Sprint 31-32), a Triptel-dependency risk row in §12, and a Phase 5 entry in §13's timeline/Gantt.
+
+**Key architectural decisions already locked in by the integration prompt** (worth knowing before implementation starts, so a future session doesn't relitigate them):
+- **A new `esim` module, not a `BookingItem` type.** An eSIM order has no check-in/out, no partner, no commission, no escrow, no inventory — forcing it into the existing booking engine would be the wrong shape. The existing `bookings`/`payments`/`commissions`/`payouts`/`loyalty`/`promotions`/`disputes`/`reviews` modules are explicitly **not to be modified** by this work.
+- **Reuses the existing SSLCommerz gateway client** (`core/sslcommerz.py`) with its own `tran_id` namespace, mirroring `payments/service.py`'s IPN + browser-redirect double-confirmation pattern exactly — no second payment integration.
+- **Idempotency:** the Ovigo `EsimOrder.id` (UUID) is always sent to Triptel as `customer_reference`, so a retried/duplicated order-placement call can never charge Triptel's wallet (or the traveler) twice.
+- **No new scheduler.** Ovigo still has no Celery/Redis/cron. An order stuck in `paid`/`provisioning` is nudged forward by the traveler's own order-detail page polling (`sync_order` on load if not synced in the last 20s) and by an admin "Sync"/"Retry provisioning" button — the Triptel webhook is the primary path, polling is the fallback, matching the same fail-open philosophy as `core/fx.py`/`core/translate.py`/`core/search_engine.py`.
+- **Traveler-side refunds are manual.** Triptel auto-refunds *Ovigo's* wallet on a failed order, but Ovigo has no automated traveler-refund rail — a failed order goes to `refund_pending` and an admin marks it `refunded` after refunding the traveler out-of-band (SSLCommerz merchant panel or bank), audit-logged.
+- **Graceful absence:** with `TRIPTEL_API_KEY` unset, the app must still boot and every existing page must keep working — eSIM endpoints return `503`, eSIM pages show an "unavailable" state. No feature flag needed beyond "is the key configured."
+- **Cost/margin never reaches the traveler.** Public catalog responses strip `retail_price`/`cost_usd`; only `/admin/esim/*` shows cost, price, and margin.
+
+**What was built**, following `TRIPTEL_ESIM_INTEGRATION_PROMPT.md` step by step:
+
+- **Backend module** `backend/app/modules/esim/` — `models.py` (`EsimOrder`, `EsimPricingConfig`, `EsimOrderStatus` enum), `pricing.py` (pure Decimal math: `ceil_to_step`/`compute_price_bdt`/`data_label`), `triptel_client.py` (token-cached HTTP client with 401-renewal and 5xx-retry logic), `schemas.py`, `service.py` (order lifecycle, payment confirmation mirroring `payments/service.py`'s IPN + redirect double-confirmation with row-locking via `SELECT ... FOR UPDATE`, Triptel order placement/sync, admin operations), `router.py` (public catalog, traveler order/pay/cancel, payment IPN/callback, Triptel webhook, full admin console under `/api/v1/admin/esim`).
+- **Migration** `backend/migrations/versions/ebe628d13714_phase_5_esim_store_via_triptel_partner_.py` — creates `esim_orders` and `esim_pricing_config`, plus adds `esim_ready`/`esim_failed` to the `notification_type` enum (via `autocommit_block()`, since Postgres can't `ALTER TYPE ... ADD VALUE` inside a transaction). **Generated and hand-reviewed only — `alembic upgrade head` has deliberately not been run**, per the integration prompt's explicit database-safety rule (never run a DB-writing command without first confirming which `DATABASE_URL` is active).
+- **Tests** (`backend/tests/test_esim_pricing.py`, `test_esim_webhook_signature.py`, `test_triptel_client.py`, `test_esim_transitions.py`) — 25 new tests, all pure/mocked (no real DB or network access), bringing the suite to 32/32 passing.
+- **Frontend** — `/esim` (country grid), `/esim/[iso2]` (plan picker → SSLCommerz checkout), `/esim/orders` (traveler's order list), `/esim/orders/[id]` (live-polling order detail: QR code via `qrcode.react`, install links, manual activation details, print-to-PDF, stale-order "start again"), `/admin/esim` (Triptel wallet balance, pricing config editable by Super Admin only, searchable/filterable order table with Sync/Retry/Mark-refunded actions). Wired into `Header.tsx`, `MobileMenu.tsx`, the homepage feature grid, and `admin/layout.tsx`'s nav.
+- **Additive-only touches to existing files**: `config.py` (3 new optional Triptel settings), `all_models.py` (model registration), `main.py` (router registration + OpenAPI tag), `notifications/models.py` (2 new enum values), `core/sslcommerz.py` (optional `product_name`/`product_category` kwargs, defaulted to preserve byte-identical behavior for existing callers), `.env.example`. No existing module's own code was modified.
+
+**Verified:** `pytest -q` → 32/32 passed with zero DB/network access; app import confirms 304 total routes (20 under `/esim`); `npm run lint` clean; `npm run build` succeeded, all 49 routes generated including the 5 new eSIM routes. **Not verified:** the migration against a real database (never run), and real Triptel upstream calls (no live API key available — `triptel_client.py` is tested only via `httpx.MockTransport`).
+
+**Deployment is a user-run checklist, not something performed here** (per the integration prompt's own instruction and this session's general database-safety rule): obtain a Triptel API key and top up the wallet; set `TRIPTEL_API_KEY` on the Dokploy `ovigo-api` app; run `alembic upgrade head` against the confirmed production `DATABASE_URL` (after a Neon branch/backup) — **the user must confirm which `DATABASE_URL` is active before this runs**; push to `main` for the Dokploy/Vercel auto-deploys; run `backend/scripts/configure_triptel_webhook.py` and set the printed `TRIPTEL_WEBHOOK_SECRET` on Dokploy, then redeploy; confirm `/admin/esim` shows the wallet balance and "webhook configured," then set the exchange rate/markup; do one real end-to-end purchase before announcing the feature live.
 
 ## Infrastructure note — Dokploy VPS backend (2026-09-03)
 

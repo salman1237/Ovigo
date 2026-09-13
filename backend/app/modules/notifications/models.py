@@ -59,6 +59,8 @@ class NotificationType(str, enum.Enum):
     STAFF_INVITE = "staff_invite"
     FRAUD_ALERT = "fraud_alert"
     ADMIN_ANNOUNCEMENT = "admin_announcement"
+    ESIM_READY = "esim_ready"
+    ESIM_FAILED = "esim_failed"
 
 
 class CampaignAudience(str, enum.Enum):

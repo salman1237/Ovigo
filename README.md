@@ -6,6 +6,7 @@ Local Expert, Host & Stay Booking Platform.
 - **How we're building it:** [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 - **Live sprint-by-sprint status:** [PROGRESS_TRACKER.md](PROGRESS_TRACKER.md)
 - **External-partner API guide:** [API_DOCUMENTATION.md](API_DOCUMENTATION.md) — start here if you're integrating against the Ovigo API rather than working on this codebase. Interactive docs live at `/partner-docs` on the running API.
+- **eSIM store (Phase 5, planned):** [TRIPTEL_PARTNER_API.md](TRIPTEL_PARTNER_API.md) (the third-party API contract) and [TRIPTEL_ESIM_INTEGRATION_PROMPT.md](TRIPTEL_ESIM_INTEGRATION_PROMPT.md) (the build spec) — reselling Triptel eSIM data plans through Ovigo's own SSLCommerz checkout. Not yet implemented; see `PROGRESS_TRACKER.md`'s Phase 5 section.
 
 ## Stack
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Building2, Car, Map, UserCheck } from "lucide-react";
+import { Building2, Car, Map, Smartphone, UserCheck } from "lucide-react";
 import Link from "next/link";
 
 import { Card } from "@/components/ui/Card";
@@ -31,6 +31,12 @@ const FEATURES = [
     title: "Local Experts",
     description: "Every listing is tied to a verified, admin-approved partner — not an anonymous ad.",
     href: "/account/partner",
+  },
+  {
+    icon: Smartphone,
+    title: "eSIM",
+    description: "Instant mobile data in 190+ countries — install before you land, no roaming surprises.",
+    href: "/esim",
   },
 ];
 
@@ -75,7 +81,7 @@ export default function HomePage() {
       </section>
 
       <section className="mx-auto w-full max-w-6xl px-6 pb-24">
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
           {FEATURES.map((feature, i) => (
             <motion.div
               key={feature.title}
