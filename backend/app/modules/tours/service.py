@@ -146,7 +146,7 @@ async def list_published_tours(
     query = (
         select(Tour)
         .where(Tour.status == TourStatus.PUBLISHED)
-        .options(selectinload(Tour.itinerary), selectinload(Tour.departures))
+        .options(selectinload(Tour.itinerary), selectinload(Tour.departures), selectinload(Tour.images))
     )
     if location_ids is not None:
         query = query.join(

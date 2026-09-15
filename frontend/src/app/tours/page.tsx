@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { apiClient } from "@/lib/api-client";
 import { ApproxPrice } from "@/components/shared/ApproxPrice";
 import { formatMoney } from "@/lib/format";
+import { firstImageId, tourImageUrl } from "@/lib/media";
 import type { TourSummary } from "@/types/tour";
 
 export default function ToursSearchPage() {
@@ -81,24 +82,39 @@ export default function ToursSearchPage() {
       )}
 
       <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {(tours ?? []).map((tour, i) => (
-          <motion.div
-            key={tour.id}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: Math.min(i, 6) * 0.05 }}
-          >
-            <Link href={`/tours/${tour.id}`}>
-              <Card hoverable className="flex h-full flex-col">
-                <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">{tour.title}</h3>
-                <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">
-                  {tour.duration_days} days · from {formatMoney(tour.base_price)} <ApproxPrice amountBDT={tour.base_price} />
-                </p>
-                {tour.description && <p className="mt-2 line-clamp-2 text-xs text-zinc-500">{tour.description}</p>}
-              </Card>
-            </Link>
-          </motion.div>
-        ))}
+        {(tours ?? []).map((tour, i) => {
+          const cover = firstImageId(tour.images);
+          return (
+            <motion.div
+              key={tour.id}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: Math.min(i, 6) * 0.05 }}
+            >
+              <Link href={`/tours/${tour.id}`}>
+                <Card hoverable className="flex h-full flex-col overflow-hidden p-0">
+                  <div className="aspect-[4/3] w-full bg-zinc-100 dark:bg-zinc-800">
+                    {cover && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={tourImageUrl(tour.id, cover.id)}
+                        alt={tour.title}
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                  </div>
+                  <div className="flex flex-1 flex-col p-5">
+                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">{tour.title}</h3>
+                    <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">
+                      {tour.duration_days} days · from {formatMoney(tour.base_price)} <ApproxPrice amountBDT={tour.base_price} />
+                    </p>
+                    {tour.description && <p className="mt-2 line-clamp-2 text-xs text-zinc-500">{tour.description}</p>}
+                  </div>
+                </Card>
+              </Link>
+            </motion.div>
+          );
+        })}
       </div>
     </div>
   );

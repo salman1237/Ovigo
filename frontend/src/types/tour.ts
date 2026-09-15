@@ -84,4 +84,5 @@ export interface TourSummary {
   duration_days: number;
   base_price: string;
   status: TourStatus;
+  images: TourImage[];
 }

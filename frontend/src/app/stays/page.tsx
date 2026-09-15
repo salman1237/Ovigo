@@ -14,6 +14,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { Input } from "@/components/ui/Input";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { apiClient } from "@/lib/api-client";
+import { firstImageId, propertyImageUrl } from "@/lib/media";
 import { PROPERTY_TYPE_LABELS, type Property } from "@/types/stay";
 
 export default function StaysSearchPage() {
@@ -76,22 +77,37 @@ export default function StaysSearchPage() {
       )}
 
       <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {(stays ?? []).map((prop, i) => (
-          <motion.div
-            key={prop.id}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: Math.min(i, 6) * 0.05 }}
-          >
-            <Link href={`/stays/${prop.id}`}>
-              <Card hoverable className="flex h-full flex-col">
-                <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">{prop.name}</h3>
-                <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">{PROPERTY_TYPE_LABELS[prop.property_type]}</p>
-                {prop.description && <p className="mt-2 line-clamp-2 text-xs text-zinc-500">{prop.description}</p>}
-              </Card>
-            </Link>
-          </motion.div>
-        ))}
+        {(stays ?? []).map((prop, i) => {
+          const cover = firstImageId(prop.images);
+          return (
+            <motion.div
+              key={prop.id}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: Math.min(i, 6) * 0.05 }}
+            >
+              <Link href={`/stays/${prop.id}`}>
+                <Card hoverable className="flex h-full flex-col overflow-hidden p-0">
+                  <div className="aspect-[4/3] w-full bg-zinc-100 dark:bg-zinc-800">
+                    {cover && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={propertyImageUrl(prop.id, cover.id)}
+                        alt={prop.name}
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                  </div>
+                  <div className="flex flex-1 flex-col p-5">
+                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">{prop.name}</h3>
+                    <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">{PROPERTY_TYPE_LABELS[prop.property_type]}</p>
+                    {prop.description && <p className="mt-2 line-clamp-2 text-xs text-zinc-500">{prop.description}</p>}
+                  </div>
+                </Card>
+              </Link>
+            </motion.div>
+          );
+        })}
       </div>
     </div>
   );

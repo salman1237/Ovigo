@@ -149,7 +149,9 @@ class TourRead(BaseModel):
 
 
 class TourSummary(BaseModel):
-    """Lightweight shape for search/listing results — no sub-resources."""
+    """Lightweight shape for search/listing results — no sub-resources, but images
+    are included since a listing card with no photo is the exact thing this shape
+    otherwise trims for size — see list_published_tours's eager-loading."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -160,3 +162,4 @@ class TourSummary(BaseModel):
     duration_days: int
     base_price: Decimal
     status: TourStatus
+    images: list[TourImageRead] = []

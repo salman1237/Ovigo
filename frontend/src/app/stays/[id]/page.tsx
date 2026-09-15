@@ -9,6 +9,7 @@ import Link from "next/link";
 import { ApproxPrice } from "@/components/shared/ApproxPrice";
 import { FrequentlyBookedWith } from "@/components/shared/FrequentlyBookedWith";
 import { MessageButton } from "@/components/shared/MessageButton";
+import { PhotoGallery } from "@/components/shared/PhotoGallery";
 import { ReviewsList } from "@/components/shared/ReviewsList";
 import { SimilarProperties } from "@/components/shared/SimilarProperties";
 import { TrustBadges } from "@/components/shared/TrustBadges";
@@ -21,6 +22,7 @@ import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
+import { propertyImageUrl } from "@/lib/media";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCartStore } from "@/stores/cart-store";
 import type { Booking } from "@/types/booking";
@@ -46,6 +48,9 @@ export default function StayDetailPage() {
         <TrustBadges entityType="property" entityId={property.id} />
         <MessageButton contextType="property" contextId={property.id} label="Message this Host" />
       </div>
+
+      <PhotoGallery images={property.images} urlFor={(img) => propertyImageUrl(property.id, img.id)} alt={property.name} />
+
       {property.description && <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">{property.description}</p>}
 
       {property.amenities.length > 0 && (

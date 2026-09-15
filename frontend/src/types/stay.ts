@@ -105,6 +105,7 @@ export interface PropertySummary {
   description: string | null;
   property_type: PropertyType;
   status: PropertyStatus;
+  images: PropertyImage[];
 }
 
 export type StaffRole = "manager" | "front_desk" | "housekeeping";

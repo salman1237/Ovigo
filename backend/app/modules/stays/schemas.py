@@ -187,6 +187,7 @@ class PropertySummary(BaseModel):
     description: str | None
     property_type: PropertyType
     status: PropertyStatus
+    images: list[PropertyImageRead] = []
 
 
 class StaffInviteCreate(BaseModel):

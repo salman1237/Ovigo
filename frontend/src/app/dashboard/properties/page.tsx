@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { firstImageId, propertyImageUrl } from "@/lib/media";
 import { useAuthStore } from "@/stores/auth-store";
 import { PROPERTY_TYPE_LABELS, Property, PropertyType } from "@/types/stay";
 
@@ -105,19 +106,30 @@ export default function DashboardPropertiesPage() {
       )}
 
       <div className="mt-6 flex flex-col gap-3">
-        {(properties ?? []).map((prop) => (
-          <Link key={prop.id} href={`/dashboard/properties/${prop.id}`}>
-            <Card hoverable className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-zinc-900 dark:text-zinc-50">{prop.name}</p>
-                <p className="text-xs text-zinc-500">{PROPERTY_TYPE_LABELS[prop.property_type]}</p>
-              </div>
-              <Badge variant={STATUS_VARIANTS[prop.status]} className="capitalize">
-                {prop.status.replace("_", " ")}
-              </Badge>
-            </Card>
-          </Link>
-        ))}
+        {(properties ?? []).map((prop) => {
+          const cover = firstImageId(prop.images);
+          return (
+            <Link key={prop.id} href={`/dashboard/properties/${prop.id}`}>
+              <Card hoverable className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                    {cover && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={propertyImageUrl(prop.id, cover.id)} alt={prop.name} className="h-full w-full object-cover" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-zinc-900 dark:text-zinc-50">{prop.name}</p>
+                    <p className="text-xs text-zinc-500">{PROPERTY_TYPE_LABELS[prop.property_type]}</p>
+                  </div>
+                </div>
+                <Badge variant={STATUS_VARIANTS[prop.status]} className="capitalize">
+                  {prop.status.replace("_", " ")}
+                </Badge>
+              </Card>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

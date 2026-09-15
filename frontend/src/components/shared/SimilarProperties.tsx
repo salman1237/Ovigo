@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { Card } from "@/components/ui/Card";
 import { apiClient } from "@/lib/api-client";
+import { firstImageId, propertyImageUrl } from "@/lib/media";
 import { PROPERTY_TYPE_LABELS, type PropertySummary } from "@/types/stay";
 
 export function SimilarProperties({ propertyId }: { propertyId: string }) {
@@ -19,16 +20,27 @@ export function SimilarProperties({ propertyId }: { propertyId: string }) {
     <div className="mt-10">
       <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Similar stays</h2>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {properties.map((property) => (
-          <Link key={property.id} href={`/stays/${property.id}`}>
-            <Card hoverable className="flex h-full flex-col p-3">
-              <p className="font-medium text-zinc-900 dark:text-zinc-50">{property.name}</p>
-              <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">
-                {PROPERTY_TYPE_LABELS[property.property_type]}
-              </p>
-            </Card>
-          </Link>
-        ))}
+        {properties.map((property) => {
+          const cover = firstImageId(property.images);
+          return (
+            <Link key={property.id} href={`/stays/${property.id}`}>
+              <Card hoverable className="flex h-full items-center gap-3 p-3">
+                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                  {cover && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={propertyImageUrl(property.id, cover.id)} alt={property.name} className="h-full w-full object-cover" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-zinc-900 dark:text-zinc-50">{property.name}</p>
+                  <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">
+                    {PROPERTY_TYPE_LABELS[property.property_type]}
+                  </p>
+                </div>
+              </Card>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ import Link from "next/link";
 import { ApproxPrice } from "@/components/shared/ApproxPrice";
 import { FrequentlyBookedWith } from "@/components/shared/FrequentlyBookedWith";
 import { MessageButton } from "@/components/shared/MessageButton";
+import { PhotoGallery } from "@/components/shared/PhotoGallery";
 import { ReviewsList } from "@/components/shared/ReviewsList";
 import { SimilarTours } from "@/components/shared/SimilarTours";
 import { TrustBadges } from "@/components/shared/TrustBadges";
@@ -21,6 +22,7 @@ import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
+import { tourImageUrl } from "@/lib/media";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCartStore } from "@/stores/cart-store";
 import type { Booking } from "@/types/booking";
@@ -48,6 +50,9 @@ export default function TourDetailPage() {
         <TrustBadges entityType="tour" entityId={tour.id} />
         <MessageButton contextType="tour" contextId={tour.id} label="Message this Expert" />
       </div>
+
+      <PhotoGallery images={tour.images} urlFor={(img) => tourImageUrl(tour.id, img.id)} alt={tour.title} />
+
       {tour.description && <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">{tour.description}</p>}
 
       {tour.itinerary.length > 0 && (

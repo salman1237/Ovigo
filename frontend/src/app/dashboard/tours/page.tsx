@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
+import { firstImageId, tourImageUrl } from "@/lib/media";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Tour } from "@/types/tour";
 
@@ -109,19 +110,30 @@ export default function DashboardToursPage() {
       )}
 
       <div className="mt-6 flex flex-col gap-3">
-        {(tours ?? []).map((tour) => (
-          <Link key={tour.id} href={`/dashboard/tours/${tour.id}`}>
-            <Card hoverable className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-zinc-900 dark:text-zinc-50">{tour.title}</p>
-                <p className="text-xs text-zinc-500">{tour.duration_days} days · {formatMoney(tour.base_price)}</p>
-              </div>
-              <Badge variant={STATUS_VARIANTS[tour.status]} className="capitalize">
-                {tour.status.replace("_", " ")}
-              </Badge>
-            </Card>
-          </Link>
-        ))}
+        {(tours ?? []).map((tour) => {
+          const cover = firstImageId(tour.images);
+          return (
+            <Link key={tour.id} href={`/dashboard/tours/${tour.id}`}>
+              <Card hoverable className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                    {cover && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={tourImageUrl(tour.id, cover.id)} alt={tour.title} className="h-full w-full object-cover" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-zinc-900 dark:text-zinc-50">{tour.title}</p>
+                    <p className="text-xs text-zinc-500">{tour.duration_days} days · {formatMoney(tour.base_price)}</p>
+                  </div>
+                </div>
+                <Badge variant={STATUS_VARIANTS[tour.status]} className="capitalize">
+                  {tour.status.replace("_", " ")}
+                </Badge>
+              </Card>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
