@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-13 (Phase 5 — eSIM Store via Triptel Partner API implemented: backend module, migration, tests, and frontend pages built; migration not yet applied and awaiting user's `DATABASE_URL` confirmation — see below)_
+_Last updated: 2026-09-19 (Phase 6 — UI/UX Redesign spec'd based on client feedback + a real-code competitive analysis of ShareTrip and GoZayaan; implementation not started — see below)_
 
 ## Infrastructure & deployment status
 
@@ -592,6 +592,21 @@ The technical document (`OVIGO_TECHNICAL_DOCUMENT.md`) has been updated to refle
 **Verified:** `pytest -q` → 32/32 passed with zero DB/network access; app import confirms 304 total routes (20 under `/esim`); `npm run lint` clean; `npm run build` succeeded, all 49 routes generated including the 5 new eSIM routes. **Not verified:** the migration against a real database (never run), and real Triptel upstream calls (no live API key available — `triptel_client.py` is tested only via `httpx.MockTransport`).
 
 **Deployment is a user-run checklist, not something performed here** (per the integration prompt's own instruction and this session's general database-safety rule): obtain a Triptel API key and top up the wallet; set `TRIPTEL_API_KEY` on the Dokploy `ovigo-api` app; run `alembic upgrade head` against the confirmed production `DATABASE_URL` (after a Neon branch/backup) — **the user must confirm which `DATABASE_URL` is active before this runs**; push to `main` for the Dokploy/Vercel auto-deploys; run `backend/scripts/configure_triptel_webhook.py` and set the printed `TRIPTEL_WEBHOOK_SECRET` on Dokploy, then redeploy; confirm `/admin/esim` shows the wallet balance and "webhook configured," then set the exchange rate/markup; do one real end-to-end purchase before announcing the feature live.
+
+## Phase 6 — UI/UX Redesign (Client-Requested)
+
+**Status: Not started — spec'd and ready to build.** Triggered by direct client feedback on 2026-09-19 (via WhatsApp, forwarded by the user): the current design doesn't read as professional/production-ready/vibrant, and should make someone "want to travel the moment they see it."
+
+**Research method:** ShareTrip (sharetrip.net) and GoZayaan (gozayaan.com) — Bangladesh's two leading OTAs, the direct competitive bar for a BDT-priced Bangladesh-focused marketplace — were analyzed by fetching their **live production HTML/CSS directly** (`curl` against the served pages, then grepping for hex colors, the `theme-color` meta tag, and `font-family` declarations in their compiled CSS bundles) rather than guessing or relying on marketing copy, since both are heavy client-rendered SPAs that a plain content fetch can't see into otherwise. No browser-automation/screenshot tool is available in this environment, so this is a real-code-level palette/typography extraction, not a visual mockup comparison — noted here so a future session knows exactly what was and wasn't verified.
+
+**Findings** (full comparison table in `OVIGO_TECHNICAL_DOCUMENT.md` §8 Phase 6):
+- **ShareTrip**: primary blue `#1882FF`, orange/amber accent `#F27D00`/`#FF911B`, flat cards, system-font stack.
+- **GoZayaan**: deep navy `#00026E` primary, amber/teal/coral accents (`#FFC107`/`#29A992`/`#F33A3A`) used for urgency and deals, **layered soft shadows** on cards, and a bold geometric **Gilroy** display font for headings — not a system font.
+- **Ovigo today**: a clean blue design-token system already exists (`primary-50`→`primary-950`, built in an earlier redesign sprint — see `frontend/src/app/globals.css`) but has **no accent color**, **no distinct heading font** (Geist Sans used everywhere), **flat single-layer shadows**, and — the biggest gap — **no functional search widget on the homepage at all**, which is replaced by icon feature-tiles instead of the search-first hero every real OTA (local and global) leads with.
+
+The technical document's §8 now has a full **Phase 6** entry (Sprints 33-40, ~7-8 weeks): Sprint 33-34 (design-system 2.0 — accent color, heading font, layered-shadow card variant), Sprint 35-36 (homepage hero search widget + real destination photography, replacing the icon tiles), Sprint 37-38 (browse/detail page visual depth, using the photography already live from the Sprint 31-32 seed data), Sprint 39-40 (nav/dashboard/admin visual consistency pass + mobile QA). Full detail, including the deliberate **evolve-not-rewrite** framing (the component architecture is sound; this is a visual-language pass on top of it) and the honest verification-constraint note (visual sign-off happens on live Vercel preview URLs, since this environment can't render or screenshot pages), lives there rather than duplicated here.
+
+**Not yet done:** all of it — this section captures the plan and competitive research; implementation has not started. Next step is executing Sprint 33-34 once the user confirms the direction (accent color choice, candidate heading font) in `OVIGO_TECHNICAL_DOCUMENT.md` §8.
 
 ## Infrastructure note — Dokploy VPS backend (2026-09-03)
 

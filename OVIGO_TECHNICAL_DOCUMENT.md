@@ -1233,6 +1233,72 @@ Each follows the same RESTful pattern with full CRUD + status management + admin
 
 ---
 
+### Phase 6: UI/UX Redesign — Modern Travel-OTA Visual Language
+
+> **Estimated Duration: 7-8 weeks**
+> **Goal:** Client feedback (2026-09-19, verbatim): *"Design Valo lage nay Amar personally... I mean
+> professional production ready, user-friendly, vibrant hoynay... Ekta Travel website dekhlei ghurte
+> jaite icche hobe erokom lagbe"* — the design should make someone want to travel the moment they see
+> it. This phase is a **visual-language upgrade layered onto the existing component architecture**
+> (`Button`/`Card`/`Input`/`Badge`/`Select`/`Spinner`/`Skeleton`/`EmptyState`/`ErrorState`, all already
+> built and used consistently across ~49 routes) — not a rewrite. The primitives are structurally
+> sound; what's missing is the polish, warmth, and photography-forward energy that established
+> Bangladeshi OTAs already have.
+
+**Competitive analysis** (real palettes/fonts extracted directly from each site's live CSS/HTML, not
+guessed — see method note below):
+
+| | **ShareTrip** (sharetrip.net) | **GoZayaan** (gozayaan.com) | **Ovigo today** |
+|---|---|---|---|
+| Primary color | Bright blue `#1882FF` / `#126FDE` | Deep navy `#00026E` | Tailwind default blue `#2563eb` (`primary-600`) |
+| Accent color | Orange/amber `#F27D00`, `#FF911B` | Amber `#FFC107`, teal `#29A992`, coral-red `#F33A3A` (urgency/deals) | **None** — blue/indigo only |
+| Neutrals | Cool blue-tinted grays (`#1A2B3D`→`#FAFBFC`) | Slate grays (`#022738`→`#F6F6F6`) | Tailwind `zinc` scale |
+| Headline font | System sans (Segoe/Roboto-style stack) | **Gilroy** (bold geometric display font), Avenir Next fallback | Geist Sans (body + headings, no distinct display face) |
+| Card depth | Flat with subtle borders | **Layered soft shadows** (2-3 stacked shadow values per card — a "premium/tactile" effect) | Single flat `shadow-sm` |
+| Homepage hero | Functional tabbed search widget (flights/hotels/packages) over the fold, real inventory previewed below | Same pattern — search-first, not feature-tiles | **Icon-card feature tiles**, no functional search widget on the homepage at all |
+| Method | Colors extracted from live `theme-color` meta tag + inline hex values in served HTML/CSS; confirmed via direct `curl` against production, not a screenshot | Colors/font extracted from the site's own compiled Nuxt CSS bundles (`_nuxt/css/*.css`), same direct-fetch method | Current tokens read from `frontend/src/app/globals.css` and `components/ui/*` in this repo |
+
+The pattern across both local competitors — and every major global OTA (Booking.com, Airbnb,
+MakeMyTrip, Agoda) — is consistent: **a trust-signaling primary hue + a warm, energetic accent used
+sparingly for urgency/deals/ratings, a distinctive (not default-system) heading font, layered shadow
+depth, and a search-first homepage dominated by real destination photography.** Ovigo currently has
+the first half of that (a clean blue design-token system, already built in an earlier sprint) but none
+of the second half — which is exactly the gap the client is describing as "not vibrant."
+
+| Sprint | Weeks | Deliverables |
+|---|---|---|
+| **Sprint 33-34** | Wk 65-67 | **Design System 2.0 — Palette, Type, Depth** |
+| | | - Add a warm accent color scale (amber/sunset, e.g. Tailwind `amber`/`orange`) alongside the existing `primary` blue scale — used for deal/urgency badges, star ratings, promo highlights, and hero CTA accents; blue stays primary/trust, accent stays a deliberate minority color (≤10% of any screen) |
+| | | - Add a distinctive **heading display font** via `next/font/google` (candidate: Plus Jakarta Sans, Outfit, or Sora — free, geometric-bold alternatives in the same visual family as Gilroy without a commercial license) layered over the existing Geist Sans body copy — headings only, so body text legibility is untouched |
+| | | - New `Card` shadow variant (`elevated`) using a stacked/layered shadow (matching GoZayaan's tactile depth) for marketing-facing cards, keeping the current flat variant for dense admin/dashboard tables |
+| | | - Expand the type scale for marketing pages (bolder, larger H1/H2 on homepage/landing-style pages) |
+| | | - Document the finalized tokens in `frontend/AGENTS.md` (design-tokens section) so every later sprint in this phase — and any future page — pulls from the same palette instead of re-deriving it |
+| **Sprint 35-36** | Wk 68-69 | **Homepage & Hero Search** |
+| | | - Replace the current icon-card `FEATURES` hero section with a real, functional tabbed search widget (Tours / Stays / Rent-a-Car / eSIM quick-jump) over a full-bleed destination photo background — using the real tour/property photography now live in R2 (Sprint 31-32's seed data), not stock placeholders |
+| | | - Add a "Popular destinations" photo-card rail (Cox's Bazar, Sundarbans, Dhaka, Sylhet, ...) linking straight into filtered browse results |
+| | | - Add a real trust-signal strip (live counts pulled from the API — published tours/properties/vehicles, not fabricated numbers) |
+| | | - Move the existing feature-tile links to a secondary "why Ovigo" section further down the page rather than the hero |
+| **Sprint 37-38** | Wk 70-71 | **Browse & Detail Pages — Visual Depth** |
+| | | - Apply the new `elevated` card variant + bigger imagery to the Tours/Stays browse grids (building on the cover-photo work already shipped) |
+| | | - Add the new accent color to deal/urgency signals ("X seats left", "Free cancellation", rating stars) across tour/property/vehicle cards |
+| | | - Upgrade the `PhotoGallery` component (tour/property detail pages) to a larger hero-style treatment with a blurred-background letterbox for non-16:9 photos |
+| | | - Rent-a-car: since vehicles deliberately have no photo gallery (documented scope trim in `rentcar/models.py`), add a tasteful per-`VehicleType` icon illustration treatment instead of a blank thumbnail — a real design fix, not a placeholder |
+| **Sprint 39-40** | Wk 72-73 | **Navigation, Dashboard/Admin Polish & Mobile QA** |
+| | | - Refresh `Header`/`MobileMenu` visuals against the new tokens (gradient/accent touches, keep the existing nav structure and grouping — that architecture already works) |
+| | | - Extend the new visual language to partner dashboard and admin pages consistently — kept dense/functional (these are tools, not marketing pages) but visually aligned instead of looking like a different, older app |
+| | | - Full responsive QA pass at real breakpoints (360/390px phones, 768px tablet, 1024/1440px desktop) across every page touched in this phase |
+| | | - **Verification constraint, stated up front:** this environment has no browser-automation/screenshot tool, so per-page visual QA is `npm run lint` + `npm run build` + direct Tailwind-class review, not a rendered screenshot — each sprint's changes get a live Vercel preview URL handed to the client for the actual visual sign-off, called out explicitly rather than claiming a visual QA pass that didn't happen |
+
+#### Phase 6 Deliverables Summary
+
+- An expanded design-token system (blue primary + warm accent + layered shadow depth + a distinctive heading font), documented once and reused everywhere
+- A search-first homepage matching the pattern every real competitor (ShareTrip, GoZayaan, and every major global OTA) already uses, built on real photography instead of icon tiles
+- Visually upgraded browse/detail pages using imagery and urgency signals consistent with the new accent color
+- One consistent visual language across public, dashboard, and admin surfaces — evolving the existing component library, not replacing it
+- Explicit acknowledgment that visual sign-off happens on live preview URLs, since this environment cannot render or screenshot pages itself
+
+---
+
 ## 9. Non-Functional Requirements & Compliance
 
 ### 9.1 Performance
@@ -1440,6 +1506,12 @@ gantt
 
     section Phase 5 - Extensions
     eSIM Data Plan Store             :p5s1, after p4s4, 4w
+
+    section Phase 6 - Redesign
+    Design System 2.0                :p6s1, after p5s1, 3w
+    Homepage and Hero Search          :p6s2, after p6s1, 2w
+    Browse and Detail Pages           :p6s3, after p6s2, 2w
+    Nav Dashboard Polish and QA       :p6s4, after p6s3, 2w
 ```
 
 ### Phase Summary Table
@@ -1451,7 +1523,8 @@ gantt
 | **Phase 3** - Growth & Monetization | 12 weeks | May 2027 | Jul 2027 | Revenue Engine |
 | **Phase 4** - Scale & Expansion | 16 weeks | Aug 2027 | Nov 2027 | Global Ready |
 | **Phase 5** - Platform Extensions | 3-4 weeks | Dec 2027 | Dec 2027 | eSIM Store Live |
-| **Total** | **~64 weeks** | **Sep 2026** | **Dec 2027** | **Full Platform** |
+| **Phase 6** - UI/UX Redesign | 7-8 weeks | Dec 2027 | Feb 2028 | Modern OTA-Grade Visual Language |
+| **Total** | **~72 weeks** | **Sep 2026** | **Feb 2028** | **Full Platform** |
 
 ### Team Requirements
 
