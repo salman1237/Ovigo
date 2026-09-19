@@ -73,7 +73,7 @@ export function MobileMenu({
             transition={{ type: "spring", damping: 30, stiffness: 320 }}
           >
             <div className="flex items-center justify-between">
-              <span className="bg-gradient-to-r from-primary-600 to-indigo-600 bg-clip-text text-lg font-bold text-transparent">
+              <span className="font-heading bg-gradient-to-r from-primary-600 to-indigo-600 bg-clip-text text-lg font-bold text-transparent">
                 Ovigo
               </span>
               <button

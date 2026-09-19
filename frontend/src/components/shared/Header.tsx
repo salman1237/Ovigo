@@ -101,7 +101,7 @@ export function Header() {
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-indigo-600 text-white shadow-md shadow-primary-600/30">
               <Sparkles className="h-4 w-4" />
             </span>
-            <span className="bg-gradient-to-r from-primary-600 to-indigo-600 bg-clip-text text-lg font-bold text-transparent">
+            <span className="font-heading bg-gradient-to-r from-primary-600 to-indigo-600 bg-clip-text text-lg font-bold text-transparent">
               Ovigo
             </span>
           </Link>
