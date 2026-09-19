@@ -16,8 +16,8 @@ from app.modules.rentcar.models import Vehicle, VehicleStatus
 from app.modules.reviews.models import Review
 from app.modules.search.schemas import DestinationSummary, ExpertSearchResult
 from app.modules.stays import service as stays_service
-from app.modules.stays.models import Property, PropertyStatus
-from app.modules.tours.models import Tour, TourDeparture, TourStatus
+from app.modules.stays.models import Property, PropertyImage, PropertyStatus
+from app.modules.tours.models import Tour, TourDeparture, TourImage, TourStatus
 from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleStatus, User
 
 
@@ -232,6 +232,28 @@ async def get_destinations(db: AsyncSession) -> list[DestinationSummary]:
     if not location_ids:
         return []
 
+    tour_cover_by_location: dict[uuid.UUID, tuple[uuid.UUID, uuid.UUID]] = {}
+    for loc_id, tour_id, image_id in await db.execute(
+        select(LocationTag.location_id, Tour.id, TourImage.id)
+        .join(Tour, (Tour.id == LocationTag.entity_id) & (LocationTag.entity_type == TaggableEntityType.TOUR))
+        .join(TourImage, TourImage.tour_id == Tour.id)
+        .where(Tour.status == TourStatus.PUBLISHED, LocationTag.location_id.in_(location_ids))
+        .order_by(TourImage.sort_order)
+    ):
+        tour_cover_by_location.setdefault(loc_id, (tour_id, image_id))
+
+    property_cover_by_location: dict[uuid.UUID, tuple[uuid.UUID, uuid.UUID]] = {}
+    for loc_id, property_id, image_id in await db.execute(
+        select(LocationTag.location_id, Property.id, PropertyImage.id)
+        .join(
+            Property, (Property.id == LocationTag.entity_id) & (LocationTag.entity_type == TaggableEntityType.PROPERTY)
+        )
+        .join(PropertyImage, PropertyImage.property_id == Property.id)
+        .where(Property.status == PropertyStatus.PUBLISHED, LocationTag.location_id.in_(location_ids))
+        .order_by(PropertyImage.sort_order)
+    ):
+        property_cover_by_location.setdefault(loc_id, (property_id, image_id))
+
     result = await db.execute(select(Location).where(Location.id.in_(location_ids)))
     locations = result.scalars().all()
     return [
@@ -243,6 +265,10 @@ async def get_destinations(db: AsyncSession) -> list[DestinationSummary]:
             published_tour_count=tour_counts.get(loc.id, 0),
             published_property_count=property_counts.get(loc.id, 0),
             published_vehicle_count=vehicle_counts.get(loc.id, 0),
+            cover_tour_id=tour_cover_by_location.get(loc.id, (None, None))[0],
+            cover_tour_image_id=tour_cover_by_location.get(loc.id, (None, None))[1],
+            cover_property_id=property_cover_by_location.get(loc.id, (None, None))[0],
+            cover_property_image_id=property_cover_by_location.get(loc.id, (None, None))[1],
         )
         for loc in locations
     ]

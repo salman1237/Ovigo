@@ -24,3 +24,11 @@ class DestinationSummary(BaseModel):
     published_tour_count: int
     published_property_count: int
     published_vehicle_count: int = 0
+    # One representative photo for this destination — a real tour/property image
+    # already in R2, not a stock placeholder. Tour cover preferred over property
+    # when both exist (see get_destinations); frontend builds the file URL from
+    # whichever pair is non-null via tourImageUrl/propertyImageUrl.
+    cover_tour_id: uuid.UUID | None = None
+    cover_tour_image_id: uuid.UUID | None = None
+    cover_property_id: uuid.UUID | None = None
+    cover_property_image_id: uuid.UUID | None = None
