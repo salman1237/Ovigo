@@ -153,7 +153,7 @@ export default function CartPage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.25, delay: i * 0.05 }}
               >
-                <Card className="flex items-center justify-between p-4">
+                <Card variant="elevated" className="flex items-center justify-between p-4">
                   <div>
                     <p className="font-medium text-zinc-900 dark:text-zinc-50">{item.title}</p>
                     <p className="text-xs text-zinc-500">{item.subtitle}</p>
@@ -228,23 +228,46 @@ export default function CartPage() {
             )}
           </div>
 
-          <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-            {bundleDiscountRate > 0 || promoDiscount > 0 || loyaltyDiscount > 0 ? (
-              <>
-                Total: <span className="text-zinc-400 line-through">{formatMoney(total.toFixed(2))}</span>{" "}
-                <span className="font-semibold text-emerald-600">{formatMoney(finalTotal.toFixed(2))}</span>{" "}
-                <ApproxPrice amountBDT={finalTotal} />
-              </>
-            ) : (
-              <>
-                Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total.toFixed(2))}</span> <ApproxPrice amountBDT={total} />
-              </>
-            )}
-          </p>
-          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-          <Button onClick={checkout} loading={submitting} className="mt-4">
-            {submitting ? "Redirecting to payment…" : "Checkout & Pay"}
-          </Button>
+          <Card variant="elevated" className="mt-6">
+            <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Order summary</h2>
+            <div className="mt-3 flex flex-col gap-2 text-sm">
+              <div className="flex justify-between text-zinc-600 dark:text-zinc-400">
+                <span>Subtotal</span>
+                <span>{formatMoney(total.toFixed(2))}</span>
+              </div>
+              {bundleDiscountRate > 0 && (
+                <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                  <span>Package discount ({(bundleDiscountRate * 100).toFixed(0)}%)</span>
+                  <span>-{formatMoney((total - afterBundle).toFixed(2))}</span>
+                </div>
+              )}
+              {promoDiscount > 0 && (
+                <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                  <span>Promo code</span>
+                  <span>-{formatMoney(promoDiscount.toFixed(2))}</span>
+                </div>
+              )}
+              {loyaltyDiscount > 0 && (
+                <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                  <span>Loyalty points</span>
+                  <span>-{formatMoney(loyaltyDiscount.toFixed(2))}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                <span className="font-semibold text-zinc-900 dark:text-zinc-50">Total</span>
+                <span className="text-right">
+                  <span className="block font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(finalTotal.toFixed(2))}</span>
+                  <span className="text-xs text-zinc-400">
+                    <ApproxPrice amountBDT={finalTotal} />
+                  </span>
+                </span>
+              </div>
+            </div>
+            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+            <Button onClick={checkout} loading={submitting} className="mt-4 w-full">
+              {submitting ? "Redirecting to payment…" : "Checkout & Pay"}
+            </Button>
+          </Card>
         </>
       )}
     </div>
