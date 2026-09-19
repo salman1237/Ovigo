@@ -11,6 +11,11 @@ export const buttonVariants = cva(
       variant: {
         primary:
           "bg-gradient-to-r from-primary-600 to-indigo-600 text-white shadow-md shadow-primary-600/20 hover:shadow-lg hover:shadow-primary-600/30 hover:-translate-y-0.5 active:translate-y-0",
+        // The one deliberately-amber button — a single primary search/booking
+        // action per screen (the hero search widget, a checkout CTA), never a
+        // second "default" button style. See DESIGN_SYSTEM.md's accent-color rule.
+        accent:
+          "bg-accent-500 text-white shadow-md shadow-accent-600/25 hover:bg-accent-600 hover:shadow-lg hover:shadow-accent-600/30 hover:-translate-y-0.5 active:translate-y-0",
         secondary:
           "border border-zinc-300 bg-white text-zinc-700 hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-primary-700 dark:hover:bg-zinc-800",
         ghost:

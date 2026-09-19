@@ -47,17 +47,17 @@ export function HeroSearchWidget() {
 
   return (
     <div className="w-full max-w-3xl rounded-2xl border border-zinc-200 bg-white/95 p-3 shadow-elevated backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 sm:p-4">
-      <div className="flex gap-1 overflow-x-auto">
+      <div className="flex gap-1 overflow-x-auto border-b border-zinc-100 dark:border-zinc-800">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
             className={cn(
-              "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:px-3.5",
+              "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors sm:px-3.5",
               tab === t.id
-                ? "bg-primary-50 text-primary-700 dark:bg-primary-950 dark:text-primary-300"
-                : "text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                ? "border-accent-500 text-zinc-900 dark:text-zinc-50"
+                : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
             )}
           >
             <t.icon className="h-4 w-4" />
@@ -102,7 +102,7 @@ export function HeroSearchWidget() {
           </>
         )}
 
-        <Button onClick={search} size="lg" className="sm:w-auto">
+        <Button onClick={search} variant="accent" size="lg" className="sm:w-auto">
           <Search className="h-4 w-4" />
           Search
         </Button>
