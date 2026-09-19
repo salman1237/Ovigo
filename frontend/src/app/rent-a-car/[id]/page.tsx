@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
+import { VEHICLE_TYPE_ICONS } from "@/lib/vehicleIcons";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCartStore } from "@/stores/cart-store";
 import type { Booking } from "@/types/booking";
@@ -33,9 +34,15 @@ export default function VehicleDetailPage() {
   if (isLoading) return <Spinner />;
   if (error || !vehicle) return <ErrorState message="Vehicle not found." />;
 
+  const TypeIcon = VEHICLE_TYPE_ICONS[vehicle.vehicle_type];
+
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
-      <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{vehicle.make} {vehicle.model} ({vehicle.year})</h1>
+      <div className="flex aspect-[21/9] w-full items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-indigo-600">
+        <TypeIcon className="h-20 w-20 text-white/90" strokeWidth={1.25} />
+      </div>
+
+      <h1 className="mt-4 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{vehicle.make} {vehicle.model} ({vehicle.year})</h1>
       <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">
         {VEHICLE_TYPE_LABELS[vehicle.vehicle_type]} · {vehicle.transmission} · {vehicle.seats} seats · {formatMoney(vehicle.price_per_day)}/day <ApproxPrice amountBDT={vehicle.price_per_day} />
         {vehicle.with_driver && " · comes with a driver"}

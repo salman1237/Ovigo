@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { MapPin, Search } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
 import { SponsoredResults } from "@/components/shared/SponsoredResults";
 import { Button } from "@/components/ui/Button";
@@ -20,10 +21,19 @@ import { firstImageId, tourImageUrl } from "@/lib/media";
 import type { TourSummary } from "@/types/tour";
 
 export default function ToursSearchPage() {
-  const [locationSlug, setLocationSlug] = useState("");
-  const [keyword, setKeyword] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [searchKeyword, setSearchKeyword] = useState("");
+  return (
+    <Suspense>
+      <ToursSearchContent />
+    </Suspense>
+  );
+}
+
+function ToursSearchContent() {
+  const initial = useSearchParams();
+  const [locationSlug, setLocationSlug] = useState(initial.get("location_slug") ?? "");
+  const [keyword, setKeyword] = useState(initial.get("q") ?? "");
+  const [searchTerm, setSearchTerm] = useState(initial.get("location_slug") ?? "");
+  const [searchKeyword, setSearchKeyword] = useState(initial.get("q") ?? "");
 
   const { data: tours, isLoading, isError } = useQuery({
     queryKey: ["tours-search", searchTerm, searchKeyword],

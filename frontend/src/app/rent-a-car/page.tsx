@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Car, Search } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
 import { SponsoredResults } from "@/components/shared/SponsoredResults";
 import { Button } from "@/components/ui/Button";
@@ -16,13 +17,23 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { apiClient } from "@/lib/api-client";
 import { ApproxPrice } from "@/components/shared/ApproxPrice";
 import { formatMoney } from "@/lib/format";
+import { VEHICLE_TYPE_ICONS } from "@/lib/vehicleIcons";
 import { VEHICLE_TYPE_LABELS, type Vehicle } from "@/types/rentcar";
 
 export default function RentACarSearchPage() {
-  const [locationSlug, setLocationSlug] = useState("");
-  const [keyword, setKeyword] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [searchKeyword, setSearchKeyword] = useState("");
+  return (
+    <Suspense>
+      <RentACarSearchContent />
+    </Suspense>
+  );
+}
+
+function RentACarSearchContent() {
+  const initial = useSearchParams();
+  const [locationSlug, setLocationSlug] = useState(initial.get("location_slug") ?? "");
+  const [keyword, setKeyword] = useState(initial.get("q") ?? "");
+  const [searchTerm, setSearchTerm] = useState(initial.get("location_slug") ?? "");
+  const [searchKeyword, setSearchKeyword] = useState(initial.get("q") ?? "");
 
   const { data: vehicles, isLoading, isError } = useQuery({
     queryKey: ["vehicles-search", searchTerm, searchKeyword],
@@ -81,26 +92,35 @@ export default function RentACarSearchPage() {
       )}
 
       <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {(vehicles ?? []).map((v, i) => (
-          <motion.div
-            key={v.id}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: Math.min(i, 6) * 0.05 }}
-          >
-            <Link href={`/rent-a-car/${v.id}`}>
-              <Card hoverable className="flex h-full flex-col">
-                <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
-                  {v.make} {v.model} ({v.year})
-                </h3>
-                <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">
-                  {VEHICLE_TYPE_LABELS[v.vehicle_type]} · {v.seats} seats · {formatMoney(v.price_per_day)}/day <ApproxPrice amountBDT={v.price_per_day} />
-                  {v.with_driver && " · with driver"}
-                </p>
-              </Card>
-            </Link>
-          </motion.div>
-        ))}
+        {(vehicles ?? []).map((v, i) => {
+          const TypeIcon = VEHICLE_TYPE_ICONS[v.vehicle_type];
+          return (
+            <motion.div
+              key={v.id}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: Math.min(i, 6) * 0.05 }}
+            >
+              <Link href={`/rent-a-car/${v.id}`}>
+                <Card hoverable className="flex h-full flex-col overflow-hidden p-0">
+                  <div className="flex aspect-[4/3] w-full items-center justify-center bg-gradient-to-br from-primary-500 to-indigo-600">
+                    <TypeIcon className="h-16 w-16 text-white/90" strokeWidth={1.25} />
+                  </div>
+                  <div className="flex flex-1 flex-col p-5">
+                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
+                      {v.make} {v.model} ({v.year})
+                    </h3>
+                    <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">
+                      {VEHICLE_TYPE_LABELS[v.vehicle_type]} · {v.seats} seats · {formatMoney(v.price_per_day)}/day{" "}
+                      <ApproxPrice amountBDT={v.price_per_day} />
+                      {v.with_driver && " · with driver"}
+                    </p>
+                  </div>
+                </Card>
+              </Link>
+            </motion.div>
+          );
+        })}
       </div>
     </div>
   );

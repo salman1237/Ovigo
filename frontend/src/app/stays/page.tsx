@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Building2, Search } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
 import { SponsoredResults } from "@/components/shared/SponsoredResults";
 import { Button } from "@/components/ui/Button";
@@ -18,12 +19,30 @@ import { firstImageId, propertyImageUrl } from "@/lib/media";
 import { PROPERTY_TYPE_LABELS, type Property } from "@/types/stay";
 
 export default function StaysSearchPage() {
-  const [locationSlug, setLocationSlug] = useState("");
+  return (
+    <Suspense>
+      <StaysSearchContent />
+    </Suspense>
+  );
+}
+
+function StaysSearchContent() {
+  const initial = useSearchParams();
+  const initialCheckIn = initial.get("check_in") ?? "";
+  const initialCheckOut = initial.get("check_out") ?? "";
+  const [locationSlug, setLocationSlug] = useState(initial.get("location_slug") ?? "");
   const [keyword, setKeyword] = useState("");
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
-  const [guests, setGuests] = useState(1);
-  const [params, setParams] = useState<{ slug: string; keyword: string; checkIn: string; checkOut: string; guests: number } | null>(null);
+  const [checkIn, setCheckIn] = useState(initialCheckIn);
+  const [checkOut, setCheckOut] = useState(initialCheckOut);
+  const [guests, setGuests] = useState(Number(initial.get("guests")) || 1);
+  // Auto-search only if the hero widget already collected dates — a bare
+  // destination with no dates isn't enough for this endpoint to be useful,
+  // so that case just pre-fills the form and waits for the traveler to submit.
+  const [params, setParams] = useState<{ slug: string; keyword: string; checkIn: string; checkOut: string; guests: number } | null>(
+    initialCheckIn && initialCheckOut
+      ? { slug: initial.get("location_slug") ?? "", keyword: "", checkIn: initialCheckIn, checkOut: initialCheckOut, guests: Number(initial.get("guests")) || 1 }
+      : null
+  );
 
   const { data: stays, isLoading, isError } = useQuery({
     queryKey: ["stays-search", params],

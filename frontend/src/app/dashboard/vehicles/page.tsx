@@ -15,6 +15,7 @@ import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
+import { VEHICLE_TYPE_ICONS } from "@/lib/vehicleIcons";
 import { useAuthStore } from "@/stores/auth-store";
 import { TransmissionType, VEHICLE_STATUS_LABELS, VEHICLE_TYPE_LABELS, Vehicle, VehicleType } from "@/types/rentcar";
 
@@ -123,17 +124,25 @@ export default function DashboardVehiclesPage() {
       )}
 
       <div className="mt-6 flex flex-col gap-3">
-        {(vehicles ?? []).map((v) => (
-          <Link key={v.id} href={`/dashboard/vehicles/${v.id}`}>
-            <Card hoverable className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-zinc-900 dark:text-zinc-50">{v.make} {v.model} ({v.year})</p>
-                <p className="text-xs text-zinc-500">{formatMoney(v.price_per_day)}/day</p>
-              </div>
-              <Badge variant={STATUS_VARIANTS[v.status]}>{VEHICLE_STATUS_LABELS[v.status]}</Badge>
-            </Card>
-          </Link>
-        ))}
+        {(vehicles ?? []).map((v) => {
+          const TypeIcon = VEHICLE_TYPE_ICONS[v.vehicle_type];
+          return (
+            <Link key={v.id} href={`/dashboard/vehicles/${v.id}`}>
+              <Card hoverable className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-indigo-600">
+                    <TypeIcon className="h-6 w-6 text-white/90" strokeWidth={1.25} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-zinc-900 dark:text-zinc-50">{v.make} {v.model} ({v.year})</p>
+                    <p className="text-xs text-zinc-500">{formatMoney(v.price_per_day)}/day</p>
+                  </div>
+                </div>
+                <Badge variant={STATUS_VARIANTS[v.status]}>{VEHICLE_STATUS_LABELS[v.status]}</Badge>
+              </Card>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
