@@ -37,7 +37,7 @@ export default function VehicleDetailPage() {
   const TypeIcon = VEHICLE_TYPE_ICONS[vehicle.vehicle_type];
 
   return (
-    <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
+    <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
       <div className="flex aspect-[21/9] w-full items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-indigo-600">
         <TypeIcon className="h-20 w-20 text-white/90" strokeWidth={1.25} />
       </div>
@@ -47,16 +47,25 @@ export default function VehicleDetailPage() {
         {VEHICLE_TYPE_LABELS[vehicle.vehicle_type]} · {vehicle.transmission} · {vehicle.seats} seats · {formatMoney(vehicle.price_per_day)}/day <ApproxPrice amountBDT={vehicle.price_per_day} />
         {vehicle.with_driver && " · comes with a driver"}
       </p>
-      {vehicle.description && <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">{vehicle.description}</p>}
 
       <div className="mt-3">
         <MessageButton contextType="vehicle" contextId={vehicle.id} label="Message this Rent-a-Car partner" />
       </div>
 
-      <BookVehicleSection vehicle={vehicle} />
+      <div className="mt-8 flex flex-col gap-10 lg:flex-row">
+        <div className="min-w-0 flex-1">
+          {vehicle.description && <p className="text-sm text-zinc-700 dark:text-zinc-300">{vehicle.description}</p>}
 
-      <FrequentlyBookedWith endpoint={`/api/v1/vehicles/${vehicle.id}/frequently-booked-with`} />
-      <SimilarVehicles vehicleId={vehicle.id} />
+          <FrequentlyBookedWith endpoint={`/api/v1/vehicles/${vehicle.id}/frequently-booked-with`} />
+          <SimilarVehicles vehicleId={vehicle.id} />
+        </div>
+
+        <div className="lg:w-80 lg:shrink-0">
+          <div className="lg:sticky lg:top-20">
+            <BookVehicleSection vehicle={vehicle} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -113,7 +122,7 @@ function BookVehicleSection({ vehicle }: { vehicle: Vehicle }) {
 
   if (!user) {
     return (
-      <Card className="mt-10">
+      <Card variant="elevated">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           <Link href="/account/login" className="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
             Sign in
@@ -125,32 +134,31 @@ function BookVehicleSection({ vehicle }: { vehicle: Vehicle }) {
   }
 
   return (
-    <Card className="mt-10">
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Book this vehicle</h2>
-      <div className="mt-3 flex flex-col gap-3">
-        <div className="flex flex-wrap gap-2">
-          <Input type="date" label="Pickup" value={pickup} onChange={(e) => setPickup(e.target.value)} />
-          <Input type="date" label="Return" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
-        </div>
+    <Card variant="elevated">
+      <p className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+        {formatMoney(vehicle.price_per_day)} <span className="text-sm font-normal text-zinc-500">/ day</span>
+      </p>
+      <div className="mt-4 flex flex-col gap-3">
+        <Input type="date" label="Pickup" value={pickup} onChange={(e) => setPickup(e.target.value)} />
+        <Input type="date" label="Return" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
         {days > 0 && (
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            {days} day(s) — Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span> <ApproxPrice amountBDT={total} />
-          </p>
+          <div className="flex items-center justify-between border-t border-zinc-100 pt-3 text-sm dark:border-zinc-800">
+            <span className="text-zinc-500">{days} day(s)</span>
+            <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span>
+          </div>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={book} loading={submitting} disabled={days <= 0}>
-            {submitting ? "Redirecting to payment…" : "Book & Pay"}
-          </Button>
-          <Button variant="secondary" onClick={addVehicleToCart} disabled={days <= 0}>
-            Add to cart
-          </Button>
-          {addedToCart && (
-            <Link href="/cart" className="text-sm text-primary-600 underline dark:text-primary-400">
-              Added to cart →
-            </Link>
-          )}
-        </div>
+        <Button onClick={book} loading={submitting} disabled={days <= 0} className="w-full">
+          {submitting ? "Redirecting to payment…" : "Book & Pay"}
+        </Button>
+        <Button variant="secondary" onClick={addVehicleToCart} disabled={days <= 0} className="w-full">
+          Add to cart
+        </Button>
+        {addedToCart && (
+          <Link href="/cart" className="text-center text-sm text-primary-600 underline dark:text-primary-400">
+            Added to cart →
+          </Link>
+        )}
       </div>
     </Card>
   );

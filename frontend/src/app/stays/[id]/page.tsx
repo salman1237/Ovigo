@@ -41,7 +41,7 @@ export default function StayDetailPage() {
   if (error || !property) return <ErrorState message="Property not found." />;
 
   return (
-    <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
+    <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
       <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{property.name}</h1>
       <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">{PROPERTY_TYPE_LABELS[property.property_type]}</p>
       <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -51,57 +51,67 @@ export default function StayDetailPage() {
 
       <PhotoGallery images={property.images} urlFor={(img) => propertyImageUrl(property.id, img.id)} alt={property.name} />
 
-      {property.description && <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">{property.description}</p>}
+      <div className="mt-8 flex flex-col gap-10 lg:flex-row">
+        <div className="min-w-0 flex-1">
+          {property.description && <p className="text-sm text-zinc-700 dark:text-zinc-300">{property.description}</p>}
 
-      {property.amenities.length > 0 && (
-        <div className="mt-6">
-          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Amenities</h2>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {property.amenities.map((a) => (
-              <Badge key={a.amenity}>{AMENITY_LABELS[a.amenity]}</Badge>
-            ))}
+          {property.amenities.length > 0 && (
+            <div className="mt-6">
+              <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Amenities</h2>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {property.amenities.map((a) => (
+                  <Badge key={a.amenity}>{AMENITY_LABELS[a.amenity]}</Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {property.room_types.length > 0 && (
+            <div className="mt-6">
+              <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Room types</h2>
+              <div className="mt-2 flex flex-col gap-2">
+                {property.room_types.map((rt) => (
+                  <Card key={rt.id} className="p-3 text-sm">
+                    <p className="font-medium">{rt.name}</p>
+                    <p className="text-zinc-500">Up to {rt.max_occupancy} guests · {formatMoney(rt.base_price)}/night</p>
+                    {rt.description && <p className="mt-1 text-zinc-400">{rt.description}</p>}
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(property.check_in_time || property.check_out_time || property.cancellation_policy || property.house_rules) && (
+            <div className="mt-6">
+              <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Policies</h2>
+              <dl className="mt-2 space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
+                {property.check_in_time && <div><dt className="inline font-medium">Check-in: </dt><dd className="inline">{property.check_in_time}</dd></div>}
+                {property.check_out_time && <div><dt className="inline font-medium">Check-out: </dt><dd className="inline">{property.check_out_time}</dd></div>}
+                {property.cancellation_policy && <div><dt className="inline font-medium">Cancellation: </dt><dd className="inline">{property.cancellation_policy}</dd></div>}
+                {property.house_rules && <div><dt className="inline font-medium">House rules: </dt><dd className="inline">{property.house_rules}</dd></div>}
+              </dl>
+            </div>
+          )}
+
+          <div className="mt-10">
+            <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Reviews</h2>
+            <div className="mt-2">
+              <ReviewsList propertyId={property.id} />
+            </div>
           </div>
-        </div>
-      )}
 
-      {property.room_types.length > 0 && (
-        <div className="mt-6">
-          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Room types</h2>
-          <div className="mt-2 flex flex-col gap-2">
-            {property.room_types.map((rt) => (
-              <Card key={rt.id} className="p-3 text-sm">
-                <p className="font-medium">{rt.name}</p>
-                <p className="text-zinc-500">Up to {rt.max_occupancy} guests · {formatMoney(rt.base_price)}/night</p>
-                {rt.description && <p className="mt-1 text-zinc-400">{rt.description}</p>}
-              </Card>
-            ))}
+          <FrequentlyBookedWith endpoint={`/api/v1/properties/${property.id}/frequently-booked-with`} />
+          <SimilarProperties propertyId={property.id} />
+        </div>
+
+        {property.room_types.length > 0 && (
+          <div className="lg:w-80 lg:shrink-0">
+            <div className="lg:sticky lg:top-20">
+              <BookStaySection property={property} />
+            </div>
           </div>
-        </div>
-      )}
-
-      {(property.check_in_time || property.check_out_time || property.cancellation_policy || property.house_rules) && (
-        <div className="mt-6">
-          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Policies</h2>
-          <dl className="mt-2 space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
-            {property.check_in_time && <div><dt className="inline font-medium">Check-in: </dt><dd className="inline">{property.check_in_time}</dd></div>}
-            {property.check_out_time && <div><dt className="inline font-medium">Check-out: </dt><dd className="inline">{property.check_out_time}</dd></div>}
-            {property.cancellation_policy && <div><dt className="inline font-medium">Cancellation: </dt><dd className="inline">{property.cancellation_policy}</dd></div>}
-            {property.house_rules && <div><dt className="inline font-medium">House rules: </dt><dd className="inline">{property.house_rules}</dd></div>}
-          </dl>
-        </div>
-      )}
-
-      {property.room_types.length > 0 && <BookStaySection property={property} />}
-
-      <div className="mt-10">
-        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Reviews</h2>
-        <div className="mt-2">
-          <ReviewsList propertyId={property.id} />
-        </div>
+        )}
       </div>
-
-      <FrequentlyBookedWith endpoint={`/api/v1/properties/${property.id}/frequently-booked-with`} />
-      <SimilarProperties propertyId={property.id} />
     </div>
   );
 }
@@ -165,7 +175,7 @@ function BookStaySection({ property }: { property: Property }) {
 
   if (!user) {
     return (
-      <Card className="mt-10">
+      <Card variant="elevated">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           <Link href="/account/login" className="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
             Sign in
@@ -177,19 +187,25 @@ function BookStaySection({ property }: { property: Property }) {
   }
 
   return (
-    <Card className="mt-10">
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Book this stay</h2>
-      <div className="mt-3 flex flex-col gap-3">
+    <Card variant="elevated">
+      <p className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+        {formatMoney(roomType?.base_price ?? property.room_types[0].base_price)}{" "}
+        <span className="text-sm font-normal text-zinc-500">/ night</span>
+      </p>
+      <p className="text-xs text-zinc-400">
+        <ApproxPrice amountBDT={roomType?.base_price ?? property.room_types[0].base_price} />
+      </p>
+      <div className="mt-4 flex flex-col gap-3">
         <Select label="Room type" value={roomTypeId} onChange={(e) => setRoomTypeId(e.target.value)}>
           {property.room_types.map((rt) => (
             <option key={rt.id} value={rt.id}>{rt.name} — {formatMoney(rt.base_price)}/night</option>
           ))}
         </Select>
         <div className="flex flex-wrap gap-2">
-          <Input type="date" label="Check-in" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} />
-          <Input type="date" label="Check-out" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} />
-          <Input type="number" label="Rooms" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} className="w-24" />
+          <Input type="date" label="Check-in" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="flex-1" />
+          <Input type="date" label="Check-out" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="flex-1" />
         </div>
+        <Input type="number" label="Rooms" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
         <div className="flex flex-col gap-2">
           {guestNames.map((name, i) => (
             <Input
@@ -208,24 +224,25 @@ function BookStaySection({ property }: { property: Property }) {
           </button>
         </div>
         {nights > 0 && (
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            {nights} night(s) × {quantity} room(s) — Total: <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span> <ApproxPrice amountBDT={total} />
-          </p>
+          <div className="flex items-center justify-between border-t border-zinc-100 pt-3 text-sm dark:border-zinc-800">
+            <span className="text-zinc-500">
+              {nights} night(s) × {quantity} room(s)
+            </span>
+            <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span>
+          </div>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={book} loading={submitting} disabled={!roomTypeId || nights <= 0}>
-            {submitting ? "Redirecting to payment…" : "Book & Pay"}
-          </Button>
-          <Button variant="secondary" onClick={addStayToCart} disabled={!roomTypeId || nights <= 0}>
-            Add to cart
-          </Button>
-          {addedToCart && (
-            <Link href="/cart" className="text-sm text-primary-600 underline dark:text-primary-400">
-              Added — combine with a tour in your cart →
-            </Link>
-          )}
-        </div>
+        <Button onClick={book} loading={submitting} disabled={!roomTypeId || nights <= 0} className="w-full">
+          {submitting ? "Redirecting to payment…" : "Book & Pay"}
+        </Button>
+        <Button variant="secondary" onClick={addStayToCart} disabled={!roomTypeId || nights <= 0} className="w-full">
+          Add to cart
+        </Button>
+        {addedToCart && (
+          <Link href="/cart" className="text-center text-sm text-primary-600 underline dark:text-primary-400">
+            Added — combine with a tour in your cart →
+          </Link>
+        )}
       </div>
     </Card>
   );
