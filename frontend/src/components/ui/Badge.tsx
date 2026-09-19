@@ -11,6 +11,10 @@ const badgeVariants = cva("inline-flex items-center gap-1 rounded-full px-2.5 py
       success: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
       warning: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
       danger: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+      // Bold-filled accent — deals, urgency ("3 seats left"), ratings. Distinct
+      // from the soft-tint "warning" (admin/status states) on purpose: this one
+      // is meant to be noticed, not to caution. See globals.css --color-accent-*.
+      accent: "bg-accent-500 text-white dark:bg-accent-600",
     },
   },
   defaultVariants: { variant: "neutral" },

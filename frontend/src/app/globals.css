@@ -4,7 +4,7 @@
   --background: #ffffff;
   --foreground: #0f172a;
 
-  /* Primary — blue, the app's signature color */
+  /* Primary — blue, the app's signature/trust color */
   --color-primary-50: #eff6ff;
   --color-primary-100: #dbeafe;
   --color-primary-200: #bfdbfe;
@@ -16,6 +16,23 @@
   --color-primary-800: #1e40af;
   --color-primary-900: #1e3a8a;
   --color-primary-950: #172554;
+
+  /* Accent — warm amber, Phase 6 redesign. Reserved for deals/urgency/ratings —
+     deliberately a minority color (see OVIGO_TECHNICAL_DOCUMENT.md §8 Phase 6)
+     so it reads as "energetic highlight," not a second primary color. */
+  --color-accent-50: #fffbeb;
+  --color-accent-100: #fef3c7;
+  --color-accent-200: #fde68a;
+  --color-accent-300: #fcd34d;
+  --color-accent-400: #fbbf24;
+  --color-accent-500: #f59e0b;
+  --color-accent-600: #d97706;
+  --color-accent-700: #b45309;
+  --color-accent-800: #92400e;
+  --color-accent-900: #78350f;
+  --color-accent-950: #451a03;
+
+  --shadow-elevated: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(37, 99, 235, 0.06);
 }
 
 @theme inline {
@@ -32,8 +49,21 @@
   --color-primary-800: var(--color-primary-800);
   --color-primary-900: var(--color-primary-900);
   --color-primary-950: var(--color-primary-950);
+  --color-accent-50: var(--color-accent-50);
+  --color-accent-100: var(--color-accent-100);
+  --color-accent-200: var(--color-accent-200);
+  --color-accent-300: var(--color-accent-300);
+  --color-accent-400: var(--color-accent-400);
+  --color-accent-500: var(--color-accent-500);
+  --color-accent-600: var(--color-accent-600);
+  --color-accent-700: var(--color-accent-700);
+  --color-accent-800: var(--color-accent-800);
+  --color-accent-900: var(--color-accent-900);
+  --color-accent-950: var(--color-accent-950);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-heading);
+  --shadow-elevated: var(--shadow-elevated);
 
   --animate-fade-in: fade-in 0.5s ease-out both;
   --animate-slide-up: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -63,12 +93,19 @@
   :root {
     --background: #05070f;
     --foreground: #f1f5f9;
+    --shadow-elevated: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(59, 130, 246, 0.12);
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading), var(--font-sans);
 }
 
 * {
