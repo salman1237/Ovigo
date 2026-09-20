@@ -124,7 +124,7 @@ export default function HomePage() {
                   transition={{ duration: 0.4, delay: i * 0.05 }}
                   className={`${TILTS[i % TILTS.length]} transition-transform duration-300 hover:z-10 hover:rotate-0 hover:scale-105`}
                 >
-                  <Link href={`/tours?location_slug=${dest.slug}`} className="group block">
+                  <Link href={`/destinations/${dest.slug}`} className="group block">
                     <div className="relative h-52 w-36 overflow-hidden rounded-2xl bg-zinc-100 shadow-elevated sm:h-64 sm:w-44 dark:bg-zinc-800">
                       {cover && (
                         // eslint-disable-next-line @next/next/no-img-element
