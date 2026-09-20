@@ -7,7 +7,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
+import { BrowseHero } from "@/components/shared/BrowseHero";
 import { DestinationSearchInput } from "@/components/shared/DestinationSearchInput";
+import { FilterChip } from "@/components/shared/FilterChip";
 import { FilterGroup } from "@/components/shared/FilterGroup";
 import { SponsoredResults } from "@/components/shared/SponsoredResults";
 import { Button } from "@/components/ui/Button";
@@ -87,15 +89,14 @@ function StaysSearchContent() {
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
-      <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Explore Stays</h1>
-      <p className="mt-1 text-sm text-zinc-500">Hotels, resorts, homestays and guesthouses, booked directly from the host.</p>
+      <BrowseHero title="Explore Stays" subtitle="Hotels, resorts, homestays and guesthouses, booked directly from the host." photoIndex={1} />
 
       <form
         onSubmit={(e) => {
           e.preventDefault();
           setParams({ slug: locationSlug, checkIn, checkOut, guests });
         }}
-        className="mt-6 flex flex-col gap-2.5 rounded-2xl border border-zinc-200 bg-white p-3 shadow-elevated dark:border-zinc-800 dark:bg-zinc-900 sm:flex-row sm:flex-wrap sm:items-end"
+        className="relative z-10 -mt-8 flex flex-col gap-2.5 rounded-2xl border border-zinc-200 bg-white p-3 shadow-elevated dark:border-zinc-800 dark:bg-zinc-900 sm:-mt-10 sm:flex-row sm:flex-wrap sm:items-end"
       >
         <DestinationSearchInput
           value={destinationText}
@@ -119,32 +120,16 @@ function StaysSearchContent() {
       <div className="mt-8 flex flex-col gap-8 lg:flex-row">
         <aside className="flex shrink-0 flex-col gap-3 lg:w-64">
           <FilterGroup title="Property type">
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
               {PROPERTY_TYPES.map((t) => (
-                <label key={t} className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  <input
-                    type="checkbox"
-                    checked={types.has(t)}
-                    onChange={() => toggle(types, setTypes, t)}
-                    className="rounded border-zinc-300 text-primary-600 focus:ring-primary-500"
-                  />
-                  {PROPERTY_TYPE_LABELS[t]}
-                </label>
+                <FilterChip key={t} label={PROPERTY_TYPE_LABELS[t]} selected={types.has(t)} onClick={() => toggle(types, setTypes, t)} />
               ))}
             </div>
           </FilterGroup>
           <FilterGroup title="Amenities">
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
               {AMENITIES.map((a) => (
-                <label key={a} className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  <input
-                    type="checkbox"
-                    checked={amenities.has(a)}
-                    onChange={() => toggle(amenities, setAmenities, a)}
-                    className="rounded border-zinc-300 text-primary-600 focus:ring-primary-500"
-                  />
-                  {AMENITY_LABELS[a]}
-                </label>
+                <FilterChip key={a} label={AMENITY_LABELS[a]} selected={amenities.has(a)} onClick={() => toggle(amenities, setAmenities, a)} />
               ))}
             </div>
           </FilterGroup>

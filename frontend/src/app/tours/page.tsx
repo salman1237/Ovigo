@@ -8,7 +8,9 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
 import { ApproxPrice } from "@/components/shared/ApproxPrice";
+import { BrowseHero } from "@/components/shared/BrowseHero";
 import { DestinationSearchInput } from "@/components/shared/DestinationSearchInput";
+import { FilterChip } from "@/components/shared/FilterChip";
 import { FilterGroup } from "@/components/shared/FilterGroup";
 import { SponsoredResults } from "@/components/shared/SponsoredResults";
 import { Button } from "@/components/ui/Button";
@@ -79,15 +81,14 @@ function ToursSearchContent() {
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
-      <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Explore Tours</h1>
-      <p className="mt-1 text-sm text-zinc-500">Fixed-date tours led by verified local experts.</p>
+      <BrowseHero title="Explore Tours" subtitle="Fixed-date tours led by verified local experts." photoIndex={0} />
 
       <form
         onSubmit={(e) => {
           e.preventDefault();
           setSearchKeyword(keyword);
         }}
-        className="mt-6 flex flex-col gap-2.5 rounded-2xl border border-zinc-200 bg-white p-3 shadow-elevated dark:border-zinc-800 dark:bg-zinc-900 sm:flex-row sm:items-center"
+        className="relative z-10 -mt-8 flex flex-col gap-2.5 rounded-2xl border border-zinc-200 bg-white p-3 shadow-elevated dark:border-zinc-800 dark:bg-zinc-900 sm:-mt-10 sm:flex-row sm:items-center"
       >
         <DestinationSearchInput
           value={destinationText}
@@ -123,17 +124,9 @@ function ToursSearchContent() {
             />
           </FilterGroup>
           <FilterGroup title="Duration">
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
               {DURATION_BUCKETS.map((b) => (
-                <label key={b.id} className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  <input
-                    type="checkbox"
-                    checked={durations.has(b.id)}
-                    onChange={() => toggleDuration(b.id)}
-                    className="rounded border-zinc-300 text-primary-600 focus:ring-primary-500"
-                  />
-                  {b.label}
-                </label>
+                <FilterChip key={b.id} label={b.label} selected={durations.has(b.id)} onClick={() => toggleDuration(b.id)} />
               ))}
             </div>
           </FilterGroup>

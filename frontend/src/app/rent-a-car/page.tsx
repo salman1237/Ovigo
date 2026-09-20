@@ -7,7 +7,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
+import { BrowseHero } from "@/components/shared/BrowseHero";
 import { DestinationSearchInput } from "@/components/shared/DestinationSearchInput";
+import { FilterChip } from "@/components/shared/FilterChip";
 import { FilterGroup } from "@/components/shared/FilterGroup";
 import { SponsoredResults } from "@/components/shared/SponsoredResults";
 import { ApproxPrice } from "@/components/shared/ApproxPrice";
@@ -73,12 +75,11 @@ function RentACarSearchContent() {
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
-      <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Rent a Car</h1>
-      <p className="mt-1 text-sm text-zinc-500">Sedans, SUVs and vans, with or without a driver.</p>
+      <BrowseHero title="Rent a Car" subtitle="Sedans, SUVs and vans, with or without a driver." photoIndex={2} />
 
       <form
         onSubmit={(e) => e.preventDefault()}
-        className="mt-6 flex flex-col gap-2.5 rounded-2xl border border-zinc-200 bg-white p-3 shadow-elevated dark:border-zinc-800 dark:bg-zinc-900 sm:flex-row sm:items-center"
+        className="relative z-10 -mt-8 flex flex-col gap-2.5 rounded-2xl border border-zinc-200 bg-white p-3 shadow-elevated dark:border-zinc-800 dark:bg-zinc-900 sm:-mt-10 sm:flex-row sm:items-center"
       >
         <DestinationSearchInput
           value={destinationText}
@@ -108,32 +109,16 @@ function RentACarSearchContent() {
             />
           </FilterGroup>
           <FilterGroup title="Vehicle type">
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
               {VEHICLE_TYPES.map((t) => (
-                <label key={t} className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  <input
-                    type="checkbox"
-                    checked={types.has(t)}
-                    onChange={() => toggle(types, setTypes, t)}
-                    className="rounded border-zinc-300 text-primary-600 focus:ring-primary-500"
-                  />
-                  {VEHICLE_TYPE_LABELS[t]}
-                </label>
+                <FilterChip key={t} label={VEHICLE_TYPE_LABELS[t]} selected={types.has(t)} onClick={() => toggle(types, setTypes, t)} />
               ))}
             </div>
           </FilterGroup>
           <FilterGroup title="Transmission">
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
               {TRANSMISSIONS.map((t) => (
-                <label key={t.id} className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  <input
-                    type="checkbox"
-                    checked={transmissions.has(t.id)}
-                    onChange={() => toggle(transmissions, setTransmissions, t.id)}
-                    className="rounded border-zinc-300 text-primary-600 focus:ring-primary-500"
-                  />
-                  {t.label}
-                </label>
+                <FilterChip key={t.id} label={t.label} selected={transmissions.has(t.id)} onClick={() => toggle(transmissions, setTransmissions, t.id)} />
               ))}
             </div>
           </FilterGroup>

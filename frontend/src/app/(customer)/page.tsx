@@ -2,50 +2,17 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ArrowRight, Building2, Car, Map, Smartphone, UserCheck } from "lucide-react";
+import { ArrowRight, Car, Smartphone } from "lucide-react";
 import Link from "next/link";
 
 import { HeroSearchWidget } from "@/components/shared/HeroSearchWidget";
 import { Card } from "@/components/ui/Card";
+import { useRankedDestinations } from "@/hooks/useRankedDestinations";
 import { apiClient } from "@/lib/api-client";
 import { destinationCoverUrl, firstImageId, propertyImageUrl, tourImageUrl } from "@/lib/media";
 import { formatMoney } from "@/lib/format";
-import type { DestinationSummary } from "@/types/search";
 import type { PropertySummary } from "@/types/stay";
 import type { TourSummary } from "@/types/tour";
-
-const FEATURES = [
-  {
-    icon: Map,
-    title: "Tours",
-    description: "Fixed-date tours led by verified local experts, with full itineraries and transparent pricing.",
-    href: "/tours",
-  },
-  {
-    icon: Building2,
-    title: "Stays",
-    description: "Book rooms directly from hosts and hotels, with real-time availability and instant confirmation.",
-    href: "/stays",
-  },
-  {
-    icon: Car,
-    title: "Rent a Car",
-    description: "Pick a vehicle by date range — sedans, SUVs and vans, with or without a driver.",
-    href: "/rent-a-car",
-  },
-  {
-    icon: UserCheck,
-    title: "Local Experts",
-    description: "Every listing is tied to a verified, admin-approved partner — not an anonymous ad.",
-    href: "/account/partner",
-  },
-  {
-    icon: Smartphone,
-    title: "eSIM",
-    description: "Instant mobile data in 190+ countries — install before you land, no roaming surprises.",
-    href: "/esim",
-  },
-];
 
 // A small alternating tilt per card — the "fanned deck" treatment used for the
 // destinations rail, echoing sharetrip.net's own "Most Popular Destinations"
@@ -53,10 +20,7 @@ const FEATURES = [
 const TILTS = ["-rotate-3", "rotate-2", "-rotate-2", "rotate-3", "-rotate-1", "rotate-1"];
 
 export default function HomePage() {
-  const { data: destinations } = useQuery({
-    queryKey: ["home-destinations"],
-    queryFn: () => apiClient.get<DestinationSummary[]>("/api/v1/search/destinations"),
-  });
+  const ranked = useRankedDestinations();
   const { data: tours } = useQuery({
     queryKey: ["home-tours"],
     queryFn: () => apiClient.get<TourSummary[]>("/api/v1/tours"),
@@ -66,19 +30,19 @@ export default function HomePage() {
     queryFn: () => apiClient.get<PropertySummary[]>("/api/v1/properties"),
   });
 
-  const ranked = [...(destinations ?? [])].sort(
-    (a, b) =>
-      b.published_tour_count + b.published_property_count + b.published_vehicle_count -
-      (a.published_tour_count + a.published_property_count + a.published_vehicle_count)
-  );
   const topDestinations = ranked.slice(0, 6);
   const heroImage = ranked.map(destinationCoverUrl).find(Boolean);
   const featuredTours = (tours ?? []).slice(0, 4);
   const featuredStays = (properties ?? []).slice(0, 4);
 
-  const totalTours = (destinations ?? []).reduce((s, d) => s + d.published_tour_count, 0);
-  const totalProperties = (destinations ?? []).reduce((s, d) => s + d.published_property_count, 0);
-  const totalVehicles = (destinations ?? []).reduce((s, d) => s + d.published_vehicle_count, 0);
+  const totalTours = ranked.reduce((s, d) => s + d.published_tour_count, 0);
+  const totalProperties = ranked.reduce((s, d) => s + d.published_property_count, 0);
+  const totalVehicles = ranked.reduce((s, d) => s + d.published_vehicle_count, 0);
+
+  const tourCoverImage = featuredTours[0] ? firstImageId(featuredTours[0].images) : undefined;
+  const tourCoverUrl = tourCoverImage ? tourImageUrl(featuredTours[0].id, tourCoverImage.id) : null;
+  const stayCoverImage = featuredStays[0] ? firstImageId(featuredStays[0].images) : undefined;
+  const stayCoverUrl = stayCoverImage ? propertyImageUrl(featuredStays[0].id, stayCoverImage.id) : null;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -312,28 +276,79 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Explore by category — bold photo/color tiles, not icon-and-paragraph
+          feature cards (the earlier version read as generic SaaS marketing
+          rather than a travel site). Tours/Stays use a real listing photo;
+          Rent-a-Car and eSIM use a solid color tile since neither has photos
+          to draw on. */}
       <section className="mx-auto w-full max-w-6xl px-6 pb-24">
-        <h2 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Why Ovigo</h2>
-        <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
-          {FEATURES.map((feature, i) => (
+        <h2 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Explore by category</h2>
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          Every listing is tied to a verified, admin-approved partner — not an anonymous ad.
+        </p>
+        <div className="mt-6 grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-4">
+          {[
+            { key: "tours", href: "/tours", title: "Tours", subtitle: "Fixed-date, expert-led", image: tourCoverUrl },
+            { key: "stays", href: "/stays", title: "Stays", subtitle: "Hotels & homestays", image: stayCoverUrl },
+          ].map((tile, i) => (
             <motion.div
-              key={feature.title}
+              key={tile.key}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-40px" }}
               transition={{ duration: 0.5, delay: i * 0.08 }}
             >
-              <Link href={feature.href}>
-                <Card hoverable variant="elevated" className="flex h-full flex-col gap-3">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-indigo-600 text-white shadow-md shadow-primary-600/20">
-                    <feature.icon className="h-5 w-5" />
-                  </span>
-                  <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">{feature.title}</h3>
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">{feature.description}</p>
-                </Card>
+              <Link href={tile.href} className="group relative block aspect-[3/4] overflow-hidden rounded-3xl bg-zinc-100 shadow-elevated dark:bg-zinc-800">
+                {tile.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={tile.image}
+                    alt=""
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                ) : (
+                  <div className="h-full w-full bg-gradient-to-br from-primary-500 to-indigo-600" />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-zinc-950/10 to-transparent" />
+                <div className="absolute inset-x-0 bottom-0 p-4">
+                  <p className="font-heading text-lg font-bold text-white">{tile.title}</p>
+                  <p className="text-xs text-zinc-200">{tile.subtitle}</p>
+                </div>
               </Link>
             </motion.div>
           ))}
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.5, delay: 0.16 }}
+          >
+            <Link
+              href="/rent-a-car"
+              className="group relative flex aspect-[3/4] flex-col justify-end overflow-hidden rounded-3xl bg-gradient-to-br from-primary-600 to-indigo-700 p-4 shadow-elevated"
+            >
+              <Car className="absolute right-4 top-4 h-10 w-10 text-white/25 transition-transform duration-300 group-hover:scale-110" strokeWidth={1.25} />
+              <p className="font-heading text-lg font-bold text-white">Rent a Car</p>
+              <p className="text-xs text-white/80">Sedans, SUVs & vans</p>
+            </Link>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.5, delay: 0.24 }}
+          >
+            <Link
+              href="/esim"
+              className="group relative flex aspect-[3/4] flex-col justify-end overflow-hidden rounded-3xl bg-gradient-to-br from-accent-500 to-accent-700 p-4 shadow-elevated"
+            >
+              <Smartphone className="absolute right-4 top-4 h-10 w-10 text-white/25 transition-transform duration-300 group-hover:scale-110" strokeWidth={1.25} />
+              <p className="font-heading text-lg font-bold text-white">eSIM</p>
+              <p className="text-xs text-white/80">190+ countries, instant</p>
+            </Link>
+          </motion.div>
         </div>
       </section>
     </div>
