@@ -4,7 +4,7 @@
 > See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how we work, and
 > [OVIGO_TECHNICAL_DOCUMENT.md](OVIGO_TECHNICAL_DOCUMENT.md) for full spec per sprint.
 
-_Last updated: 2026-09-20 (Phase 6c — second round of client feedback addressed: mobile nav drawer decluttered (accordion + icons + active states), browse pages gained a photo hero + selectable filter chips, homepage's generic icon-tile section replaced with photo/gradient category tiles — see Phase 6c below)_
+_Last updated: 2026-09-20 (Full self-hosted infrastructure migration: frontend off Vercel and backend's domain moved onto the user's own Dokploy VPS, storage off Cloudflare R2 onto self-hosted MinIO — see "Infrastructure note — full self-hosted migration" below. Also Phase 6c — second round of client feedback addressed: mobile nav drawer decluttered (accordion + icons + active states), browse pages gained a photo hero + selectable filter chips, homepage's generic icon-tile section replaced with photo/gradient category tiles — see Phase 6c below)_
 
 ## Infrastructure & deployment status
 
@@ -12,12 +12,12 @@ _Last updated: 2026-09-20 (Phase 6c — second round of client feedback addresse
 |---|---|---|
 | GitHub repo | Done | `salman1237/Ovigo`, connected |
 | NeonDB | Done | Connection string configured in `backend/.env` (gitignored); 48 tables live — see Sprint 5-6 (13 tables), Sprint 7-8 (`bookings`, `booking_items`, `booking_guests`, `booking_status_history`, `payments`, `escrow_transactions`, `commissions`, `reviews`), Sprint 9 (`notifications`, `disputes`), Sprint 10-11 (`custom_tour_requests`, `tour_bids`), Sprint 12-13 (`guide_supervision`, `guide_assignments`, `guide_availability`, `business_referrals`), Sprint 14-15 Part 1 (`commission_rules`, `payouts`, `badges`), Sprint 14-15 Part 2 (`drivers`, `vehicles`, `vehicle_availability`), Sprint 16 Part 1 (`chat_threads`, `chat_attachments`, `chat_messages`) and Sprint 17-18 (`ad_campaigns`) additions below. Sprint 16 Part 2 (analytics + dispute payout holds) added no new tables — see that section |
-| Cloudflare R2 | Done | `ovigo` bucket, S3-compatible credentials in `backend/.env` and on FastAPI Cloud — see Sprint 5-6 image storage notes |
-| SSLCommerz | Done | Sandbox store credentials in `backend/.env` and on FastAPI Cloud — see Sprint 7-8 payment notes |
+| Object storage | Done | **(2026-09-20)** Migrated off Cloudflare R2 to a self-hosted MinIO container on the Dokploy VPS — see the full infra note below. R2 itself is left untouched as a cold backup, not decommissioned. |
+| SSLCommerz | Done | Sandbox store credentials set on the backend's Dokploy app — see Sprint 7-8 payment notes |
 | Backend scaffold | Done | FastAPI app, config, async SQLAlchemy engine, Alembic wired to Neon |
 | Frontend scaffold | Done | Next.js 16 (App Router, Tailwind v4, TypeScript), builds clean |
-| Vercel project link + auto-deploy | Done | Project `ovigo` (`salman2033` team) linked, GitHub repo connected, production live at `ovigo.vercel.app`, built with `NEXT_PUBLIC_API_URL` pointing at the live backend (confirmed baked into the production JS bundle). |
-| FastAPI Cloud project + auto-deploy | Done | Live at `https://ovigo-e5f049a8.fastapicloud.dev`, GitHub-connected, deploying from Application Directory `backend`. Root cause of the earlier failures: a `pyproject.toml` with a `[project]` table made `uv` treat the backend as an installable package, which broke on the flat `app/`+`migrations/`+`tests/` layout — fixed by deleting `pyproject.toml` and installing straight from `requirements.txt` (matching a sibling project's proven-working setup), plus pinning Python to 3.12 (`.python-version`) since FastAPI Cloud's default 3.14 had no prebuilt wheel for our pinned `pydantic-core`. Required env vars (`DATABASE_URL`, `SYNC_DATABASE_URL`, `JWT_SECRET_KEY`, `ENVIRONMENT`, `CORS_ORIGINS`) set via `fastapi cloud env set`. End-to-end smoke test (register → login) verified against the live Neon DB. |
+| Frontend hosting | Done | **(2026-09-20)** Migrated off Vercel to a self-hosted Docker deployment on the same Dokploy VPS as the backend, `https://ovigo.salmandev.io` — see the full infra note below. The old `ovigo.vercel.app` Vercel project still exists and still auto-deploys on push, but is now dormant/unused and its baked-in API URL points at a retired backend domain, so it no longer works correctly — left as-is rather than deleted, pending the user's call on full teardown. |
+| Backend hosting | Done | **(2026-09-20)** Already running on the user's own Dokploy VPS since 2026-09-03 (originally a FastAPI Cloud outage mitigation); this session renamed its public domain to `https://api-ovigo.salmandev.io` (old `ovigo-api.salmandev.io` fully retired) as part of consolidating everything onto self-hosted infra — see the full infra note below. |
 | CI (GitHub Actions) | Done | `.github/workflows/ci.yml` — backend pytest + frontend lint/build on push/PR to `main` |
 
 ## Phase 1 — Core Marketplace (MVP)
@@ -650,6 +650,32 @@ FastAPI Cloud's build infrastructure hit a sustained outage (repeated identical 
 - `.github/workflows/deploy-dokploy.yml` added (API key stored as a GitHub Actions secret) to auto-deploy here on every backend push, mirroring FastAPI Cloud's own auto-deploy.
 - **The live frontend now points at this Dokploy backend** (`NEXT_PUBLIC_API_URL` updated on Vercel and redeployed, verified in the shipped JS bundle) — FastAPI Cloud is currently idle/unused, not decommissioned; worth revisiting once their outage clears.
 - **(2026-09-03) A second container, `ovigo-elasticsearch`, was added to the same VPS** for Sprint 27-28's free-text search (see that section above) — a plain `docker run`, not a Dokploy-managed application, attached to `dokploy-network` and reachable by the backend at `http://ovigo-elasticsearch:9200`. Port 9200 is bound to the VPS's own loopback only (`127.0.0.1:9200`), for occasional SSH-tunneled admin access — never exposed publicly.
+
+## Infrastructure note — full self-hosted migration (2026-09-20)
+
+The user asked to move everything off third-party PaaS/cloud services (Vercel frontend hosting, Cloudflare R2 storage) onto their own VPS via Dokploy, with new domains `ovigo.salmandev.io` (frontend) and `api-ovigo.salmandev.io` (backend). Investigation before touching anything found the backend was **already** on this exact VPS since the 2026-09-03 mitigation above (not FastAPI Cloud, despite that being the initial framing) — so the real remaining work was a domain rename for the backend, a fresh frontend deployment, and a storage swap.
+
+**Storage — Cloudflare R2 → self-hosted MinIO:**
+- `backend/app/core/storage.py` already used a generic S3-compatible `boto3` client (endpoint/keys/bucket all driven by env vars) — **zero code changes needed**, purely an env-var swap.
+- MinIO (`quay.io/minio/minio` — the `minio/minio` Docker Hub image now requires a paid login, so the app switched to MinIO's own Quay.io mirror) deployed as a plain `docker run` on `dokploy-network`, same pattern as `ovigo-elasticsearch` — no published ports at all, reachable internally at `http://ovigo-minio:9000` only. No public domain, since images are already proxied through the backend rather than served as direct public URLs.
+- A dedicated `ovigo_app_key` MinIO user was created with a least-privilege bucket policy (`GetObject`/`PutObject`/`DeleteObject`/`ListBucket` on the `ovigo` bucket only) — the backend never holds MinIO root credentials.
+- All 101 existing objects (~11MB — tour/property/profile images) copied from R2 to MinIO via a one-off script run inside a temporary `python:3.12-slim` container on the VPS (attached to `dokploy-network`, so it could reach both R2 over the public internet and MinIO internally). Verified: 101/101 migrated, 0 failures, object count matched on the destination.
+- R2 itself is **left untouched as a cold backup** per the user's choice — not deleted, not billed differently either way at this object count.
+
+**Backend — domain rename, same app:**
+- Added domain `api-ovigo.salmandev.io` to the existing `ovigo-api` Dokploy application (`domain.create` via the API), updated its env: `R2_ENDPOINT_URL`/`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY` now point at MinIO (the var names stayed `R2_*` — renaming them would've meant a `config.py` change for zero benefit), `BACKEND_URL` → the new domain, `CORS_ORIGINS`/`FRONTEND_URL` → the new frontend domain (Vercel's origin was kept in `CORS_ORIGINS` too, harmlessly, since it's just an allow-list entry).
+- **Triptel eSIM webhook re-registered** to the new domain (`scripts/configure_triptel_webhook.py`) — this was the one genuinely risky step, since re-running that script immediately invalidates the previous webhook secret on Triptel's side. Rotated and redeployed with the new `TRIPTEL_WEBHOOK_SECRET` within the same short window to minimize the window where an incoming Triptel webhook could fail.
+- SSLCommerz callback URLs needed no separate re-registration — they're built fresh per-transaction from `settings.backend_url`, not statically registered like Triptel's.
+- Old domain `ovigo-api.salmandev.io` **retired** (removed via `domain.delete` + a redeploy to actually drop the Traefik route — the API call alone only updated Dokploy's own DB, Traefik kept routing it until the next deploy) once `api-ovigo.salmandev.io` was confirmed fully working. Verified after retirement: old domain now 404s at the Traefik level, new domain unaffected.
+
+**Frontend — new Dockerized deployment (previously Vercel-only):**
+- `frontend/next.config.ts` gained `output: "standalone"`; new `frontend/Dockerfile` (multi-stage: `npm install` — not `npm ci`, since the Windows-generated lockfile was missing Linux-only optional deps like `@emnapi/*` — build, then a slim runtime copying `.next/standalone` + `.next/static` + `public`) and `.dockerignore`. `NEXT_PUBLIC_API_URL` is passed as a Docker **build arg**, not just a runtime env var, since Next.js inlines `NEXT_PUBLIC_*` values at build time.
+- New Dokploy application `ovigo-frontend` created in the existing `ovigo` project, building from this same repo's `/frontend` directory, domain `ovigo.salmandev.io` with Let's Encrypt SSL.
+- Verified locally before ever pushing: `docker build` succeeded and the built image served `HTTP 200` when run standalone.
+
+**Verified end-to-end on the new stack:** homepage and `/tours` screenshotted live via Playwright — real photos loading (proving frontend → backend → MinIO all connected correctly), zero console/network errors; CORS preflight confirmed `Access-Control-Allow-Origin: https://ovigo.salmandev.io`; a real registration submitted through the live UI succeeded (redirected to the homepage logged in), confirming the full write path (POST → FastAPI → Neon → JWT issuance) works on the new domain pair, not just static reads.
+
+**Not done / left for the user:** the dormant Vercel project (`ovigo.vercel.app`) was not deleted — it still auto-deploys on every push but now points at a retired backend domain, so it's effectively broken; worth a deliberate teardown decision later rather than an unprompted deletion here.
 
 ## MVP Acceptance Criteria (from technical document §11)
 

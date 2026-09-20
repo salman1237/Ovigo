@@ -1,0 +1,21 @@
+name: Deploy frontend to Dokploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-dokploy-frontend.yml"
+
+jobs:
+  deploy:
+    name: Trigger Dokploy deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger deploy
+        run: |
+          curl -sf -X POST \
+            -H "x-api-key: ${{ secrets.DOKPLOY_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"applicationId":"pZkKAeoYq8wGAMenSlHPr"}' \
+            "http://89.116.122.118:3000/api/application.deploy"
