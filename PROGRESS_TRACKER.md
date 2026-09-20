@@ -693,7 +693,17 @@ The location tree was a generic `Country -> Region -> City -> Attraction` chain 
 
 **Verified:** `pytest -q` 32/32 passing; migration applied to production; seed script run against production (8 divisions / 64 districts / 6 upazilas / 4 re-parented, idempotent — re-running skips existing rows by slug); live API checks after redeploy — `/api/v1/locations/search?q=sylhet` returns the full Division→District→Upazila chain, `/api/v1/tours?location_slug=coxs-bazar` still returns all 5 tagged tours, `/api/v1/search/destinations` unaffected (still 9). Also fixed in passing: the frontend's `package-lock.json` was missing Linux-only optional dependencies (generated on Windows), which had been silently failing CI on every push since the Dockerfile was added — regenerated it inside a Linux container and restored `npm ci` in both CI and the Dockerfile.
 
-**Next up (Phase 7.2, not started):** destination-centric discovery — dedicated destination landing pages pulling together experts/tours/stays/guides/transport for one location, now that the location tree can actually represent a real destination hierarchy.
+### Phase 7.2 — Destination-centric discovery (HIGH PRIORITY #2) — Done (2026-09-21)
+
+Ovigo previously only worked as four separate search pages (Tours/Stays/Rent-a-Car/Experts) with no single page for "everything at this destination" — the doc's own example (Sreemangal → Local Experts, Tours, Stays, Guides, Transport, nearby destinations) didn't exist anywhere.
+
+- New backend endpoint `GET /api/v1/search/destinations/{slug}` (`search/service.py::get_destination_detail`) composes one response: a root-to-self breadcrumb, tours, stays, vehicles and local experts — every list **subtree-aware**, reusing the exact same search functions (`tours_service.list_published_tours`, `search_stays`, `search_vehicles`, `search_experts`) the dedicated search pages already call with a `location_slug`, so a Division/District page correctly rolls up everything tagged anywhere underneath it. A cover photo is resolved from the first tour/property image found anywhere in the subtree (works even for upper hierarchy levels with no direct tags of their own). "Nearby destinations" are sibling locations under the same parent.
+- New frontend page `/destinations/[slug]` renders all of it: hero photo + clickable breadcrumb trail, Local Experts cards (first real UI consumer of the `/search/experts` endpoint — it existed on the backend with no frontend surface before this), Tours/Stays/Rent-a-Car grids, and a nearby-destinations rail.
+- Homepage's "Most popular destinations" rail now links to `/destinations/{slug}` instead of straight to `/tours?location_slug=`, making the destination page the actual discovery entry point per the doc's intent.
+
+**Verified:** backend function-level checks against production data at three hierarchy depths (leaf attraction, division, country root) before deploying; live: `/api/v1/search/destinations/coxs-bazar` returns the correct 5-level breadcrumb and correct counts; the live frontend page screenshotted (scroll-through, not just a static capture — `whileInView` reveal animations don't fire without real scroll events, learned earlier this session) shows all four sections rendering with real photos and zero console/network errors; clicking the homepage's Cox's Bazar card lands on the new page.
+
+**Next up (Phase 7.3, not started):** the Local Expert tour builder — no `tour_type` categorization, no tiered pricing (adult/child/infant/seasonal/tax/deposit), no per-tour safety or cancellation-policy fields. The tour model has the least depth of anything in the gap list.
 
 ## MVP Acceptance Criteria (from technical document §11)
 
