@@ -96,7 +96,7 @@ function StaysSearchContent() {
           e.preventDefault();
           setParams({ slug: locationSlug, checkIn, checkOut, guests });
         }}
-        className="relative z-10 -mt-8 flex flex-col gap-2.5 rounded-2xl border border-zinc-200 bg-white p-3 shadow-elevated dark:border-zinc-800 dark:bg-zinc-900 sm:-mt-10 sm:flex-row sm:flex-wrap sm:items-end"
+        className="relative z-10 -mt-4 flex flex-col gap-2.5 rounded-2xl border border-zinc-200 bg-white p-3 shadow-elevated dark:border-zinc-800 dark:bg-zinc-900 sm:-mt-6 sm:flex-row sm:flex-wrap sm:items-end"
       >
         <DestinationSearchInput
           value={destinationText}

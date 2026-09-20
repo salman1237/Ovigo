@@ -32,7 +32,7 @@ export function BrowseHero({
       ) : (
         <div className="h-56 w-full bg-gradient-to-br from-primary-600 to-indigo-700 sm:h-64" />
       )}
-      <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8">
+      <div className="absolute inset-x-0 bottom-0 p-6 pb-10 sm:p-8 sm:pb-14">
         <h1 className="text-2xl font-bold text-white sm:text-3xl">{title}</h1>
         <p className="mt-1 text-sm text-zinc-100">{subtitle}</p>
       </div>

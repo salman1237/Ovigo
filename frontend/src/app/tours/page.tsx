@@ -88,7 +88,7 @@ function ToursSearchContent() {
           e.preventDefault();
           setSearchKeyword(keyword);
         }}
-        className="relative z-10 -mt-8 flex flex-col gap-2.5 rounded-2xl border border-zinc-200 bg-white p-3 shadow-elevated dark:border-zinc-800 dark:bg-zinc-900 sm:-mt-10 sm:flex-row sm:items-center"
+        className="relative z-10 -mt-4 flex flex-col gap-2.5 rounded-2xl border border-zinc-200 bg-white p-3 shadow-elevated dark:border-zinc-800 dark:bg-zinc-900 sm:-mt-6 sm:flex-row sm:items-center"
       >
         <DestinationSearchInput
           value={destinationText}
