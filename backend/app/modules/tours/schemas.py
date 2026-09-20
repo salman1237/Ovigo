@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
-from app.modules.tours.models import MealType, TourStatus
+from app.modules.tours.models import MealType, TourStatus, TourType
 
 
 class TourCreate(BaseModel):
@@ -13,6 +13,19 @@ class TourCreate(BaseModel):
     duration_days: int
     base_price: Decimal
     max_group_size: int = 10
+    tour_type: TourType | None = None
+    child_price: Decimal | None = None
+    infant_price: Decimal | None = None
+    tax_rate: Decimal | None = None
+    service_charge_rate: Decimal | None = None
+    deposit_percentage: Decimal | None = None
+    payment_deadline_days: int | None = None
+    cancellation_policy: str | None = None
+    refund_policy: str | None = None
+    child_policy: str | None = None
+    emergency_contact_phone: str | None = None
+    weather_risk_note: str | None = None
+    activity_risk_note: str | None = None
 
 
 class TourUpdate(BaseModel):
@@ -21,12 +34,28 @@ class TourUpdate(BaseModel):
     duration_days: int | None = None
     base_price: Decimal | None = None
     max_group_size: int | None = None
+    tour_type: TourType | None = None
+    child_price: Decimal | None = None
+    infant_price: Decimal | None = None
+    tax_rate: Decimal | None = None
+    service_charge_rate: Decimal | None = None
+    deposit_percentage: Decimal | None = None
+    payment_deadline_days: int | None = None
+    cancellation_policy: str | None = None
+    refund_policy: str | None = None
+    child_policy: str | None = None
+    emergency_contact_phone: str | None = None
+    weather_risk_note: str | None = None
+    activity_risk_note: str | None = None
 
 
 class ItineraryDayCreate(BaseModel):
     day_number: int
     title: str
     description: str | None = None
+    location_name: str | None = None
+    arrival_time: str | None = None
+    departure_time: str | None = None
 
 
 class ItineraryDayRead(BaseModel):
@@ -35,6 +64,9 @@ class ItineraryDayRead(BaseModel):
     day_number: int
     title: str
     description: str | None
+    location_name: str | None
+    arrival_time: str | None
+    departure_time: str | None
 
 
 class DepartureCreate(BaseModel):
@@ -67,6 +99,14 @@ class ActivityCreate(BaseModel):
     name: str
     description: str | None = None
     is_included: bool = True
+    duration_hours: Decimal | None = None
+    location_name: str | None = None
+    difficulty: str | None = None
+    min_age: int | None = None
+    equipment_needed: str | None = None
+    max_capacity: int | None = None
+    safety_notes: str | None = None
+    guide_required: bool = False
 
 
 class ActivityRead(BaseModel):
@@ -75,6 +115,14 @@ class ActivityRead(BaseModel):
     name: str
     description: str | None
     is_included: bool
+    duration_hours: Decimal | None
+    location_name: str | None
+    difficulty: str | None
+    min_age: int | None
+    equipment_needed: str | None
+    max_capacity: int | None
+    safety_notes: str | None
+    guide_required: bool
 
 
 class AddonCreate(BaseModel):
@@ -94,6 +142,10 @@ class AddonRead(BaseModel):
 class TransportCreate(BaseModel):
     mode: str
     description: str | None = None
+    vehicle_type: str | None = None
+    has_ac: bool | None = None
+    capacity: int | None = None
+    driver_name: str | None = None
 
 
 class TransportRead(BaseModel):
@@ -101,12 +153,18 @@ class TransportRead(BaseModel):
     id: uuid.UUID
     mode: str
     description: str | None
+    vehicle_type: str | None
+    has_ac: bool | None
+    capacity: int | None
+    driver_name: str | None
 
 
 class TourStayCreate(BaseModel):
     property_id: uuid.UUID | None = None
     description: str
     nights: int = 1
+    property_type: str | None = None
+    room_category: str | None = None
 
 
 class TourStayRead(BaseModel):
@@ -115,6 +173,8 @@ class TourStayRead(BaseModel):
     property_id: uuid.UUID | None
     description: str
     nights: int
+    property_type: str | None
+    room_category: str | None
 
 
 class TourImageRead(BaseModel):
@@ -138,6 +198,19 @@ class TourRead(BaseModel):
     status: TourStatus
     rejection_reason: str | None
     created_at: datetime
+    tour_type: TourType | None
+    child_price: Decimal | None
+    infant_price: Decimal | None
+    tax_rate: Decimal | None
+    service_charge_rate: Decimal | None
+    deposit_percentage: Decimal | None
+    payment_deadline_days: int | None
+    cancellation_policy: str | None
+    refund_policy: str | None
+    child_policy: str | None
+    emergency_contact_phone: str | None
+    weather_risk_note: str | None
+    activity_risk_note: str | None
     itinerary: list[ItineraryDayRead] = []
     departures: list[DepartureRead] = []
     meals: list[MealRead] = []
@@ -162,4 +235,5 @@ class TourSummary(BaseModel):
     duration_days: int
     base_price: Decimal
     status: TourStatus
+    tour_type: TourType | None
     images: list[TourImageRead] = []

@@ -34,6 +34,19 @@ class MealType(str, enum.Enum):
     SNACK = "snack"
 
 
+class TourType(str, enum.Enum):
+    ADVENTURE = "adventure"
+    ROMANTIC = "romantic"
+    CULTURAL = "cultural"
+    WILDLIFE = "wildlife"
+    BEACH = "beach"
+    FAMILY = "family"
+    TREKKING = "trekking"
+    CITY = "city"
+    CRUISE = "cruise"
+    RELIGIOUS = "religious"
+
+
 class Tour(Base):
     __tablename__ = "tours"
 
@@ -48,6 +61,21 @@ class Tour(Base):
     base_price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     max_group_size: Mapped[int] = mapped_column(Integer, default=10)
     status: Mapped[TourStatus] = mapped_column(Enum(TourStatus, name="tour_status"), default=TourStatus.DRAFT)
+    tour_type: Mapped[TourType | None] = mapped_column(Enum(TourType, name="tour_type"), nullable=True)
+    # Tiered pricing — base_price above is the adult rate, unchanged for backward compat.
+    child_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    infant_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    tax_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)  # e.g. 0.05 = 5%
+    service_charge_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
+    deposit_percentage: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
+    payment_deadline_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Policies & safety — free text, same pattern as stays/models.py's cancellation_policy.
+    cancellation_policy: Mapped[str | None] = mapped_column(Text, nullable=True)
+    refund_policy: Mapped[str | None] = mapped_column(Text, nullable=True)
+    child_policy: Mapped[str | None] = mapped_column(Text, nullable=True)
+    emergency_contact_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    weather_risk_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    activity_risk_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -81,6 +109,9 @@ class TourItineraryDay(Base):
     day_number: Mapped[int] = mapped_column(Integer)
     title: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    location_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    arrival_time: Mapped[str | None] = mapped_column(String(20), nullable=True)  # free text, e.g. "9:00 AM"
+    departure_time: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     tour: Mapped["Tour"] = relationship(back_populates="itinerary")
 
@@ -116,6 +147,14 @@ class TourActivity(Base):
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_included: Mapped[bool] = mapped_column(Boolean, default=True)
+    duration_hours: Mapped[Decimal | None] = mapped_column(Numeric(4, 1), nullable=True)
+    location_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    difficulty: Mapped[str | None] = mapped_column(String(50), nullable=True)  # free text: easy/moderate/challenging
+    min_age: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    equipment_needed: Mapped[str | None] = mapped_column(Text, nullable=True)
+    max_capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    safety_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    guide_required: Mapped[bool] = mapped_column(Boolean, default=False)
 
     tour: Mapped["Tour"] = relationship(back_populates="activities")
 
@@ -139,6 +178,10 @@ class TourTransport(Base):
     tour_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tours.id", ondelete="CASCADE"))
     mode: Mapped[str] = mapped_column(String(100))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    vehicle_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    has_ac: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    driver_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     tour: Mapped["Tour"] = relationship(back_populates="transport")
 
@@ -153,6 +196,8 @@ class TourStay(Base):
     )
     description: Mapped[str] = mapped_column(String(255))
     nights: Mapped[int] = mapped_column(Integer, default=1)
+    property_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    room_category: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     tour: Mapped["Tour"] = relationship(back_populates="stays")
 
