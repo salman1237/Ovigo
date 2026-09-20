@@ -14,9 +14,10 @@ from app.modules.profiles.models import LocalExpertProfile
 from app.modules.rentcar import service as rentcar_service
 from app.modules.rentcar.models import Vehicle, VehicleStatus
 from app.modules.reviews.models import Review
-from app.modules.search.schemas import DestinationSummary, ExpertSearchResult
+from app.modules.search.schemas import DestinationDetail, DestinationSummary, ExpertSearchResult, LocationBreadcrumbItem
 from app.modules.stays import service as stays_service
 from app.modules.stays.models import Property, PropertyImage, PropertyStatus
+from app.modules.tours import service as tours_service
 from app.modules.tours.models import Tour, TourDeparture, TourImage, TourStatus
 from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleStatus, User
 
@@ -272,3 +273,79 @@ async def get_destinations(db: AsyncSession) -> list[DestinationSummary]:
         )
         for loc in locations
     ]
+
+
+async def get_destination_detail(db: AsyncSession, slug: str) -> DestinationDetail | None:
+    """The single "everything about this destination" page: Local Experts, Tours,
+    Stays, Rent-a-Car, and nearby destinations for one location, in one response.
+    Every list is subtree-aware (a Division/District/Upazila page surfaces content
+    tagged anywhere underneath it), reusing the exact same search functions the
+    dedicated /tours, /stays, /rent-a-car, /search/experts endpoints already call
+    with a location_slug — no new search logic, just composed here."""
+    target = (await db.execute(select(Location).where(Location.slug == slug))).scalar_one_or_none()
+    if target is None:
+        return None
+
+    subtree_ids = await locations_service.resolve_slug_to_subtree_ids(db, slug)
+
+    ancestor_ids = await locations_service.get_ancestor_ids(db, target.id)
+    ancestor_rows = (await db.execute(select(Location).where(Location.id.in_(ancestor_ids)))).scalars().all()
+    by_id = {loc.id: loc for loc in ancestor_rows}
+    breadcrumb = [
+        LocationBreadcrumbItem(id=loc.id, name=loc.name, slug=loc.slug, type=loc.type.value)
+        for loc in (by_id[i] for i in reversed(ancestor_ids))
+    ]
+
+    tours = await tours_service.list_published_tours(db, subtree_ids, None)
+    stays = await search_stays(db, subtree_ids, None, None, 1, None)
+    vehicles = await search_vehicles(db, subtree_ids, None, None)
+    experts = await search_experts(db, subtree_ids)
+
+    # A cover photo for the destination itself: the first tour/property image found
+    # anywhere in its subtree — works for every level (a Division page has no listing
+    # tagged directly to it, but its District/Upazila/City descendants do).
+    cover_tour_id = cover_tour_image_id = None
+    cover_property_id = cover_property_image_id = None
+    for tour in tours:
+        if tour.images:
+            first = min(tour.images, key=lambda img: img.sort_order)
+            cover_tour_id, cover_tour_image_id = tour.id, first.id
+            break
+    if cover_tour_id is None:
+        for stay in stays:
+            if stay.images:
+                first = min(stay.images, key=lambda img: img.sort_order)
+                cover_property_id, cover_property_image_id = stay.id, first.id
+                break
+
+    nearby: list[DestinationSummary] = []
+    if target.parent_id is not None:
+        sibling_ids = {
+            loc.id
+            for loc in (
+                await db.execute(select(Location).where(Location.parent_id == target.parent_id))
+            ).scalars()
+            if loc.id != target.id
+        }
+        if sibling_ids:
+            nearby = [d for d in await get_destinations(db) if d.id in sibling_ids]
+
+    return DestinationDetail(
+        id=target.id,
+        name=target.name,
+        slug=target.slug,
+        type=target.type.value,
+        published_tour_count=len(tours),
+        published_property_count=len(stays),
+        published_vehicle_count=len(vehicles),
+        cover_tour_id=cover_tour_id,
+        cover_tour_image_id=cover_tour_image_id,
+        cover_property_id=cover_property_id,
+        cover_property_image_id=cover_property_image_id,
+        breadcrumb=breadcrumb,
+        tours=tours,
+        stays=stays,
+        vehicles=vehicles,
+        experts=experts,
+        nearby=nearby,
+    )

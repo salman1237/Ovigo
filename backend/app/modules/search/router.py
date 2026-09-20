@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import cached
@@ -8,7 +8,7 @@ from app.database import get_db
 from app.modules.locations import service as locations_service
 from app.modules.rentcar.schemas import VehicleRead
 from app.modules.search import service
-from app.modules.search.schemas import DestinationSummary, ExpertSearchResult
+from app.modules.search.schemas import DestinationDetail, DestinationSummary, ExpertSearchResult
 from app.modules.stays.schemas import PropertyRead
 
 router = APIRouter(prefix="/api/v1/search", tags=["search"])
@@ -65,3 +65,14 @@ async def get_destinations(db: AsyncSession = Depends(get_db)):
     approvals happen in the admin module, and there are enough of them that wiring
     an invalidation call in wasn't worth it next to just waiting out 2 minutes."""
     return await service.get_destinations(db)
+
+
+@router.get("/destinations/{slug}", response_model=DestinationDetail)
+async def get_destination_detail(slug: str, db: AsyncSession = Depends(get_db)):
+    """The destination-centric discovery page: Local Experts, Tours, Stays,
+    Rent-a-Car and nearby destinations for one location in a single response,
+    instead of a traveler bouncing between four separate search pages."""
+    detail = await service.get_destination_detail(db, slug)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Destination not found")
+    return detail
