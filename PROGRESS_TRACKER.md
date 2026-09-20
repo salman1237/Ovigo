@@ -677,6 +677,24 @@ The user asked to move everything off third-party PaaS/cloud services (Vercel fr
 
 **Not done / left for the user:** the dormant Vercel project (`ovigo.vercel.app`) was not deleted — it still auto-deploys on every push but now points at a retired backend domain, so it's effectively broken; worth a deliberate teardown decision later rather than an unprompted deletion here.
 
+## Phase 7 — Client Product-Feedback Gap Closure (started 2026-09-21)
+
+A 12-page product feedback document arrived comparing the live walkthrough against the PRD. Before building anything, each claim was verified against the actual codebase rather than taken at face value — several things it called "missing" already existed (map coordinates, tour group size, multi-date departures, guide assignment lifecycle, stay cancellation policies + seasonal pricing, category/partner/network commission scoping, referral ownership + approval), while most of the rest were confirmed real gaps. Full gap analysis isn't duplicated here — see the conversation where it was produced; this section tracks what's actually been built against that list, phase by phase, in the doc's own stated priority order.
+
+### Phase 7.1 — Location architecture (HIGH PRIORITY #1) — Done (2026-09-21)
+
+The location tree was a generic `Country -> Region -> City -> Attraction` chain with no Bangladesh-specific administrative tiers, despite the PRD requiring `Division -> District -> Upazila -> Destination/Attraction/City`.
+
+- Added `DIVISION`, `DISTRICT`, `UPAZILA` to `LocationType` (migration `fffe54d89b9b` — additive `ALTER TYPE ... ADD VALUE`, same non-transactional-block pattern as the earlier eSIM enum-casing fix, applied to production).
+- `scripts/seed_bd_location_hierarchy.py` seeded all 8 divisions and all 64 districts (complete, correct, real Bangladesh administrative data — cheap to get right once and unlocks nationwide location search immediately) plus upazilas for the handful of areas with real content today (Cox's Bazar Sadar, Mongla, Sreemangal, Bandarban Sadar, Rangamati Sadar, Sylhet Sadar). More upazilas can be added later via the existing admin locations CRUD as real listings need them, rather than seeding all ~495 nationally up front for zero current benefit.
+- The 4 existing Bangladesh-side locations (Dhaka, Chittagong cities; Cox's Bazar, Sundarbans attractions) were **re-parented by ID** onto the correct new nodes rather than recreated — every existing `LocationTag` row (on real tours/properties) kept working with zero re-tagging needed. Verified paths: `Bangladesh > Chittagong Division > Cox's Bazar District > Cox's Bazar Sadar > Cox's Bazar` and `Bangladesh > Khulna Division > Bagerhat District > Mongla > Sundarbans`.
+- One genuine domain irregularity documented in `locations/models.py`: Bangladesh's city-corporation areas (Dhaka, Chittagong) aren't subdivided into upazilas the way rural districts are, so those two cities hang directly off their District with no Upazila in between — correct, not a bug.
+- The existing location-tree/subtree-resolution code (`locations/router.py`, `locations/service.py`) needed **zero changes** — it already walked the tree with no hardcoded depth assumption.
+
+**Verified:** `pytest -q` 32/32 passing; migration applied to production; seed script run against production (8 divisions / 64 districts / 6 upazilas / 4 re-parented, idempotent — re-running skips existing rows by slug); live API checks after redeploy — `/api/v1/locations/search?q=sylhet` returns the full Division→District→Upazila chain, `/api/v1/tours?location_slug=coxs-bazar` still returns all 5 tagged tours, `/api/v1/search/destinations` unaffected (still 9). Also fixed in passing: the frontend's `package-lock.json` was missing Linux-only optional dependencies (generated on Windows), which had been silently failing CI on every push since the Dockerfile was added — regenerated it inside a Linux container and restored `npm ci` in both CI and the Dockerfile.
+
+**Next up (Phase 7.2, not started):** destination-centric discovery — dedicated destination landing pages pulling together experts/tours/stays/guides/transport for one location, now that the location tree can actually represent a real destination hierarchy.
+
 ## MVP Acceptance Criteria (from technical document §11)
 
 | # | Criteria | Status |
