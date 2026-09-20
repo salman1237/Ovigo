@@ -26,7 +26,7 @@ import { tourImageUrl } from "@/lib/media";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCartStore } from "@/stores/cart-store";
 import type { Booking } from "@/types/booking";
-import type { Tour } from "@/types/tour";
+import { TOUR_TYPE_LABELS, type Tour } from "@/types/tour";
 
 export default function TourDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -42,7 +42,10 @@ export default function TourDetailPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
-      <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{tour.title}</h1>
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{tour.title}</h1>
+        {tour.tour_type && <Badge variant="accent">{TOUR_TYPE_LABELS[tour.tour_type]}</Badge>}
+      </div>
       <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">
         {tour.duration_days} days · from {formatMoney(tour.base_price)} <ApproxPrice amountBDT={tour.base_price} /> · up to {tour.max_group_size} people
       </p>
@@ -64,6 +67,13 @@ export default function TourDetailPage() {
                 {tour.itinerary.map((day) => (
                   <li key={day.id} className="text-sm">
                     <span className="font-medium">Day {day.day_number}: {day.title}</span>
+                    {day.location_name && <span className="text-zinc-400"> · {day.location_name}</span>}
+                    {(day.arrival_time || day.departure_time) && (
+                      <span className="text-zinc-400">
+                        {" "}
+                        · {day.arrival_time ?? "—"} to {day.departure_time ?? "—"}
+                      </span>
+                    )}
                     {day.description && <p className="text-zinc-500">{day.description}</p>}
                   </li>
                 ))}
@@ -98,24 +108,45 @@ export default function TourDetailPage() {
             {tour.activities.length > 0 && (
               <div>
                 <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Activities</h2>
-                <ul className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  {tour.activities.map((a) => <li key={a.id}>{a.name}</li>)}
+                <ul className="mt-2 flex flex-col gap-1 text-sm text-zinc-600 dark:text-zinc-400">
+                  {tour.activities.map((a) => (
+                    <li key={a.id}>
+                      {a.name}
+                      {a.duration_hours && <span className="text-zinc-400"> · {a.duration_hours}h</span>}
+                      {a.difficulty && <span className="text-zinc-400"> · {a.difficulty}</span>}
+                      {a.min_age != null && <span className="text-zinc-400"> · {a.min_age}+ yrs</span>}
+                      {a.guide_required && <span className="text-zinc-400"> · guide required</span>}
+                    </li>
+                  ))}
                 </ul>
               </div>
             )}
             {tour.transport.length > 0 && (
               <div>
                 <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Transport</h2>
-                <ul className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  {tour.transport.map((t) => <li key={t.id}>{t.mode}</li>)}
+                <ul className="mt-2 flex flex-col gap-1 text-sm text-zinc-600 dark:text-zinc-400">
+                  {tour.transport.map((t) => (
+                    <li key={t.id}>
+                      {t.mode}
+                      {t.vehicle_type && <span className="text-zinc-400"> · {t.vehicle_type}</span>}
+                      {t.has_ac && <span className="text-zinc-400"> · AC</span>}
+                      {t.capacity && <span className="text-zinc-400"> · {t.capacity} seats</span>}
+                    </li>
+                  ))}
                 </ul>
               </div>
             )}
             {tour.stays.length > 0 && (
               <div>
                 <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Stays</h2>
-                <ul className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  {tour.stays.map((s) => <li key={s.id}>{s.description} ({s.nights} nights)</li>)}
+                <ul className="mt-2 flex flex-col gap-1 text-sm text-zinc-600 dark:text-zinc-400">
+                  {tour.stays.map((s) => (
+                    <li key={s.id}>
+                      {s.description} ({s.nights} nights)
+                      {s.property_type && <span className="text-zinc-400"> · {s.property_type}</span>}
+                      {s.room_category && <span className="text-zinc-400"> · {s.room_category}</span>}
+                    </li>
+                  ))}
                 </ul>
               </div>
             )}
@@ -128,6 +159,66 @@ export default function TourDetailPage() {
               </div>
             )}
           </div>
+
+          {(tour.cancellation_policy ||
+            tour.refund_policy ||
+            tour.child_policy ||
+            tour.emergency_contact_phone ||
+            tour.weather_risk_note ||
+            tour.activity_risk_note) && (
+            <div className="mt-6 grid gap-6 sm:grid-cols-2">
+              {(tour.cancellation_policy || tour.refund_policy || tour.child_policy) && (
+                <div>
+                  <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Policies</h2>
+                  <ul className="mt-2 flex flex-col gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                    {tour.cancellation_policy && (
+                      <li>
+                        <span className="font-medium text-zinc-700 dark:text-zinc-300">Cancellation: </span>
+                        {tour.cancellation_policy}
+                      </li>
+                    )}
+                    {tour.refund_policy && (
+                      <li>
+                        <span className="font-medium text-zinc-700 dark:text-zinc-300">Refund: </span>
+                        {tour.refund_policy}
+                      </li>
+                    )}
+                    {tour.child_policy && (
+                      <li>
+                        <span className="font-medium text-zinc-700 dark:text-zinc-300">Children: </span>
+                        {tour.child_policy}
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+              {(tour.emergency_contact_phone || tour.weather_risk_note || tour.activity_risk_note) && (
+                <div>
+                  <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Safety</h2>
+                  <ul className="mt-2 flex flex-col gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                    {tour.emergency_contact_phone && (
+                      <li>
+                        <span className="font-medium text-zinc-700 dark:text-zinc-300">Emergency contact: </span>
+                        {tour.emergency_contact_phone}
+                      </li>
+                    )}
+                    {tour.weather_risk_note && (
+                      <li>
+                        <span className="font-medium text-zinc-700 dark:text-zinc-300">Weather: </span>
+                        {tour.weather_risk_note}
+                      </li>
+                    )}
+                    {tour.activity_risk_note && (
+                      <li>
+                        <span className="font-medium text-zinc-700 dark:text-zinc-300">Activity risk: </span>
+                        {tour.activity_risk_note}
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="mt-10">
             <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Reviews</h2>
@@ -234,6 +325,20 @@ function BookTourSection({ tour }: { tour: Tour }) {
       <p className="text-xs text-zinc-400">
         <ApproxPrice amountBDT={price} />
       </p>
+      {(tour.child_price || tour.infant_price || tour.tax_rate || tour.service_charge_rate || tour.deposit_percentage) && (
+        <ul className="mt-2 flex flex-col gap-0.5 text-xs text-zinc-500">
+          {tour.child_price && <li>Child: {formatMoney(tour.child_price)}</li>}
+          {tour.infant_price && <li>Infant: {formatMoney(tour.infant_price)}</li>}
+          {tour.tax_rate && <li>+{(Number(tour.tax_rate) * 100).toFixed(0)}% tax</li>}
+          {tour.service_charge_rate && <li>+{(Number(tour.service_charge_rate) * 100).toFixed(0)}% service charge</li>}
+          {tour.deposit_percentage && (
+            <li>
+              {(Number(tour.deposit_percentage) * 100).toFixed(0)}% deposit
+              {tour.payment_deadline_days ? `, balance due ${tour.payment_deadline_days} days before departure` : ""}
+            </li>
+          )}
+        </ul>
+      )}
       <div className="mt-4 flex flex-col gap-3">
         <Select label="Departure date" value={departureId} onChange={(e) => setDepartureId(e.target.value)}>
           {tour.departures.map((d) => (

@@ -13,6 +13,7 @@ import { DestinationSearchInput } from "@/components/shared/DestinationSearchInp
 import { FilterChip } from "@/components/shared/FilterChip";
 import { FilterGroup } from "@/components/shared/FilterGroup";
 import { SponsoredResults } from "@/components/shared/SponsoredResults";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -23,13 +24,15 @@ import { apiClient } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { firstImageId, tourImageUrl } from "@/lib/media";
 import type { Location } from "@/types/location";
-import type { TourSummary } from "@/types/tour";
+import { TOUR_TYPE_LABELS, type TourSummary, type TourType } from "@/types/tour";
 
 const DURATION_BUCKETS = [
   { id: "short", label: "1-3 days", test: (d: number) => d <= 3 },
   { id: "medium", label: "4-7 days", test: (d: number) => d >= 4 && d <= 7 },
   { id: "long", label: "8+ days", test: (d: number) => d >= 8 },
 ];
+
+const TOUR_TYPES = Object.keys(TOUR_TYPE_LABELS) as TourType[];
 
 export default function ToursSearchPage() {
   return (
@@ -48,6 +51,7 @@ function ToursSearchContent() {
 
   const [maxPrice, setMaxPrice] = useState("");
   const [durations, setDurations] = useState<Set<string>>(new Set());
+  const [tourTypes, setTourTypes] = useState<Set<TourType>>(new Set());
 
   const { data: tours, isLoading, isError } = useQuery({
     queryKey: ["tours-search", searchTerm, searchKeyword],
@@ -67,14 +71,24 @@ function ToursSearchContent() {
       const active = DURATION_BUCKETS.filter((b) => durations.has(b.id));
       list = list.filter((t) => active.some((b) => b.test(t.duration_days)));
     }
+    if (tourTypes.size > 0) list = list.filter((t) => t.tour_type && tourTypes.has(t.tour_type));
     return list;
-  }, [tours, maxPrice, durations]);
+  }, [tours, maxPrice, durations, tourTypes]);
 
   const toggleDuration = (id: string) => {
     setDurations((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleTourType = (type: TourType) => {
+    setTourTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
       return next;
     });
   };
@@ -130,6 +144,13 @@ function ToursSearchContent() {
               ))}
             </div>
           </FilterGroup>
+          <FilterGroup title="Tour type">
+            <div className="flex flex-wrap gap-2">
+              {TOUR_TYPES.map((t) => (
+                <FilterChip key={t} label={TOUR_TYPE_LABELS[t]} selected={tourTypes.has(t)} onClick={() => toggleTourType(t)} />
+              ))}
+            </div>
+          </FilterGroup>
         </aside>
 
         <div className="min-w-0 flex-1">
@@ -168,7 +189,10 @@ function ToursSearchContent() {
                         )}
                       </div>
                       <div className="flex flex-1 flex-col p-5">
-                        <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">{tour.title}</h3>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">{tour.title}</h3>
+                          {tour.tour_type && <Badge variant="accent">{TOUR_TYPE_LABELS[tour.tour_type]}</Badge>}
+                        </div>
                         <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">
                           {tour.duration_days} days · from {formatMoney(tour.base_price)} <ApproxPrice amountBDT={tour.base_price} />
                         </p>
