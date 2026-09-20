@@ -1,10 +1,20 @@
-"""Location hierarchy: Country -> Region -> City -> Attraction, plus generic location tagging.
+"""Location hierarchy: generic Country -> Region -> City -> Attraction, plus generic
+location tagging.
 
 Sprint 1-2 scope was the base self-referential table only. Sprint 3-4 adds full CRUD,
 search, and `location_tags` — a generic junction so any future entity (partner role,
 tour, property, ...) can be tagged to one or more locations without a new table per
 entity type. Partner roles are the first consumer (§3.5 "Publishing Restriction" — a
 role's public profile can't go live without at least one tagged location).
+
+DIVISION/DISTRICT/UPAZILA (added later) are Bangladesh's real administrative tiers,
+used only for the Bangladesh country subtree — they sit between COUNTRY and the leaf
+CITY/ATTRACTION nodes there. Other countries (India, Thailand, ...) keep using the
+plain COUNTRY -> CITY -> ATTRACTION chain, since that hierarchy doesn't apply outside
+Bangladesh. There's a real irregularity worth knowing here: Bangladesh's city-
+corporation areas (Dhaka, Chittagong) aren't subdivided into upazilas the way rural
+districts are, so a CITY node there hangs directly off its DISTRICT with no UPAZILA
+in between — the model doesn't enforce a fixed depth, so this is fine as-is.
 """
 import enum
 import uuid
@@ -20,6 +30,9 @@ from app.database import Base
 class LocationType(str, enum.Enum):
     COUNTRY = "country"
     REGION = "region"
+    DIVISION = "division"
+    DISTRICT = "district"
+    UPAZILA = "upazila"
     CITY = "city"
     ATTRACTION = "attraction"
 
