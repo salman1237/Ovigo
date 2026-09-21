@@ -20,6 +20,11 @@ class AdminUserSummary(BaseModel):
     full_name: str
     email: str | None
     phone: str | None
+    is_active: bool = True
+
+
+class SuspendRequest(BaseModel):
+    reason: str
 
 
 class AdminPartnerRoleRead(BaseModel):

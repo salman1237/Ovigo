@@ -63,6 +63,10 @@ class NotificationType(str, enum.Enum):
     ESIM_FAILED = "esim_failed"
     NEW_QUESTION = "new_question"
     QUESTION_ANSWERED = "question_answered"
+    ROLE_SUSPENDED = "role_suspended"
+    ROLE_REINSTATED = "role_reinstated"
+    ACCOUNT_SUSPENDED = "account_suspended"
+    ACCOUNT_REACTIVATED = "account_reactivated"
 
 
 class CampaignAudience(str, enum.Enum):

@@ -18,6 +18,7 @@ from app.modules.admin.schemas import (
     AdminPaymentRead,
     AdminPropertyRead,
     AdminTourRead,
+    AdminUserSummary,
     AdminVehicleRead,
     AuditLogRead,
     BookingsSummaryRow,
@@ -28,6 +29,7 @@ from app.modules.admin.schemas import (
     PlatformRevenueRow,
     ReferralOverviewRow,
     RejectRequest,
+    SuspendRequest,
 )
 from app.modules.bookings.models import BookingStatus
 from app.modules.partners.models import PartnerDocument
@@ -65,6 +67,44 @@ async def reject_partner_role(
     db: AsyncSession = Depends(get_db),
 ):
     return await service.reject_role(db, current_user, role_id, payload.reason)
+
+
+@router.post("/partners/roles/{role_id}/suspend", response_model=AdminPartnerRoleRead)
+async def suspend_partner_role(
+    role_id: uuid.UUID,
+    payload: SuspendRequest,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.suspend_role(db, current_user, role_id, payload.reason)
+
+
+@router.post("/partners/roles/{role_id}/unsuspend", response_model=AdminPartnerRoleRead)
+async def unsuspend_partner_role(
+    role_id: uuid.UUID,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.unsuspend_role(db, current_user, role_id)
+
+
+@router.post("/users/{user_id}/suspend", response_model=AdminUserSummary)
+async def suspend_user(
+    user_id: uuid.UUID,
+    payload: SuspendRequest,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.suspend_user(db, current_user, user_id, payload.reason)
+
+
+@router.post("/users/{user_id}/unsuspend", response_model=AdminUserSummary)
+async def unsuspend_user(
+    user_id: uuid.UUID,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.unsuspend_user(db, current_user, user_id)
 
 
 @router.get("/partners/documents/{document_id}/file")

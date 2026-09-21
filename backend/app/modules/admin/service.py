@@ -143,6 +143,106 @@ async def reject_role(
     return _to_admin_read(role)
 
 
+async def suspend_role(db: AsyncSession, admin: User, role_id: uuid.UUID, reason: str) -> AdminPartnerRoleRead:
+    """Individual role suspension — only this one role_type stops working
+    (require_approved_role filters on PartnerRoleStatus.APPROVED, so a suspended
+    role is immediately locked out of every endpoint that role type gates), while
+    the partner's other approved roles and their own account login are unaffected."""
+    role = await _get_role_with_relations(db, role_id)
+    if role.status != PartnerRoleStatus.APPROVED:
+        raise ConflictError(f"Role is {role.status.value}, not approved — nothing to suspend")
+
+    role.status = PartnerRoleStatus.SUSPENDED
+    await notifications_service.notify(
+        db,
+        user_id=role.partner_account.user_id,
+        type=NotificationType.ROLE_SUSPENDED,
+        title="Partner role suspended",
+        message=f"Your {role.role_type.value.replace('_', ' ')} role has been suspended: {reason}",
+    )
+    await db.commit()
+    await audit.record(
+        db,
+        actor_id=admin.id,
+        action="partner_role.suspend",
+        entity_type="partner_role",
+        entity_id=role.id,
+        extra={"role_type": role.role_type.value, "reason": reason},
+    )
+    return _to_admin_read(role)
+
+
+async def unsuspend_role(db: AsyncSession, admin: User, role_id: uuid.UUID) -> AdminPartnerRoleRead:
+    role = await _get_role_with_relations(db, role_id)
+    if role.status != PartnerRoleStatus.SUSPENDED:
+        raise ConflictError(f"Role is {role.status.value}, not suspended")
+
+    role.status = PartnerRoleStatus.APPROVED
+    await notifications_service.notify(
+        db,
+        user_id=role.partner_account.user_id,
+        type=NotificationType.ROLE_REINSTATED,
+        title="Partner role reinstated",
+        message=f"Your {role.role_type.value.replace('_', ' ')} role has been reinstated.",
+    )
+    await db.commit()
+    await audit.record(
+        db, actor_id=admin.id, action="partner_role.unsuspend", entity_type="partner_role", entity_id=role.id
+    )
+    return _to_admin_read(role)
+
+
+async def _get_user_or_404(db: AsyncSession, user_id: uuid.UUID) -> User:
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise NotFoundError("User not found")
+    return user
+
+
+async def suspend_user(db: AsyncSession, admin: User, user_id: uuid.UUID, reason: str) -> AdminUserSummary:
+    """Complete account suspension — blocks login entirely (auth/service.py and
+    auth/utils.py both already check User.is_active), unlike suspending one
+    PartnerRole which only locks out that specific role's endpoints."""
+    target = await _get_user_or_404(db, user_id)
+    if target.id == admin.id:
+        raise ConflictError("You cannot suspend your own account")
+    if not target.is_active:
+        raise ConflictError("This account is already suspended")
+
+    target.is_active = False
+    await notifications_service.notify(
+        db,
+        user_id=target.id,
+        type=NotificationType.ACCOUNT_SUSPENDED,
+        title="Your account has been suspended",
+        message=reason,
+    )
+    await db.commit()
+    await audit.record(
+        db, actor_id=admin.id, action="user.suspend", entity_type="user", entity_id=target.id, extra={"reason": reason}
+    )
+    return AdminUserSummary.model_validate(target)
+
+
+async def unsuspend_user(db: AsyncSession, admin: User, user_id: uuid.UUID) -> AdminUserSummary:
+    target = await _get_user_or_404(db, user_id)
+    if target.is_active:
+        raise ConflictError("This account is not suspended")
+
+    target.is_active = True
+    await notifications_service.notify(
+        db,
+        user_id=target.id,
+        type=NotificationType.ACCOUNT_REACTIVATED,
+        title="Your account has been reactivated",
+        message="You can now sign in again.",
+    )
+    await db.commit()
+    await audit.record(db, actor_id=admin.id, action="user.unsuspend", entity_type="user", entity_id=target.id)
+    return AdminUserSummary.model_validate(target)
+
+
 async def _get_document_or_404(db: AsyncSession, document_id: uuid.UUID) -> PartnerDocument:
     result = await db.execute(select(PartnerDocument).where(PartnerDocument.id == document_id))
     document = result.scalar_one_or_none()
