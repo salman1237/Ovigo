@@ -27,6 +27,7 @@ const NAV = [
   { href: "/admin/fraud", label: "Fraud & Risk" },
   { href: "/admin/notifications", label: "Notifications" },
   { href: "/admin/reports", label: "Reports" },
+  { href: "/admin/admins", label: "Admin Roles" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
