@@ -4,8 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -32,7 +32,16 @@ const registerSchema = z
 type RegisterForm = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
+  return (
+    <Suspense>
+      <RegisterContent />
+    </Suspense>
+  );
+}
+
+function RegisterContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const setSession = useAuthStore((s) => s.setSession);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -48,7 +57,7 @@ export default function RegisterPage() {
       const payload = { ...data, email: data.email || undefined, phone: data.phone || undefined };
       const tokens = await apiClient.post<TokenPair>("/api/v1/auth/register", payload);
       setSession(tokens);
-      router.push("/");
+      router.push(searchParams.get("next") || "/");
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : "Something went wrong");
     }
@@ -96,7 +105,10 @@ export default function RegisterPage() {
 
             <p className="mt-6 text-center text-sm text-zinc-500">
               Already have an account?{" "}
-              <Link href="/account/login" className="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+              <Link
+                href={searchParams.get("next") ? `/account/login?next=${encodeURIComponent(searchParams.get("next")!)}` : "/account/login"}
+                className="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
+              >
                 Sign in
               </Link>
             </p>

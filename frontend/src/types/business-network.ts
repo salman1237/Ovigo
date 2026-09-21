@@ -12,7 +12,23 @@ export interface BusinessReferral {
   status: ReferralStatus;
   rejection_reason: string | null;
   linked_partner_role_id: string | null;
+  invite_token: string | null;
+  invite_sent_at: string | null;
+  invited_user_id: string | null;
+  invite_accepted_at: string | null;
+  is_business_verified: boolean;
+  verified_at: string | null;
+  custom_commission_rate: string | null;
   created_at: string;
+}
+
+export interface ClaimReferralInfo {
+  id: string;
+  business_name: string;
+  business_type: string;
+  description: string | null;
+  referring_expert_name: string;
+  already_claimed: boolean;
 }
 
 export interface AdminBusinessReferral extends BusinessReferral {

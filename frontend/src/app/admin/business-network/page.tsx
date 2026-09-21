@@ -73,8 +73,45 @@ function ReferralCard({ referral, onChange }: { referral: AdminBusinessReferral;
   const [showReject, setShowReject] = useState(false);
   const [showLink, setShowLink] = useState(false);
   const [partnerRoleId, setPartnerRoleId] = useState("");
+  const [commissionRate, setCommissionRate] = useState(
+    referral.custom_commission_rate ? (Number(referral.custom_commission_rate) * 100).toString() : ""
+  );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const toggleVerified = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await apiClient.post(
+        `/api/v1/admin/business-network/${referral.id}/verify-business`,
+        { verified: !referral.is_business_verified },
+        { auth: true }
+      );
+      onChange();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to update verification");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveCommissionRate = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await apiClient.post(
+        `/api/v1/admin/business-network/${referral.id}/commission-rate`,
+        { rate: commissionRate.trim() ? Number(commissionRate) / 100 : null },
+        { auth: true }
+      );
+      onChange();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to set commission rate");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const linkPartner = async () => {
     if (!partnerRoleId.trim()) return;
@@ -156,23 +193,56 @@ function ReferralCard({ referral, onChange }: { referral: AdminBusinessReferral;
       )}
 
       {referral.status === "approved" && (
-        <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-          {referral.linked_partner_role_id ? (
-            <p className="text-xs text-emerald-600">
-              Linked to partner {referral.linked_partner_role_id.slice(0, 8)} — network commission active
-            </p>
-          ) : !showLink ? (
-            <button onClick={() => setShowLink(true)} className="text-xs font-medium text-primary-600 underline hover:text-primary-700 dark:text-primary-400">
-              Link to a registered partner
-            </button>
-          ) : (
-            <div className="flex gap-2">
-              <Input value={partnerRoleId} onChange={(e) => setPartnerRoleId(e.target.value)} placeholder="Partner role ID" className="flex-1" />
-              <Button size="sm" onClick={linkPartner} disabled={busy || !partnerRoleId.trim()}>
-                Link
-              </Button>
-            </div>
+        <div className="mt-3 flex flex-col gap-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+          <div>
+            {referral.linked_partner_role_id ? (
+              <p className="text-xs text-emerald-600">
+                Linked to partner {referral.linked_partner_role_id.slice(0, 8)} — network commission active
+              </p>
+            ) : !showLink ? (
+              <button onClick={() => setShowLink(true)} className="text-xs font-medium text-primary-600 underline hover:text-primary-700 dark:text-primary-400">
+                Link to a registered partner
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <Input value={partnerRoleId} onChange={(e) => setPartnerRoleId(e.target.value)} placeholder="Partner role ID" className="flex-1" />
+                <Button size="sm" onClick={linkPartner} disabled={busy || !partnerRoleId.trim()}>
+                  Link
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {referral.invite_accepted_at && (
+            <p className="text-xs text-zinc-500">Owner invite claimed — ready to link once they apply as a partner.</p>
           )}
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleVerified}
+              disabled={busy}
+              className={cn(
+                "text-xs font-medium underline",
+                referral.is_business_verified ? "text-emerald-600" : "text-zinc-500 hover:text-zinc-700"
+              )}
+            >
+              {referral.is_business_verified ? "✓ Business verified — click to unverify" : "Mark business as verified"}
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              value={commissionRate}
+              onChange={(e) => setCommissionRate(e.target.value)}
+              placeholder="Default rate"
+              className="w-32"
+            />
+            <span className="text-xs text-zinc-500">% custom network commission</span>
+            <Button size="sm" variant="secondary" onClick={saveCommissionRate} disabled={busy}>
+              Save
+            </Button>
+          </div>
         </div>
       )}
 

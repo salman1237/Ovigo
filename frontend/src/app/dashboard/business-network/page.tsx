@@ -70,22 +70,83 @@ export default function BusinessNetworkPage() {
 
       <div className="mt-6 flex flex-col gap-3">
         {(referrals ?? []).map((r) => (
-          <Card key={r.id}>
-            <div className="flex items-center justify-between">
-              <h3 className="font-medium text-zinc-900 dark:text-zinc-50">{r.business_name}</h3>
-              <Badge>{REFERRAL_STATUS_LABELS[r.status]}</Badge>
-            </div>
-            <p className="mt-1 text-xs text-zinc-500">
-              {r.business_type} · {OWNERSHIP_TYPE_LABELS[r.ownership_type]}
-            </p>
-            {r.description && <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{r.description}</p>}
-            {r.status === "rejected" && r.rejection_reason && (
-              <p className="mt-1 text-xs text-red-600">Reason: {r.rejection_reason}</p>
-            )}
-          </Card>
+          <ReferralCard key={r.id} referral={r} onChange={refetch} />
         ))}
       </div>
     </div>
+  );
+}
+
+function ReferralCard({ referral: r, onChange }: { referral: BusinessReferral; onChange: () => void }) {
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const sendInvite = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      await apiClient.post(`/api/v1/business-network/${r.id}/send-invite`, undefined, { auth: true });
+      onChange();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to send invite");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const claimUrl = r.invite_token ? `${window.location.origin}/business-network/claim/${r.invite_token}` : null;
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <h3 className="font-medium text-zinc-900 dark:text-zinc-50">{r.business_name}</h3>
+        <div className="flex items-center gap-1.5">
+          {r.is_business_verified && <Badge variant="success">Verified</Badge>}
+          <Badge>{REFERRAL_STATUS_LABELS[r.status]}</Badge>
+        </div>
+      </div>
+      <p className="mt-1 text-xs text-zinc-500">
+        {r.business_type} · {OWNERSHIP_TYPE_LABELS[r.ownership_type]}
+      </p>
+      {r.description && <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{r.description}</p>}
+      {r.status === "rejected" && r.rejection_reason && (
+        <p className="mt-1 text-xs text-red-600">Reason: {r.rejection_reason}</p>
+      )}
+
+      {r.ownership_type === "referred" && r.status === "approved" && (
+        <div className="mt-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+          {r.invite_token ? (
+            <div className="flex flex-col gap-1">
+              <p className="text-xs text-zinc-500">
+                {r.invite_accepted_at ? "Owner has claimed this invite." : "Share this link with the business owner:"}
+              </p>
+              {!r.invite_accepted_at && claimUrl && (
+                <div className="flex gap-2">
+                  <code className="flex-1 truncate rounded-lg bg-zinc-100 px-2 py-1 text-xs dark:bg-zinc-800">{claimUrl}</code>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      navigator.clipboard.writeText(claimUrl);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                  >
+                    {copied ? "Copied!" : "Copy"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Button size="sm" variant="secondary" onClick={sendInvite} loading={busy}>
+              Invite the owner
+            </Button>
+          )}
+          {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+        </div>
+      )}
+    </Card>
   );
 }
 

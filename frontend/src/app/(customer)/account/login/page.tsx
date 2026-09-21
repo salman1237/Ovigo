@@ -4,8 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -25,7 +25,16 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const setSession = useAuthStore((s) => s.setSession);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -40,7 +49,7 @@ export default function LoginPage() {
     try {
       const tokens = await apiClient.post<TokenPair>("/api/v1/auth/login", data);
       setSession(tokens);
-      router.push("/");
+      router.push(searchParams.get("next") || "/");
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : "Something went wrong");
     }
@@ -86,7 +95,10 @@ export default function LoginPage() {
 
             <p className="mt-6 text-center text-sm text-zinc-500">
               Don&apos;t have an account?{" "}
-              <Link href="/account/register" className="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+              <Link
+                href={searchParams.get("next") ? `/account/register?next=${encodeURIComponent(searchParams.get("next")!)}` : "/account/register"}
+                className="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
+              >
                 Create one
               </Link>
             </p>
