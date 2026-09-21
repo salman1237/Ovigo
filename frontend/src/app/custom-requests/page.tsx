@@ -68,7 +68,9 @@ export default function CustomRequestsPage() {
               <div>
                 <h3 className="font-medium text-zinc-900 dark:text-zinc-50">{r.title}</h3>
                 <p className="mt-1 text-xs text-zinc-500">
-                  {r.start_date} → {r.end_date} · {r.group_size} traveler(s) ·{" "}
+                  {r.start_date} → {r.end_date} · {r.adults} adult{r.adults === 1 ? "" : "s"}
+                  {r.children > 0 ? `, ${r.children} child${r.children === 1 ? "" : "ren"}` : ""}
+                  {r.infants > 0 ? `, ${r.infants} infant${r.infants === 1 ? "" : "s"}` : ""} ·{" "}
                   {r.bid_count} bid{r.bid_count === 1 ? "" : "s"}
                 </p>
               </div>
@@ -86,9 +88,19 @@ function RequestForm({ onCreated }: { onCreated: () => void }) {
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [groupSize, setGroupSize] = useState(1);
+  const [adults, setAdults] = useState(1);
+  const [children, setChildren] = useState(0);
+  const [infants, setInfants] = useState(0);
   const [budgetMin, setBudgetMin] = useState("");
   const [budgetMax, setBudgetMax] = useState("");
+  const [pickupLocation, setPickupLocation] = useState("");
+  const [foodPreference, setFoodPreference] = useState("");
+  const [accessibilityNeeds, setAccessibilityNeeds] = useState("");
+  const [safetyPrivacyNotes, setSafetyPrivacyNotes] = useState("");
+  const [guideRequested, setGuideRequested] = useState(false);
+  const [specialOccasion, setSpecialOccasion] = useState("");
+  const [additionalNotes, setAdditionalNotes] = useState("");
+  const [bidDeadline, setBidDeadline] = useState("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Location[]>([]);
   const [location, setLocation] = useState<Location | null>(null);
@@ -121,10 +133,20 @@ function RequestForm({ onCreated }: { onCreated: () => void }) {
           description,
           start_date: startDate,
           end_date: endDate,
-          group_size: groupSize,
+          adults,
+          children,
+          infants,
           budget_min: budgetMin || undefined,
           budget_max: budgetMax || undefined,
           location_id: location.id,
+          pickup_location: pickupLocation || undefined,
+          food_preference: foodPreference || undefined,
+          accessibility_needs: accessibilityNeeds || undefined,
+          safety_privacy_notes: safetyPrivacyNotes || undefined,
+          guide_requested: guideRequested,
+          special_occasion: specialOccasion || undefined,
+          additional_notes: additionalNotes || undefined,
+          bid_deadline: bidDeadline || undefined,
         },
         { auth: true }
       );
@@ -166,7 +188,11 @@ function RequestForm({ onCreated }: { onCreated: () => void }) {
         <Input type="date" label="End date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
       </div>
       <div className="grid grid-cols-3 gap-3">
-        <Input type="number" label="Group size" min={1} value={groupSize} onChange={(e) => setGroupSize(Number(e.target.value))} />
+        <Input type="number" label="Adults" min={1} value={adults} onChange={(e) => setAdults(Number(e.target.value))} />
+        <Input type="number" label="Children" min={0} value={children} onChange={(e) => setChildren(Number(e.target.value))} />
+        <Input type="number" label="Infants" min={0} value={infants} onChange={(e) => setInfants(Number(e.target.value))} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
         <Input type="number" label="Budget min (optional)" value={budgetMin} onChange={(e) => setBudgetMin(e.target.value)} />
         <Input type="number" label="Budget max (optional)" value={budgetMax} onChange={(e) => setBudgetMax(e.target.value)} />
       </div>
@@ -175,6 +201,23 @@ function RequestForm({ onCreated }: { onCreated: () => void }) {
           Budget range: {formatMoney(budgetMin)} – {formatMoney(budgetMax)}
         </p>
       )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <Input label="Pickup location (optional)" value={pickupLocation} onChange={(e) => setPickupLocation(e.target.value)} />
+        <Input label="Special occasion (optional)" value={specialOccasion} onChange={(e) => setSpecialOccasion(e.target.value)} placeholder="e.g. honeymoon" />
+      </div>
+      <Textarea label="Food preference (optional)" value={foodPreference} onChange={(e) => setFoodPreference(e.target.value)} rows={2} />
+      <Textarea label="Accessibility needs (optional)" value={accessibilityNeeds} onChange={(e) => setAccessibilityNeeds(e.target.value)} rows={2} />
+      <Textarea label="Safety / privacy notes (optional)" value={safetyPrivacyNotes} onChange={(e) => setSafetyPrivacyNotes(e.target.value)} rows={2} />
+      <Textarea label="Additional notes (optional)" value={additionalNotes} onChange={(e) => setAdditionalNotes(e.target.value)} rows={2} />
+      <div className="grid grid-cols-2 gap-3 sm:items-end">
+        <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <input type="checkbox" checked={guideRequested} onChange={(e) => setGuideRequested(e.target.checked)} className="rounded border-zinc-300" />
+          A guide is needed
+        </label>
+        <Input type="date" label="Bid deadline (optional)" value={bidDeadline} onChange={(e) => setBidDeadline(e.target.value)} />
+      </div>
+
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Button onClick={submit} loading={busy} disabled={!title || !description || !startDate || !endDate} className="self-start">
         Post request
