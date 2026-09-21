@@ -61,6 +61,8 @@ class NotificationType(str, enum.Enum):
     ADMIN_ANNOUNCEMENT = "admin_announcement"
     ESIM_READY = "esim_ready"
     ESIM_FAILED = "esim_failed"
+    NEW_QUESTION = "new_question"
+    QUESTION_ANSWERED = "question_answered"
 
 
 class CampaignAudience(str, enum.Enum):

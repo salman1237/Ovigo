@@ -10,9 +10,13 @@ from app.modules.bidding import service
 from app.modules.bidding.schemas import (
     BidCreate,
     BidRead,
+    BidUpdate,
     BidWithBookingRead,
     CustomTourRequestCreate,
     CustomTourRequestRead,
+    RequestQuestionAnswer,
+    RequestQuestionCreate,
+    RequestQuestionRead,
 )
 from app.modules.users.models import PartnerRole, PartnerRoleType, User
 
@@ -28,8 +32,19 @@ def _to_request_read(request) -> CustomTourRequestRead:
         start_date=request.start_date,
         end_date=request.end_date,
         group_size=request.group_size,
+        adults=request.adults,
+        children=request.children,
+        infants=request.infants,
         budget_min=request.budget_min,
         budget_max=request.budget_max,
+        pickup_location=request.pickup_location,
+        food_preference=request.food_preference,
+        accessibility_needs=request.accessibility_needs,
+        safety_privacy_notes=request.safety_privacy_notes,
+        guide_requested=request.guide_requested,
+        special_occasion=request.special_occasion,
+        additional_notes=request.additional_notes,
+        bid_deadline=request.bid_deadline,
         status=request.status,
         created_at=request.created_at,
         bid_count=len(request.bids),
@@ -120,3 +135,60 @@ async def withdraw_bid(
     db: AsyncSession = Depends(get_db),
 ):
     return await service.withdraw_bid(db, role, bid_id)
+
+
+@bids_router.put("/{bid_id}", response_model=BidRead)
+async def update_bid(
+    bid_id: uuid.UUID,
+    payload: BidUpdate,
+    role: PartnerRole = Depends(require_approved_role(PartnerRoleType.LOCAL_EXPERT)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.update_bid(db, role, bid_id, payload)
+
+
+@router.post("/{request_id}/bids/{bid_id}/shortlist", response_model=BidRead)
+async def toggle_shortlist(
+    request_id: uuid.UUID,
+    bid_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.toggle_shortlist(db, current_user, request_id, bid_id)
+
+
+@router.post("/{request_id}/questions", response_model=RequestQuestionRead, status_code=201)
+async def ask_question(
+    request_id: uuid.UUID,
+    payload: RequestQuestionCreate,
+    role: PartnerRole = Depends(require_approved_role(PartnerRoleType.LOCAL_EXPERT)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.ask_question(db, role, request_id, payload)
+
+
+@router.get("/{request_id}/questions", response_model=list[RequestQuestionRead])
+async def list_questions_for_request(
+    request_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    return await service.list_questions_for_request(db, current_user, request_id)
+
+
+@router.post("/{request_id}/questions/{question_id}/answer", response_model=RequestQuestionRead)
+async def answer_question(
+    request_id: uuid.UUID,
+    question_id: uuid.UUID,
+    payload: RequestQuestionAnswer,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.answer_question(db, current_user, request_id, question_id, payload.answer)
+
+
+@router.get("/{request_id}/questions/mine", response_model=list[RequestQuestionRead])
+async def list_my_questions(
+    request_id: uuid.UUID,
+    role: PartnerRole = Depends(require_approved_role(PartnerRoleType.LOCAL_EXPERT)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.list_my_questions(db, role, request_id)
