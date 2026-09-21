@@ -29,7 +29,7 @@ from app.modules.payments.models import Payment, PaymentStatus
 from app.modules.rentcar.models import Vehicle, VehicleStatus
 from app.modules.stays.models import Property, PropertyStatus
 from app.modules.tours.models import Tour, TourStatus
-from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleStatus, User
+from app.modules.users.models import AdminPermissionRole, PartnerAccount, PartnerRole, PartnerRoleStatus, SystemRole, User
 
 
 def _to_admin_read(role: PartnerRole) -> AdminPartnerRoleRead:
@@ -241,6 +241,33 @@ async def unsuspend_user(db: AsyncSession, admin: User, user_id: uuid.UUID) -> A
     await db.commit()
     await audit.record(db, actor_id=admin.id, action="user.unsuspend", entity_type="user", entity_id=target.id)
     return AdminUserSummary.model_validate(target)
+
+
+async def list_admins(db: AsyncSession) -> list[User]:
+    result = await db.execute(select(User).where(User.system_role.in_([SystemRole.ADMIN, SystemRole.SUPER_ADMIN])))
+    return list(result.scalars().all())
+
+
+async def set_admin_permission_role(
+    db: AsyncSession, super_admin: User, user_id: uuid.UUID, role: AdminPermissionRole | None
+) -> User:
+    """SUPER_ADMIN-only — granting or narrowing another admin's permission scope is
+    itself sensitive enough that it shouldn't be delegated to a scoped admin role."""
+    target = await _get_user_or_404(db, user_id)
+    if target.system_role not in (SystemRole.ADMIN, SystemRole.SUPER_ADMIN):
+        raise ConflictError("Only an ADMIN or SUPER_ADMIN account can be assigned a permission role")
+    target.admin_permission_role = role
+    await db.commit()
+    await audit.record(
+        db,
+        actor_id=super_admin.id,
+        action="admin.set_permission_role",
+        entity_type="user",
+        entity_id=target.id,
+        extra={"admin_permission_role": role.value if role else None},
+    )
+    await db.refresh(target)
+    return target
 
 
 async def _get_document_or_404(db: AsyncSession, document_id: uuid.UUID) -> PartnerDocument:

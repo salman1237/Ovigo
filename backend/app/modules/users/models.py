@@ -23,6 +23,21 @@ class SystemRole(str, enum.Enum):
     SUPER_ADMIN = "super_admin"
 
 
+class AdminPermissionRole(str, enum.Enum):
+    """A finer-grained scope *within* SystemRole.ADMIN — SUPER_ADMIN always bypasses
+    this entirely, and an ADMIN with no admin_permission_role set (the default, and
+    every admin that existed before this field) keeps full legacy access to every
+    admin_permission-gated endpoint, so introducing this never silently locks anyone
+    out. Setting a role only narrows what that specific admin account can do — see
+    core/admin_permissions.py for the actual scope-to-endpoint mapping."""
+
+    FINANCE_ADMIN = "finance_admin"
+    OPERATIONS_ADMIN = "operations_admin"
+    SUPPORT = "support"
+    MODERATOR = "moderator"
+    VERIFICATION_TEAM = "verification_team"
+
+
 class PartnerAccountStatus(str, enum.Enum):
     PENDING = "pending"
     ACTIVE = "active"
@@ -63,6 +78,9 @@ class User(TimestampMixin, Base):
 
     system_role: Mapped[SystemRole] = mapped_column(
         Enum(SystemRole, name="system_role"), default=SystemRole.TRAVELER, nullable=False
+    )
+    admin_permission_role: Mapped[AdminPermissionRole | None] = mapped_column(
+        Enum(AdminPermissionRole, name="admin_permission_role"), nullable=True
     )
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

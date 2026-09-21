@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.admin_permissions import require_admin_permission
 from app.core.permissions import require_admin, require_approved_role
 from app.database import get_db
 from app.modules.admin.schemas import RejectRequest
@@ -89,7 +90,11 @@ async def claim_referral(
 
 
 @admin_router.get("", response_model=list[AdminBusinessReferralRead])
-async def admin_list_referrals(status: ReferralStatus | None = None, db: AsyncSession = Depends(get_db)):
+async def admin_list_referrals(
+    status: ReferralStatus | None = None,
+    current_user: User = Depends(require_admin_permission("referrals.manage")),
+    db: AsyncSession = Depends(get_db),
+):
     referrals = await service.list_referrals(db, status)
     return [_to_admin_read(r) for r in referrals]
 
@@ -97,7 +102,7 @@ async def admin_list_referrals(status: ReferralStatus | None = None, db: AsyncSe
 @admin_router.post("/{referral_id}/approve", response_model=AdminBusinessReferralRead)
 async def admin_approve_referral(
     referral_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_permission("referrals.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     referral = await service.approve_referral(db, current_user, referral_id)
@@ -108,7 +113,7 @@ async def admin_approve_referral(
 async def admin_link_partner(
     referral_id: uuid.UUID,
     payload: LinkPartnerRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_permission("referrals.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     referral = await service.link_partner(db, current_user, referral_id, payload.partner_role_id)
@@ -119,7 +124,7 @@ async def admin_link_partner(
 async def admin_reject_referral(
     referral_id: uuid.UUID,
     payload: RejectRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_permission("referrals.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     referral = await service.reject_referral(db, current_user, referral_id, payload.reason)
@@ -130,7 +135,7 @@ async def admin_reject_referral(
 async def admin_verify_business(
     referral_id: uuid.UUID,
     payload: VerifyBusinessRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_permission("referrals.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     referral = await service.verify_business(db, current_user, referral_id, payload.verified)
@@ -141,7 +146,7 @@ async def admin_verify_business(
 async def admin_set_commission_rate(
     referral_id: uuid.UUID,
     payload: SetCommissionRateRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_permission("referrals.commission")),
     db: AsyncSession = Depends(get_db),
 ):
     referral = await service.set_commission_rate(db, current_user, referral_id, payload.rate)

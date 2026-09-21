@@ -10,7 +10,7 @@ from app.modules.payments.models import EscrowStatus, PaymentProvider, PaymentSt
 from app.modules.rentcar.models import VehicleStatus
 from app.modules.stays.models import PropertyStatus
 from app.modules.tours.models import TourStatus
-from app.modules.users.models import PartnerRoleStatus, PartnerRoleType
+from app.modules.users.models import AdminPermissionRole, PartnerRoleStatus, PartnerRoleType, SystemRole
 
 
 class AdminUserSummary(BaseModel):
@@ -25,6 +25,22 @@ class AdminUserSummary(BaseModel):
 
 class SuspendRequest(BaseModel):
     reason: str
+
+
+class AdminAccountRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    full_name: str
+    email: str | None
+    phone: str | None
+    system_role: SystemRole
+    admin_permission_role: AdminPermissionRole | None
+    is_active: bool
+
+
+class SetAdminPermissionRoleRequest(BaseModel):
+    admin_permission_role: AdminPermissionRole | None
 
 
 class AdminPartnerRoleRead(BaseModel):

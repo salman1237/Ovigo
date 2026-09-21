@@ -3,9 +3,9 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.admin_permissions import require_admin_permission
 from app.core.permissions import require_admin, require_approved_role
 from app.database import get_db
-from app.modules.auth.utils import get_current_user
 from app.modules.commissions import service
 from app.modules.commissions.schemas import (
     CommissionPreviewRequest,
@@ -47,24 +47,34 @@ async def get_rent_a_car_earnings(
 
 
 @admin_router.get("", response_model=list[CommissionRuleRead])
-async def list_commission_rules(db: AsyncSession = Depends(get_db)):
+async def list_commission_rules(
+    current_user: User = Depends(require_admin_permission("commission_rules.view")), db: AsyncSession = Depends(get_db)
+):
     return await service.list_rules(db)
 
 
 @admin_router.post("", response_model=CommissionRuleRead, status_code=201)
 async def create_commission_rule(
-    payload: CommissionRuleCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    payload: CommissionRuleCreate,
+    current_user: User = Depends(require_admin_permission("commission_rules.write")),
+    db: AsyncSession = Depends(get_db),
 ):
     return await service.create_rule(db, current_user, payload)
 
 
 @admin_router.post("/{rule_id}/deactivate", response_model=CommissionRuleRead)
 async def deactivate_commission_rule(
-    rule_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    rule_id: uuid.UUID,
+    current_user: User = Depends(require_admin_permission("commission_rules.write")),
+    db: AsyncSession = Depends(get_db),
 ):
     return await service.deactivate_rule(db, current_user, rule_id)
 
 
 @admin_router.post("/preview", response_model=CommissionPreviewResponse)
-async def preview_commission(payload: CommissionPreviewRequest, db: AsyncSession = Depends(get_db)):
+async def preview_commission(
+    payload: CommissionPreviewRequest,
+    current_user: User = Depends(require_admin_permission("commission_rules.view")),
+    db: AsyncSession = Depends(get_db),
+):
     return await service.preview_commission(db, payload)

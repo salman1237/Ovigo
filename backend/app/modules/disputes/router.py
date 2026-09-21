@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.admin_permissions import require_admin_permission
 from app.core.permissions import require_admin
 from app.database import get_db
 from app.modules.auth.utils import get_current_user
@@ -39,7 +40,11 @@ async def get_my_dispute(
 
 
 @admin_router.get("", response_model=list[DisputeRead])
-async def admin_list_disputes(status: DisputeStatus | None = Query(default=None), db: AsyncSession = Depends(get_db)):
+async def admin_list_disputes(
+    status: DisputeStatus | None = Query(default=None),
+    current_user: User = Depends(require_admin_permission("disputes.view")),
+    db: AsyncSession = Depends(get_db),
+):
     return await service.list_disputes(db, status)
 
 
@@ -47,7 +52,7 @@ async def admin_list_disputes(status: DisputeStatus | None = Query(default=None)
 async def admin_resolve_dispute(
     dispute_id: uuid.UUID,
     payload: DisputeResolve,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_permission("disputes.resolve")),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.resolve_dispute(db, current_user, dispute_id, payload)
