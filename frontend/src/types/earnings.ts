@@ -32,7 +32,20 @@ export interface CommissionRule {
   partner_role_id: string | null;
   rate: string;
   is_active: boolean;
+  effective_date: string | null;
+  expiry_date: string | null;
   created_at: string;
+}
+
+export interface CommissionPreviewResult {
+  direct_rate: string;
+  direct_rule_id: string | null;
+  direct_commission_amount: string;
+  direct_partner_net_amount: string;
+  network_rate: string | null;
+  network_rule_id: string | null;
+  network_commission_amount: string | null;
+  network_referring_role_id: string | null;
 }
 
 export type PayoutStatus = "paid";
