@@ -752,7 +752,20 @@ Investigation before building anything found most of what the doc asks for alrea
 
 **Verified:** `pytest -q` 32/32 passing; migration applied to production (4 new notification enum values); all 4 new endpoints confirmed live; a full round-trip directly against production (suspend a real approved role → confirm status → unsuspend → confirm reverted; suspend a real user account → confirm `is_active=False` → unsuspend → confirm reverted), fully reversed with no lasting changes; and a live UI check — a freshly registered traveler's Dashboard dropdown shows only the Traveler section (My Bookings/Custom Trip/My eSIMs), with zero trace of "Partner Tools" or any role-specific link, confirming the nav gating fix works for the majority case (a plain traveler) exactly as intended.
 
-**Next up (Phase 7.7, not started):** the commission engine's remaining operational gaps — no effective-date/expiry-date on a `CommissionRule` (can't schedule a rate change or time-box a promo rate) and no calculation-preview (dry-run) endpoint.
+### Phase 7.7 — Commission engine scheduling & preview (HIGH PRIORITY #7) — Done (2026-09-21)
+
+The rules engine itself (PARTNER-override > CATEGORY-default priority resolution, plus a NETWORK referral cut) already worked correctly — the two remaining gaps from the doc were operational: no way to schedule a rate change or time-box a promo rate, and no way to check what a rule would actually produce before real bookings exist to test against.
+
+- `CommissionRule` gained `effective_date`/`expiry_date` (both optional — no `effective_date` means active since creation, no `expiry_date` means it never self-expires). All four rate-resolution query sites (PARTNER item-type-specific, PARTNER blanket, CATEGORY, NETWORK) now filter to rules currently within their window.
+- Since rules can now legitimately overlap in time (an old rate whose expiry hasn't been backfilled alongside a new one that just started), resolution now deterministically picks the most-recently-effective match instead of the previous `scalar_one_or_none()`, which would have raised `MultipleResultsFound` the moment two rules overlapped.
+- New `POST /api/v1/admin/commission-rules/preview` — a dry run of the exact same resolution logic for a hypothetical item_type/partner/gross_amount, returning both the DIRECT rate/amount and, if the partner has an approved+linked referral, the NETWORK rate/amount (correctly checking that referral's `custom_commission_rate` from Phase 7.5 first). No `Commission` row is ever written.
+- Frontend: the commission rules form gained optional date inputs, the rules table shows each rule's active window, and a new "Preview calculation" tool surfaces the dry-run result inline.
+
+**Verified:** `pytest -q` 32/32 passing; migration applied to production; the preview endpoint tested directly against real production data (10% rate on a ৳10,000 gross → ৳1,000 commission, ৳9,000 net, correctly showing no network cut for a role with no linked referral); the date-window logic specifically verified with three real rule states against production — a future-dated rule correctly ignored, an expired rule correctly ignored, then the same rule with a currently-valid window correctly picked up (0.30 rate applied) — all test rules cleaned up afterward with zero lasting changes.
+
+All 8 of the original doc's HIGH PRIORITY items are now done except one: Admin RBAC & audit logs (`system_role` is still only traveler/admin/super_admin — no Finance Admin/Operations Admin/Support/Moderator/Verification-team roles or granular per-action permissions).
+
+**Next up (Phase 7.8, not started):** admin RBAC and audit logs — the last HIGH PRIORITY item.
 
 ## MVP Acceptance Criteria (from technical document §11)
 
