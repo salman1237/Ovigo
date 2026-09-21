@@ -30,12 +30,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
+import { useMyApprovedRoleTypes } from "@/hooks/useMyPartnerRoles";
 import { cn } from "@/lib/cn";
+import type { PartnerRoleType } from "@/types/partner";
 
 interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  roles?: PartnerRoleType[];
 }
 
 const EXPLORE_LINKS: NavItem[] = [
@@ -53,19 +56,21 @@ const TRAVELER_LINKS: NavItem[] = [
   { href: "/esim/orders", label: "My eSIMs", icon: Smartphone },
 ];
 
+// `roles` mirrors each page's own backend permission dependency — see the
+// matching comment in Header.tsx's own PARTNER_LINKS.
 const PARTNER_LINKS: NavItem[] = [
-  { href: "/dashboard/tours", label: "My Tours", icon: Map },
-  { href: "/dashboard/properties", label: "My Properties", icon: Building2 },
-  { href: "/dashboard/vehicles", label: "My Vehicles", icon: Car },
-  { href: "/dashboard/drivers", label: "My Drivers", icon: UserIcon },
-  { href: "/dashboard/bids", label: "Bid Requests", icon: Handshake },
-  { href: "/dashboard/guides", label: "My Guides", icon: Users },
-  { href: "/dashboard/guide", label: "Guide Dashboard", icon: Compass },
-  { href: "/dashboard/business-network", label: "Business Network", icon: Briefcase },
-  { href: "/dashboard/ads", label: "Ad Campaigns", icon: Megaphone },
-  { href: "/dashboard/earnings", label: "Earnings", icon: Coins },
-  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/dashboard/staff", label: "Staff Invitations", icon: UserPlus },
+  { href: "/dashboard/tours", label: "My Tours", icon: Map, roles: ["local_expert"] },
+  { href: "/dashboard/properties", label: "My Properties", icon: Building2, roles: ["host", "hotel"] },
+  { href: "/dashboard/vehicles", label: "My Vehicles", icon: Car, roles: ["rent_a_car"] },
+  { href: "/dashboard/drivers", label: "My Drivers", icon: UserIcon, roles: ["rent_a_car"] },
+  { href: "/dashboard/bids", label: "Bid Requests", icon: Handshake, roles: ["local_expert"] },
+  { href: "/dashboard/guides", label: "My Guides", icon: Users, roles: ["local_expert"] },
+  { href: "/dashboard/guide", label: "Guide Dashboard", icon: Compass, roles: ["guide"] },
+  { href: "/dashboard/business-network", label: "Business Network", icon: Briefcase, roles: ["local_expert"] },
+  { href: "/dashboard/ads", label: "Ad Campaigns", icon: Megaphone, roles: ["local_expert", "host", "hotel", "rent_a_car"] },
+  { href: "/dashboard/earnings", label: "Earnings", icon: Coins, roles: ["local_expert", "host", "hotel", "guide"] },
+  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3, roles: ["local_expert", "host", "hotel", "rent_a_car"] },
+  { href: "/dashboard/staff", label: "Staff Invitations", icon: UserPlus, roles: ["host", "hotel"] },
 ];
 
 export function MobileMenu({
@@ -82,6 +87,8 @@ export function MobileMenu({
   onLogout: () => void;
 }) {
   const pathname = usePathname();
+  const approvedRoleTypes = useMyApprovedRoleTypes();
+  const myPartnerLinks = PARTNER_LINKS.filter((item) => item.roles?.some((r) => approvedRoleTypes.has(r)));
 
   return (
     <AnimatePresence>
@@ -129,11 +136,13 @@ export function MobileMenu({
                     ))}
                   </SectionCard>
 
-                  <AccordionSection title="Partner Tools" icon={LayoutDashboard} tone="primary" count={PARTNER_LINKS.length}>
-                    {PARTNER_LINKS.map((item) => (
-                      <MobileLink key={item.href} {...item} active={pathname?.startsWith(item.href)} onClose={onClose} />
-                    ))}
-                  </AccordionSection>
+                  {myPartnerLinks.length > 0 && (
+                    <AccordionSection title="Partner Tools" icon={LayoutDashboard} tone="primary" count={myPartnerLinks.length}>
+                      {myPartnerLinks.map((item) => (
+                        <MobileLink key={item.href} href={item.href} label={item.label} icon={item.icon} active={pathname?.startsWith(item.href)} onClose={onClose} />
+                      ))}
+                    </AccordionSection>
+                  )}
 
                   <SectionCard title="Account" icon={ShieldCheck} tone="accent">
                     <MobileLink href="/dashboard/profile" label="My Profile" icon={UserIcon} active={pathname?.startsWith("/dashboard/profile")} onClose={onClose} />

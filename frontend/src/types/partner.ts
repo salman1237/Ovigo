@@ -53,6 +53,7 @@ export interface AdminUserSummary {
   full_name: string;
   email: string | null;
   phone: string | null;
+  is_active: boolean;
 }
 
 export interface AdminPartnerRole {

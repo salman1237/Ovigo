@@ -72,6 +72,8 @@ export default function AdminPartnersPage() {
 function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: () => void }) {
   const [rejectReason, setRejectReason] = useState("");
   const [showReject, setShowReject] = useState(false);
+  const [suspendReason, setSuspendReason] = useState("");
+  const [showSuspend, setShowSuspend] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -106,6 +108,55 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
     }
   };
 
+  const suspend = async () => {
+    if (!suspendReason.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiClient.post(
+        `/api/v1/admin/partners/roles/${role.id}/suspend`,
+        { reason: suspendReason },
+        { auth: true }
+      );
+      onChange();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to suspend");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const unsuspend = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await apiClient.post(`/api/v1/admin/partners/roles/${role.id}/unsuspend`, undefined, { auth: true });
+      onChange();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to unsuspend");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleAccount = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const path = role.applicant.is_active
+        ? `/api/v1/admin/users/${role.applicant.id}/suspend`
+        : `/api/v1/admin/users/${role.applicant.id}/unsuspend`;
+      await apiClient.post(path, role.applicant.is_active ? { reason: "Suspended from partner review" } : undefined, {
+        auth: true,
+      });
+      onChange();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to update account");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const viewDocument = async (documentId: string, fileName: string) => {
     const blob = await apiClient.getBlob(`/api/v1/admin/partners/documents/${documentId}/file`, { auth: true });
     const url = URL.createObjectURL(blob);
@@ -130,18 +181,33 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
           <h3 className="font-medium text-zinc-900 dark:text-zinc-50">
             {ROLE_LABELS[role.role_type]} — {role.applicant.full_name}
           </h3>
-          <p className="text-xs text-zinc-500">{role.applicant.email ?? role.applicant.phone}</p>
+          <p className="text-xs text-zinc-500">
+            {role.applicant.email ?? role.applicant.phone}
+            {!role.applicant.is_active && <span className="ml-2 font-medium text-red-600">Account suspended</span>}
+          </p>
         </div>
-        {role.status === "pending" && (
-          <div className="flex gap-2">
-            <Button size="sm" onClick={approve} loading={busy}>
-              Approve
+        <div className="flex gap-2">
+          {role.status === "pending" && (
+            <>
+              <Button size="sm" onClick={approve} loading={busy}>
+                Approve
+              </Button>
+              <Button size="sm" variant="destructive" onClick={() => setShowReject((s) => !s)} disabled={busy}>
+                Reject
+              </Button>
+            </>
+          )}
+          {role.status === "approved" && (
+            <Button size="sm" variant="destructive" onClick={() => setShowSuspend((s) => !s)} disabled={busy}>
+              Suspend role
             </Button>
-            <Button size="sm" variant="destructive" onClick={() => setShowReject((s) => !s)} disabled={busy}>
-              Reject
+          )}
+          {role.status === "suspended" && (
+            <Button size="sm" variant="secondary" onClick={unsuspend} loading={busy}>
+              Reinstate role
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {showReject && (
@@ -158,6 +224,29 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
           </Button>
         </div>
       )}
+
+      {showSuspend && (
+        <div className="mt-3 flex gap-2">
+          <Input
+            type="text"
+            value={suspendReason}
+            onChange={(e) => setSuspendReason(e.target.value)}
+            placeholder="Suspension reason"
+            className="flex-1"
+          />
+          <Button size="sm" variant="destructive" onClick={suspend} disabled={busy || !suspendReason.trim()}>
+            Confirm
+          </Button>
+        </div>
+      )}
+
+      <button
+        onClick={toggleAccount}
+        disabled={busy}
+        className="mt-2 text-xs font-medium text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+      >
+        {role.applicant.is_active ? "Suspend entire account" : "Reactivate account"}
+      </button>
 
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 

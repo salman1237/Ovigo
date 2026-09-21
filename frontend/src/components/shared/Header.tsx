@@ -27,6 +27,7 @@ import { NotificationBell } from "@/components/shared/NotificationBell";
 import { MobileMenu } from "@/components/shared/MobileMenu";
 import { Popover } from "@/components/ui/Popover";
 import { buttonVariants } from "@/components/ui/Button";
+import { useMyApprovedRoleTypes } from "@/hooks/useMyPartnerRoles";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { useAuthStore } from "@/stores/auth-store";
@@ -34,6 +35,7 @@ import { useCartStore } from "@/stores/cart-store";
 import { useCurrencyStore } from "@/stores/currency-store";
 import type { ChatThread } from "@/types/chat";
 import { CURRENCY_LABELS } from "@/types/fx";
+import type { PartnerRoleType } from "@/types/partner";
 
 const DISPLAY_CURRENCIES = ["BDT", "USD", "EUR", "GBP", "INR", "AED", "SAR", "MYR", "SGD", "AUD", "CAD"];
 
@@ -44,19 +46,24 @@ const PRIMARY_NAV = [
   { href: "/esim", label: "eSIM", icon: Smartphone },
 ];
 
-const PARTNER_LINKS = [
-  { href: "/dashboard/tours", label: "My Tours" },
-  { href: "/dashboard/properties", label: "My Properties" },
-  { href: "/dashboard/vehicles", label: "My Vehicles" },
-  { href: "/dashboard/drivers", label: "My Drivers" },
-  { href: "/dashboard/bids", label: "Bid Requests" },
-  { href: "/dashboard/guides", label: "My Guides" },
-  { href: "/dashboard/guide", label: "Guide Dashboard" },
-  { href: "/dashboard/business-network", label: "Business Network" },
-  { href: "/dashboard/ads", label: "Ad Campaigns" },
-  { href: "/dashboard/earnings", label: "Earnings" },
-  { href: "/dashboard/analytics", label: "Analytics" },
-  { href: "/dashboard/staff", label: "Staff Invitations" },
+// `roles` mirrors each page's own backend permission dependency exactly
+// (require_approved_role(...) in tours/stays/rentcar/guides/business_network/
+// ads/payouts/analytics/stays' staff router) — a link only shows if the user
+// holds an APPROVED role from this list, instead of every partner feature
+// showing to every logged-in user regardless of what they've applied for.
+const PARTNER_LINKS: { href: string; label: string; roles: PartnerRoleType[] }[] = [
+  { href: "/dashboard/tours", label: "My Tours", roles: ["local_expert"] },
+  { href: "/dashboard/properties", label: "My Properties", roles: ["host", "hotel"] },
+  { href: "/dashboard/vehicles", label: "My Vehicles", roles: ["rent_a_car"] },
+  { href: "/dashboard/drivers", label: "My Drivers", roles: ["rent_a_car"] },
+  { href: "/dashboard/bids", label: "Bid Requests", roles: ["local_expert"] },
+  { href: "/dashboard/guides", label: "My Guides", roles: ["local_expert"] },
+  { href: "/dashboard/guide", label: "Guide Dashboard", roles: ["guide"] },
+  { href: "/dashboard/business-network", label: "Business Network", roles: ["local_expert"] },
+  { href: "/dashboard/ads", label: "Ad Campaigns", roles: ["local_expert", "host", "hotel", "rent_a_car"] },
+  { href: "/dashboard/earnings", label: "Earnings", roles: ["local_expert", "host", "hotel", "guide"] },
+  { href: "/dashboard/analytics", label: "Analytics", roles: ["local_expert", "host", "hotel", "rent_a_car"] },
+  { href: "/dashboard/staff", label: "Staff Invitations", roles: ["host", "hotel"] },
 ];
 
 const TRAVELER_LINKS = [
@@ -72,6 +79,8 @@ export function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const approvedRoleTypes = useMyApprovedRoleTypes();
+  const myPartnerLinks = PARTNER_LINKS.filter((item) => item.roles.some((r) => approvedRoleTypes.has(r)));
 
   const { data: chatThreads } = useQuery({
     queryKey: ["chat", "threads"],
@@ -138,10 +147,14 @@ export function Header() {
                 {TRAVELER_LINKS.map((item) => (
                   <DropdownLink key={item.href} href={item.href} label={item.label} />
                 ))}
-                <DropdownSectionLabel>Partner Tools</DropdownSectionLabel>
-                {PARTNER_LINKS.map((item) => (
-                  <DropdownLink key={item.href} href={item.href} label={item.label} />
-                ))}
+                {myPartnerLinks.length > 0 && (
+                  <>
+                    <DropdownSectionLabel>Partner Tools</DropdownSectionLabel>
+                    {myPartnerLinks.map((item) => (
+                      <DropdownLink key={item.href} href={item.href} label={item.label} />
+                    ))}
+                  </>
+                )}
               </Popover>
             )}
           </nav>
