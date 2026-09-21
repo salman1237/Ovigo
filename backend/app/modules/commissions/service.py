@@ -139,7 +139,10 @@ async def create_commissions_for_booking(db: AsyncSession, booking: Booking) -> 
 
         referral = await _approved_referral_for_partner(db, partner_role_id)
         if referral is not None:
-            network_rate, network_rule = await _resolve_network_rate(db)
+            if referral.custom_commission_rate is not None:
+                network_rate, network_rule = referral.custom_commission_rate, None
+            else:
+                network_rate, network_rule = await _resolve_network_rate(db)
             network_amount = (item.subtotal * network_rate).quantize(Decimal("0.01"))
             db.add(
                 Commission(

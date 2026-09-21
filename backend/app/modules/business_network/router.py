@@ -13,7 +13,10 @@ from app.modules.business_network.schemas import (
     AdminBusinessReferralRead,
     BusinessReferralCreate,
     BusinessReferralRead,
+    ClaimReferralRead,
     LinkPartnerRequest,
+    SetCommissionRateRequest,
+    VerifyBusinessRequest,
 )
 from app.modules.users.models import PartnerRole, PartnerRoleType, User
 
@@ -56,6 +59,35 @@ async def get_referral(
     return await service.get_own_referral_or_404(db, role, referral_id)
 
 
+@router.post("/{referral_id}/send-invite", response_model=BusinessReferralRead)
+async def send_invite(
+    referral_id: uuid.UUID,
+    role: PartnerRole = Depends(require_approved_role(PartnerRoleType.LOCAL_EXPERT)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.send_invite(db, role, referral_id)
+
+
+@router.get("/claim/{token}", response_model=ClaimReferralRead)
+async def get_claim_info(token: str, db: AsyncSession = Depends(get_db)):
+    referral = await service.get_claim_info(db, token)
+    return ClaimReferralRead(
+        id=referral.id,
+        business_name=referral.business_name,
+        business_type=referral.business_type,
+        description=referral.description,
+        referring_expert_name=referral.referring_expert_role.partner_account.user.full_name,
+        already_claimed=referral.invited_user_id is not None,
+    )
+
+
+@router.post("/claim/{token}", response_model=BusinessReferralRead)
+async def claim_referral(
+    token: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    return await service.claim_referral(db, current_user, token)
+
+
 @admin_router.get("", response_model=list[AdminBusinessReferralRead])
 async def admin_list_referrals(status: ReferralStatus | None = None, db: AsyncSession = Depends(get_db)):
     referrals = await service.list_referrals(db, status)
@@ -91,4 +123,26 @@ async def admin_reject_referral(
     db: AsyncSession = Depends(get_db),
 ):
     referral = await service.reject_referral(db, current_user, referral_id, payload.reason)
+    return _to_admin_read(referral)
+
+
+@admin_router.post("/{referral_id}/verify-business", response_model=AdminBusinessReferralRead)
+async def admin_verify_business(
+    referral_id: uuid.UUID,
+    payload: VerifyBusinessRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    referral = await service.verify_business(db, current_user, referral_id, payload.verified)
+    return _to_admin_read(referral)
+
+
+@admin_router.post("/{referral_id}/commission-rate", response_model=AdminBusinessReferralRead)
+async def admin_set_commission_rate(
+    referral_id: uuid.UUID,
+    payload: SetCommissionRateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    referral = await service.set_commission_rate(db, current_user, referral_id, payload.rate)
     return _to_admin_read(referral)

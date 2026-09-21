@@ -18,8 +18,9 @@ purposes.
 import enum
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -61,7 +62,28 @@ class BusinessReferral(Base):
     linked_partner_role_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("partner_roles.id", ondelete="SET NULL"), nullable=True, unique=True
     )
+    # Owner invitation (REFERRED type only — an OWNED referral's "owner" is the
+    # referring expert themself, nothing to invite): a shareable claim link the
+    # referring expert sends the actual business owner outside the platform (no
+    # email/SMS delivery exists yet — see notifications/models.py), who then visits
+    # it and claims the referral as themselves.
+    invite_token: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    invite_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    invited_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    invite_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # A distinct step from `status` approval — an admin independently confirming the
+    # business is real (a phone call, a site visit, whatever), not just that the
+    # referral record itself looks legitimate.
+    is_business_verified: Mapped[bool] = mapped_column(default=False)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Overrides the platform-wide NETWORK commission rate (commissions/service.py)
+    # for this specific referral, when a negotiated rate applies instead of the
+    # standard one.
+    custom_commission_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     referring_expert_role: Mapped["PartnerRole"] = relationship(foreign_keys=[referring_expert_role_id])  # noqa: F821
     linked_partner_role: Mapped["PartnerRole | None"] = relationship(foreign_keys=[linked_partner_role_id])  # noqa: F821
+    invited_user: Mapped["User | None"] = relationship(foreign_keys=[invited_user_id])  # noqa: F821
