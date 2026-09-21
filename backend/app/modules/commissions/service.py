@@ -2,19 +2,31 @@
 See models.py for the overall design (DIRECT vs NETWORK commission, rule scopes).
 """
 import uuid
+from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
 from app.modules.bookings.models import Booking, BookingItem, BookingItemStatus, BookingItemType
 from app.modules.business_network.models import BusinessReferral, ReferralStatus
 from app.modules.commissions.models import Commission, CommissionRule, CommissionRuleScope, CommissionSource, CommissionStatus
-from app.modules.commissions.schemas import CommissionRuleCreate, EarningsSummary
+from app.modules.commissions.schemas import CommissionPreviewRequest, CommissionPreviewResponse, CommissionRuleCreate, EarningsSummary
 from app.modules.stays.models import Property, RoomType
 from app.modules.tours.models import Tour, TourDeparture
 from app.modules.users.models import PartnerRole, User
+
+
+def _currently_effective(query, today: date | None = None):
+    """Restricts a CommissionRule query to rows whose effective/expiry window
+    covers today — a rule with no effective_date is active since creation, no
+    expiry_date means it doesn't self-expire."""
+    today = today or date.today()
+    return query.where(
+        or_(CommissionRule.effective_date.is_(None), CommissionRule.effective_date <= today),
+        or_(CommissionRule.expiry_date.is_(None), CommissionRule.expiry_date >= today),
+    )
 
 # Fallback rates used only if no matching CommissionRule row exists at all (shouldn't
 # happen once the Sprint 14-15 migration seeds a CATEGORY rule per item type — this is
@@ -56,49 +68,75 @@ async def _partner_role_for_item(db: AsyncSession, item: BookingItem) -> uuid.UU
     return None
 
 
+async def _most_recently_effective(db: AsyncSession, query) -> CommissionRule | None:
+    """Picks one deterministically when more than one currently-effective rule
+    matches the same scope/item_type/partner (e.g. an old rate whose expiry_date
+    hasn't been backfilled yet alongside a new one that just became effective) —
+    the rule with the latest effective_date wins; ties fall back to the most
+    recently created. Previously this used scalar_one_or_none(), which would
+    raise if a second row ever matched; now that rules can overlap in time,
+    picking the most-recent one is the correct default instead of erroring."""
+    result = await db.execute(
+        query.order_by(
+            CommissionRule.effective_date.desc().nullslast(), CommissionRule.created_at.desc()
+        ).limit(1)
+    )
+    return result.scalars().first()
+
+
 async def _resolve_direct_rate(
     db: AsyncSession, item_type: BookingItemType, partner_role_id: uuid.UUID
 ) -> tuple[Decimal, CommissionRule | None]:
     """PARTNER-scope override (item-type-specific, then blanket) beats CATEGORY-scope,
     which beats the hardcoded legacy default — priority resolution, most specific wins."""
-    result = await db.execute(
-        select(CommissionRule).where(
-            CommissionRule.scope == CommissionRuleScope.PARTNER,
-            CommissionRule.partner_role_id == partner_role_id,
-            CommissionRule.item_type == item_type,
-            CommissionRule.is_active.is_(True),
-        )
-    )
-    rule = result.scalar_one_or_none()
-    if rule is None:
-        result = await db.execute(
+    rule = await _most_recently_effective(
+        db,
+        _currently_effective(
             select(CommissionRule).where(
                 CommissionRule.scope == CommissionRuleScope.PARTNER,
                 CommissionRule.partner_role_id == partner_role_id,
-                CommissionRule.item_type.is_(None),
-                CommissionRule.is_active.is_(True),
-            )
-        )
-        rule = result.scalar_one_or_none()
-    if rule is None:
-        result = await db.execute(
-            select(CommissionRule).where(
-                CommissionRule.scope == CommissionRuleScope.CATEGORY,
                 CommissionRule.item_type == item_type,
                 CommissionRule.is_active.is_(True),
             )
+        ),
+    )
+    if rule is None:
+        rule = await _most_recently_effective(
+            db,
+            _currently_effective(
+                select(CommissionRule).where(
+                    CommissionRule.scope == CommissionRuleScope.PARTNER,
+                    CommissionRule.partner_role_id == partner_role_id,
+                    CommissionRule.item_type.is_(None),
+                    CommissionRule.is_active.is_(True),
+                )
+            ),
         )
-        rule = result.scalar_one_or_none()
+    if rule is None:
+        rule = await _most_recently_effective(
+            db,
+            _currently_effective(
+                select(CommissionRule).where(
+                    CommissionRule.scope == CommissionRuleScope.CATEGORY,
+                    CommissionRule.item_type == item_type,
+                    CommissionRule.is_active.is_(True),
+                )
+            ),
+        )
     if rule is None:
         return _LEGACY_DEFAULTS[item_type], None
     return rule.rate, rule
 
 
 async def _resolve_network_rate(db: AsyncSession) -> tuple[Decimal, CommissionRule | None]:
-    result = await db.execute(
-        select(CommissionRule).where(CommissionRule.scope == CommissionRuleScope.NETWORK, CommissionRule.is_active.is_(True))
+    rule = await _most_recently_effective(
+        db,
+        _currently_effective(
+            select(CommissionRule).where(
+                CommissionRule.scope == CommissionRuleScope.NETWORK, CommissionRule.is_active.is_(True)
+            )
+        ),
     )
-    rule = result.scalar_one_or_none()
     if rule is None:
         return _DEFAULT_NETWORK_RATE, None
     return rule.rate, rule
@@ -111,6 +149,39 @@ async def _approved_referral_for_partner(db: AsyncSession, partner_role_id: uuid
         )
     )
     return result.scalar_one_or_none()
+
+
+async def preview_commission(db: AsyncSession, payload: CommissionPreviewRequest) -> CommissionPreviewResponse:
+    """A dry run of the exact same resolution logic create_commissions_for_booking
+    uses, for a hypothetical gross_amount — no Commission row is written. Lets an
+    admin answer "what would this partner actually earn/pay right now" before a
+    real booking exists, e.g. while deciding whether a proposed rule change or a
+    new PARTNER-scope override rate is what they intended."""
+    rate, rule = await _resolve_direct_rate(db, payload.item_type, payload.partner_role_id)
+    commission_amount = (payload.gross_amount * rate).quantize(Decimal("0.01"))
+
+    network_rate = network_amount = network_rule_id = network_referring_role_id = None
+    referral = await _approved_referral_for_partner(db, payload.partner_role_id)
+    if referral is not None:
+        if referral.custom_commission_rate is not None:
+            network_rate = referral.custom_commission_rate
+            network_rule_id = None
+        else:
+            network_rate, network_rule = await _resolve_network_rate(db)
+            network_rule_id = network_rule.id if network_rule else None
+        network_amount = (payload.gross_amount * network_rate).quantize(Decimal("0.01"))
+        network_referring_role_id = referral.referring_expert_role_id
+
+    return CommissionPreviewResponse(
+        direct_rate=rate,
+        direct_rule_id=rule.id if rule else None,
+        direct_commission_amount=commission_amount,
+        direct_partner_net_amount=payload.gross_amount - commission_amount,
+        network_rate=network_rate,
+        network_rule_id=network_rule_id,
+        network_commission_amount=network_amount,
+        network_referring_role_id=network_referring_role_id,
+    )
 
 
 async def create_commissions_for_booking(db: AsyncSession, booking: Booking) -> None:

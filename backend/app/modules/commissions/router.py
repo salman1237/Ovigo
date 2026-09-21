@@ -7,7 +7,13 @@ from app.core.permissions import require_admin, require_approved_role
 from app.database import get_db
 from app.modules.auth.utils import get_current_user
 from app.modules.commissions import service
-from app.modules.commissions.schemas import CommissionRuleCreate, CommissionRuleRead, EarningsSummary
+from app.modules.commissions.schemas import (
+    CommissionPreviewRequest,
+    CommissionPreviewResponse,
+    CommissionRuleCreate,
+    CommissionRuleRead,
+    EarningsSummary,
+)
 from app.modules.users.models import PartnerRole, PartnerRoleType, User
 
 router = APIRouter(prefix="/api/v1/partners/earnings", tags=["commissions"])
@@ -57,3 +63,8 @@ async def deactivate_commission_rule(
     rule_id: uuid.UUID, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     return await service.deactivate_rule(db, current_user, rule_id)
+
+
+@admin_router.post("/preview", response_model=CommissionPreviewResponse)
+async def preview_commission(payload: CommissionPreviewRequest, db: AsyncSession = Depends(get_db)):
+    return await service.preview_commission(db, payload)

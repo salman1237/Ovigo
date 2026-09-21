@@ -23,10 +23,10 @@ batch.
 """
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Numeric, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -66,6 +66,12 @@ class CommissionRule(Base):
     )
     rate: Mapped[Decimal] = mapped_column(Numeric(5, 4))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # A rule with no effective_date is active from creation; no expiry_date means it
+    # never expires on its own (still needs is_active=False or a later, more-specific
+    # rule to actually stop applying). Lets an admin schedule a rate change or
+    # time-box a promo rate instead of having to flip is_active by hand on the day.
+    effective_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
