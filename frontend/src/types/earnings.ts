@@ -48,7 +48,7 @@ export interface CommissionPreviewResult {
   network_referring_role_id: string | null;
 }
 
-export type PayoutStatus = "paid";
+export type PayoutStatus = "pending" | "processing" | "paid" | "failed" | "reversed";
 
 export interface Payout {
   id: string;
@@ -56,8 +56,11 @@ export interface Payout {
   total_amount: string;
   commission_count: number;
   status: PayoutStatus;
+  reference: string | null;
+  note: string | null;
   created_at: string;
-  paid_at: string;
+  updated_at: string;
+  paid_at: string | null;
 }
 
 export interface PayoutPreviewRow {

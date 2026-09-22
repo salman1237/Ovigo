@@ -22,5 +22,14 @@ class PayoutRead(BaseModel):
     total_amount: Decimal
     commission_count: int
     status: PayoutStatus
+    reference: str | None
+    note: str | None
     created_at: datetime
-    paid_at: datetime
+    updated_at: datetime
+    paid_at: datetime | None
+
+
+class PayoutStatusUpdate(BaseModel):
+    status: PayoutStatus
+    reference: str | None = None
+    note: str | None = None

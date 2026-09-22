@@ -2,12 +2,21 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
-import type { EarningsSummary, Payout } from "@/types/earnings";
+import type { EarningsSummary, Payout, PayoutStatus } from "@/types/earnings";
+
+const STATUS_BADGE: Record<PayoutStatus, { label: string; variant: "neutral" | "primary" | "success" | "warning" | "danger" }> = {
+  pending: { label: "Pending", variant: "neutral" },
+  processing: { label: "Processing", variant: "warning" },
+  paid: { label: "Paid", variant: "success" },
+  failed: { label: "Failed", variant: "danger" },
+  reversed: { label: "Reversed", variant: "danger" },
+};
 
 export default function EarningsPage() {
   const user = useAuthStore((s) => s.user);
@@ -110,12 +119,19 @@ function PayoutHistory() {
 
   return (
     <div className="mt-2 flex flex-col gap-2">
-      {data.map((p) => (
-        <Card key={p.id} className="flex items-center justify-between p-3 text-sm">
-          <span>{new Date(p.paid_at).toLocaleDateString()} · {p.commission_count} commission(s)</span>
-          <span className="font-medium text-primary-600 dark:text-primary-400">{formatMoney(p.total_amount)}</span>
-        </Card>
-      ))}
+      {data.map((p) => {
+        const badge = STATUS_BADGE[p.status];
+        return (
+          <Card key={p.id} className="flex items-center justify-between p-3 text-sm">
+            <span className="flex items-center gap-2">
+              {p.paid_at ? new Date(p.paid_at).toLocaleDateString() : new Date(p.created_at).toLocaleDateString()} ·{" "}
+              {p.commission_count} commission(s)
+              <Badge variant={badge.variant}>{badge.label}</Badge>
+            </span>
+            <span className="font-medium text-primary-600 dark:text-primary-400">{formatMoney(p.total_amount)}</span>
+          </Card>
+        );
+      })}
     </div>
   );
 }
