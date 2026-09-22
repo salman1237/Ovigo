@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     # Database
     database_url: str
     sync_database_url: str
+    # Neon requires TLS; a self-hosted Postgres on the same internal Docker network
+    # has no cert configured and doesn't need one. True by default since Neon was
+    # the original/default target — set to false via env var for an internal host.
+    db_ssl_required: bool = True
 
     # Auth
     jwt_secret_key: str

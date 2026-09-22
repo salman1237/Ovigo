@@ -8,9 +8,10 @@ from app.config import get_settings
 
 settings = get_settings()
 
-# Neon requires TLS. asyncpg does not understand the libpq `sslmode`/`channel_binding`
-# query params, so they are stripped from DATABASE_URL and set here via connect_args instead.
-connect_args = {"ssl": "require"} if "asyncpg" in settings.database_url else {}
+# asyncpg does not understand the libpq `sslmode`/`channel_binding` query params, so
+# they are stripped from DATABASE_URL and set here via connect_args instead, gated on
+# settings.db_ssl_required (Neon needs TLS; a same-network self-hosted Postgres doesn't).
+connect_args = {"ssl": "require"} if "asyncpg" in settings.database_url and settings.db_ssl_required else {}
 
 engine = create_async_engine(
     settings.database_url,
