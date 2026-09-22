@@ -42,6 +42,8 @@ PERMISSIONS: dict[AdminPermissionRole, set[str]] = {
         "fraud.view",
         "referrals.manage",
         "users.suspend",
+        "guides.certify",
+        "guides.restrict",
     },
     AdminPermissionRole.SUPPORT: {
         "bookings.view",

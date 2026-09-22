@@ -15,6 +15,8 @@ import {
   ASSIGNMENT_STATUS_LABELS,
   Assignment,
   Availability,
+  GUIDE_CERTIFICATION_LABELS,
+  GuideCertification,
   GuideEarnings,
   SUPERVISION_STATUS_LABELS,
   Supervision,
@@ -53,6 +55,12 @@ export default function GuideDashboardPage() {
   const { data: earnings } = useQuery({
     queryKey: ["guides", "earnings"],
     queryFn: () => apiClient.get<GuideEarnings>("/api/v1/guides/earnings", { auth: true }),
+    retry: false,
+  });
+
+  const { data: certification } = useQuery({
+    queryKey: ["guides", "certification", "mine"],
+    queryFn: () => apiClient.get<GuideCertification>("/api/v1/guides/certification/mine", { auth: true }),
     retry: false,
   });
 
@@ -160,6 +168,26 @@ export default function GuideDashboardPage() {
             {formatMoney(earnings.total_fees)}
           </p>
           <p className="text-xs text-zinc-400">{earnings.total_completed_assignments} completed assignment(s)</p>
+        </Card>
+      )}
+
+      {certification && (
+        <Card className="mt-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-zinc-500">Certification</p>
+            <Badge variant={certification.level === "level_2" ? "success" : certification.level === "level_1" ? "primary" : "neutral"}>
+              {GUIDE_CERTIFICATION_LABELS[certification.level]}
+            </Badge>
+          </div>
+          {certification.specialty && (
+            <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">Specialty: {certification.specialty}</p>
+          )}
+          {certification.is_restricted && (
+            <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+              Restricted from high-risk activity assignments
+              {certification.restriction_reason && ` — ${certification.restriction_reason}`}
+            </p>
+          )}
         </Card>
       )}
 

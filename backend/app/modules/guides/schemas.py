@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.modules.guides.models import AssignmentStatus, SupervisionStatus
+from app.modules.guides.models import AssignmentStatus, GuideCertificationLevel, SupervisionStatus
 
 
 class GuideInviteCreate(BaseModel):
@@ -68,3 +68,27 @@ class AvailabilityRead(BaseModel):
 class GuideEarnings(BaseModel):
     total_completed_assignments: int
     total_fees: Decimal
+
+
+class GuideCertificationRead(BaseModel):
+    level: GuideCertificationLevel
+    specialty: str | None
+    is_restricted: bool
+    restriction_reason: str | None
+
+
+class GuideCertificationUpdate(BaseModel):
+    level: GuideCertificationLevel
+    specialty: str | None = None
+
+
+class GuideRestrictionUpdate(BaseModel):
+    is_restricted: bool
+    restriction_reason: str | None = None
+
+
+class GuideAdminSummary(BaseModel):
+    role: PersonSummary
+    role_status: str
+    certification: GuideCertificationRead
+    total_completed_assignments: int

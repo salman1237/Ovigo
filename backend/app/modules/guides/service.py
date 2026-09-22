@@ -7,13 +7,22 @@ import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core import audit
 from app.core.exceptions import AppError, ConflictError, NotFoundError
-from app.modules.guides.models import AssignmentStatus, GuideAssignment, GuideAvailability, GuideSupervision, SupervisionStatus
-from app.modules.guides.schemas import AssignmentCreate, GuideInviteCreate
+from app.modules.guides.models import (
+    AssignmentStatus,
+    GuideAssignment,
+    GuideAvailability,
+    GuideCertification,
+    GuideCertificationLevel,
+    GuideSupervision,
+    SupervisionStatus,
+)
+from app.modules.guides.schemas import AssignmentCreate, GuideCertificationUpdate, GuideInviteCreate, GuideRestrictionUpdate
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.models import NotificationType
 from app.modules.tours.models import Tour, TourDeparture
@@ -222,10 +231,24 @@ async def assign_guide(
         select(TourDeparture)
         .join(Tour, Tour.id == TourDeparture.tour_id)
         .where(TourDeparture.id == payload.tour_departure_id, Tour.local_expert_role_id == expert_role.id)
+        .options(selectinload(TourDeparture.tour).selectinload(Tour.activities))
     )
     departure = departure_result.scalar_one_or_none()
     if departure is None:
         raise NotFoundError("Tour departure not found among your own tours")
+
+    if any(activity.is_high_risk for activity in departure.tour.activities):
+        certification = await _get_certification(db, guide_role_id)
+        if certification is not None and certification.is_restricted:
+            raise ConflictError(
+                "This guide is currently restricted from high-risk activity assignments"
+                + (f" ({certification.restriction_reason})" if certification.restriction_reason else "")
+            )
+        level = certification.level if certification is not None else GuideCertificationLevel.NONE
+        if level != GuideCertificationLevel.LEVEL_2:
+            raise ConflictError(
+                "This tour includes a high-risk activity — only a Level 2 certified guide can be assigned"
+            )
 
     assignment = GuideAssignment(
         guide_role_id=guide_role_id,
@@ -346,3 +369,108 @@ async def get_earnings(db: AsyncSession, guide_role: PartnerRole) -> dict:
     completed = list(result.scalars().all())
     total_fees = sum((a.fee_amount for a in completed if a.fee_amount is not None), Decimal("0"))
     return {"total_completed_assignments": len(completed), "total_fees": total_fees}
+
+
+# --- Certification & restriction (guide lifecycle, admin-managed) ---
+
+
+async def _get_certification(db: AsyncSession, guide_role_id: uuid.UUID) -> GuideCertification | None:
+    result = await db.execute(select(GuideCertification).where(GuideCertification.guide_role_id == guide_role_id))
+    return result.scalar_one_or_none()
+
+
+def _certification_dict(certification: GuideCertification | None) -> dict:
+    if certification is None:
+        return {
+            "level": GuideCertificationLevel.NONE,
+            "specialty": None,
+            "is_restricted": False,
+            "restriction_reason": None,
+        }
+    return {
+        "level": certification.level,
+        "specialty": certification.specialty,
+        "is_restricted": certification.is_restricted,
+        "restriction_reason": certification.restriction_reason,
+    }
+
+
+async def get_my_certification(db: AsyncSession, guide_role: PartnerRole) -> dict:
+    return _certification_dict(await _get_certification(db, guide_role.id))
+
+
+async def _get_or_create_certification(db: AsyncSession, guide_role_id: uuid.UUID) -> GuideCertification:
+    certification = await _get_certification(db, guide_role_id)
+    if certification is None:
+        certification = GuideCertification(guide_role_id=guide_role_id)
+        db.add(certification)
+        await db.flush()
+    return certification
+
+
+async def admin_set_certification(
+    db: AsyncSession, admin: User, guide_role_id: uuid.UUID, payload: GuideCertificationUpdate
+) -> dict:
+    certification = await _get_or_create_certification(db, guide_role_id)
+    certification.level = payload.level
+    certification.specialty = payload.specialty
+    await audit.record(
+        db,
+        actor_id=admin.id,
+        action="guide.certification_update",
+        entity_type="partner_role",
+        entity_id=guide_role_id,
+        extra={"level": payload.level.value, "specialty": payload.specialty},
+    )
+    await db.commit()
+    await db.refresh(certification)
+    return _certification_dict(certification)
+
+
+async def admin_set_restriction(
+    db: AsyncSession, admin: User, guide_role_id: uuid.UUID, payload: GuideRestrictionUpdate
+) -> dict:
+    certification = await _get_or_create_certification(db, guide_role_id)
+    certification.is_restricted = payload.is_restricted
+    certification.restriction_reason = payload.restriction_reason
+    await audit.record(
+        db,
+        actor_id=admin.id,
+        action="guide.restriction_update",
+        entity_type="partner_role",
+        entity_id=guide_role_id,
+        extra={"is_restricted": payload.is_restricted, "restriction_reason": payload.restriction_reason},
+    )
+    await db.commit()
+    await db.refresh(certification)
+    return _certification_dict(certification)
+
+
+async def admin_list_guides(db: AsyncSession) -> list[dict]:
+    roles_result = await db.execute(
+        select(PartnerRole)
+        .where(PartnerRole.role_type == PartnerRoleType.GUIDE)
+        .options(selectinload(PartnerRole.partner_account).selectinload(PartnerAccount.user))
+        .order_by(PartnerRole.created_at.desc())
+    )
+    roles = list(roles_result.scalars().all())
+
+    certs_result = await db.execute(select(GuideCertification))
+    certs_by_role = {c.guide_role_id: c for c in certs_result.scalars().all()}
+
+    counts_result = await db.execute(
+        select(GuideAssignment.guide_role_id, func.count())
+        .where(GuideAssignment.status == AssignmentStatus.COMPLETED)
+        .group_by(GuideAssignment.guide_role_id)
+    )
+    completed_counts = dict(counts_result.all())
+
+    return [
+        {
+            "role": _person_summary(role),
+            "role_status": role.status.value,
+            "certification": _certification_dict(certs_by_role.get(role.id)),
+            "total_completed_assignments": completed_counts.get(role.id, 0),
+        }
+        for role in roles
+    ]

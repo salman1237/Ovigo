@@ -21,7 +21,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, Numeric, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -40,6 +40,12 @@ class AssignmentStatus(str, enum.Enum):
     CHECKED_IN = "checked_in"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+
+
+class GuideCertificationLevel(str, enum.Enum):
+    NONE = "none"  # no certification on file — the default, can still be assigned to ordinary activities
+    LEVEL_1 = "level_1"
+    LEVEL_2 = "level_2"  # required to be assigned to a departure containing a high-risk activity
 
 
 class GuideSupervision(Base):
@@ -97,3 +103,31 @@ class GuideAvailability(Base):
     )
     date: Mapped[date] = mapped_column(Date)
     is_available: Mapped[bool] = mapped_column(default=True)
+
+
+class GuideCertification(Base):
+    """Admin-managed guide lifecycle attributes — certification tier/specialty and a
+    high-risk-activity restriction that's lighter-weight than a full role suspension
+    (PartnerRoleStatus.SUSPENDED, added in Phase 7.6) since it only blocks assignment
+    to departures with a high-risk activity, not the guide role entirely. One row per
+    guide PartnerRole, created lazily on the first admin update — a guide with no row
+    yet is treated as GuideCertificationLevel.NONE / not restricted (see guides/service.py)."""
+
+    __tablename__ = "guide_certifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    guide_role_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("partner_roles.id", ondelete="CASCADE"), unique=True
+    )
+    level: Mapped[GuideCertificationLevel] = mapped_column(
+        Enum(GuideCertificationLevel, name="guide_certification_level"), default=GuideCertificationLevel.NONE
+    )
+    specialty: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_restricted: Mapped[bool] = mapped_column(Boolean, default=False)
+    restriction_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    guide_role: Mapped["PartnerRole"] = relationship()  # noqa: F821

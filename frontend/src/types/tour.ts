@@ -61,6 +61,7 @@ export interface Activity {
   max_capacity: number | null;
   safety_notes: string | null;
   guide_required: boolean;
+  is_high_risk: boolean;
 }
 
 export interface Addon {

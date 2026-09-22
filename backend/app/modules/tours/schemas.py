@@ -107,6 +107,7 @@ class ActivityCreate(BaseModel):
     max_capacity: int | None = None
     safety_notes: str | None = None
     guide_required: bool = False
+    is_high_risk: bool = False
 
 
 class ActivityRead(BaseModel):
@@ -123,6 +124,7 @@ class ActivityRead(BaseModel):
     max_capacity: int | None
     safety_notes: str | None
     guide_required: bool
+    is_high_risk: bool
 
 
 class AddonCreate(BaseModel):

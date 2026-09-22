@@ -43,6 +43,7 @@ from app.modules.esim.router import admin_router as esim_admin_router
 from app.modules.esim.router import router as esim_router
 from app.modules.fraud.router import router as fraud_router
 from app.modules.fx.router import router as fx_router
+from app.modules.guides.router import admin_router as guides_admin_router
 from app.modules.guides.router import router as guides_router
 from app.modules.locations.router import router as locations_router
 from app.modules.loyalty.router import router as loyalty_router
@@ -154,6 +155,7 @@ app.include_router(users_router)
 app.include_router(bidding_router)
 app.include_router(bidding_bids_router)
 app.include_router(guides_router)
+app.include_router(guides_admin_router)
 app.include_router(business_network_router)
 app.include_router(business_network_admin_router)
 app.include_router(locations_router)

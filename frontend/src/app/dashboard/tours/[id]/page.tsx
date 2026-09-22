@@ -355,6 +355,7 @@ function ActivitiesSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<
   const [equipmentNeeded, setEquipmentNeeded] = useState("");
   const [maxCapacity, setMaxCapacity] = useState("");
   const [guideRequired, setGuideRequired] = useState(false);
+  const [isHighRisk, setIsHighRisk] = useState(false);
 
   const add = () => {
     run(() =>
@@ -369,6 +370,7 @@ function ActivitiesSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<
           equipment_needed: equipmentNeeded || undefined,
           max_capacity: maxCapacity ? Number(maxCapacity) : undefined,
           guide_required: guideRequired,
+          is_high_risk: isHighRisk,
         },
         { auth: true }
       )
@@ -381,6 +383,7 @@ function ActivitiesSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<
     setEquipmentNeeded("");
     setMaxCapacity("");
     setGuideRequired(false);
+    setIsHighRisk(false);
   };
 
   return (
@@ -393,6 +396,7 @@ function ActivitiesSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<
               {a.difficulty && <span className="text-zinc-400"> · {a.difficulty}</span>}
               {a.duration_hours && <span className="text-zinc-400"> · {a.duration_hours}h</span>}
               {a.guide_required && <span className="text-zinc-400"> · guide required</span>}
+              {a.is_high_risk && <span className="text-red-500"> · high risk</span>}
             </span>
             <RemoveButton onClick={() => run(() => apiClient.delete(`/api/v1/tours/${tour.id}/activities/${a.id}`, { auth: true }))} />
           </li>
@@ -414,6 +418,10 @@ function ActivitiesSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<
         <label className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
           <input type="checkbox" checked={guideRequired} onChange={(e) => setGuideRequired(e.target.checked)} className="rounded border-zinc-300" />
           Guide required
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+          <input type="checkbox" checked={isHighRisk} onChange={(e) => setIsHighRisk(e.target.checked)} className="rounded border-zinc-300" />
+          High risk (requires a Level 2 certified guide)
         </label>
         <Button size="sm" variant="secondary" onClick={add} disabled={!name}>
           Add

@@ -155,6 +155,10 @@ class TourActivity(Base):
     max_capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     safety_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     guide_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Gates guide assignment (guides/service.py::assign_guide): a departure whose tour
+    # has any high-risk activity can only be assigned a Level 2 certified, unrestricted
+    # guide — see guides/models.py::GuideCertification.
+    is_high_risk: Mapped[bool] = mapped_column(Boolean, default=False)
 
     tour: Mapped["Tour"] = relationship(back_populates="activities")
 

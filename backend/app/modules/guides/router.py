@@ -4,7 +4,8 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.permissions import require_approved_role, require_role
+from app.core.admin_permissions import require_admin_permission
+from app.core.permissions import require_admin, require_approved_role, require_role
 from app.database import get_db
 from app.modules.auth.utils import get_current_user
 from app.modules.guides import service
@@ -13,14 +14,19 @@ from app.modules.guides.schemas import (
     AssignmentRead,
     AvailabilityRead,
     AvailabilitySet,
+    GuideAdminSummary,
+    GuideCertificationRead,
+    GuideCertificationUpdate,
     GuideEarnings,
     GuideInviteCreate,
+    GuideRestrictionUpdate,
     SupervisionRead,
     SupervisionRespond,
 )
 from app.modules.users.models import PartnerRole, PartnerRoleType, User
 
 router = APIRouter(prefix="/api/v1/guides", tags=["guides"])
+admin_router = APIRouter(prefix="/api/v1/admin/guides", tags=["admin", "guides"], dependencies=[Depends(require_admin)])
 
 
 @router.post("/invite", response_model=SupervisionRead, status_code=201)
@@ -145,3 +151,38 @@ async def get_earnings(
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_earnings(db, role)
+
+
+@router.get("/certification/mine", response_model=GuideCertificationRead)
+async def get_my_certification(
+    role: PartnerRole = Depends(require_role(PartnerRoleType.GUIDE)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_my_certification(db, role)
+
+
+@admin_router.get("", response_model=list[GuideAdminSummary])
+async def admin_list_guides(
+    current_user: User = Depends(require_admin_permission("guides.certify")), db: AsyncSession = Depends(get_db)
+):
+    return await service.admin_list_guides(db)
+
+
+@admin_router.put("/{guide_role_id}/certification", response_model=GuideCertificationRead)
+async def admin_set_certification(
+    guide_role_id: uuid.UUID,
+    payload: GuideCertificationUpdate,
+    current_user: User = Depends(require_admin_permission("guides.certify")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.admin_set_certification(db, current_user, guide_role_id, payload)
+
+
+@admin_router.put("/{guide_role_id}/restriction", response_model=GuideCertificationRead)
+async def admin_set_restriction(
+    guide_role_id: uuid.UUID,
+    payload: GuideRestrictionUpdate,
+    current_user: User = Depends(require_admin_permission("guides.restrict")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.admin_set_restriction(db, current_user, guide_role_id, payload)

@@ -57,3 +57,25 @@ export const ASSIGNMENT_STATUS_LABELS: Record<AssignmentStatus, string> = {
   completed: "Completed",
   cancelled: "Cancelled",
 };
+
+export type GuideCertificationLevel = "none" | "level_1" | "level_2";
+
+export interface GuideCertification {
+  level: GuideCertificationLevel;
+  specialty: string | null;
+  is_restricted: boolean;
+  restriction_reason: string | null;
+}
+
+export interface GuideAdminSummary {
+  role: PersonSummary;
+  role_status: string;
+  certification: GuideCertification;
+  total_completed_assignments: number;
+}
+
+export const GUIDE_CERTIFICATION_LABELS: Record<GuideCertificationLevel, string> = {
+  none: "Not certified",
+  level_1: "Level 1",
+  level_2: "Level 2",
+};

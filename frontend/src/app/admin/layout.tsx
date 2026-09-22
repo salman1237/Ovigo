@@ -17,6 +17,7 @@ const NAV = [
   { href: "/admin/payments", label: "Payments" },
   { href: "/admin/disputes", label: "Disputes" },
   { href: "/admin/business-network", label: "Business Referrals" },
+  { href: "/admin/guides", label: "Guides" },
   { href: "/admin/chat", label: "Chat Moderation" },
   { href: "/admin/commission-rules", label: "Commission Rules" },
   { href: "/admin/payouts", label: "Payouts" },
