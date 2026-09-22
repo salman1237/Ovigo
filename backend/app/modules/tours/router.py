@@ -271,7 +271,8 @@ async def get_tour_image_file(
 ):
     await service.get_tour_for_view(db, tour_id, viewer_role)  # visibility gate: published or owner
     image = await service.get_image_or_404(db, tour_id, image_id)
-    return Response(content=storage.get_bytes(image.storage_key), media_type=image.content_type)
+    data = await storage.get_bytes_async(image.storage_key)
+    return Response(content=data, media_type=image.content_type, headers=storage.IMAGE_CACHE_HEADERS)
 
 
 @router.post("/{tour_id}/locations", response_model=list[LocationTagRead])

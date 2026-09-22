@@ -260,7 +260,8 @@ async def get_property_image_file(
 ):
     await service.get_property_for_view(db, property_id, viewer_role)  # visibility gate
     image = await service.get_image_or_404(db, property_id, image_id)
-    return Response(content=storage.get_bytes(image.storage_key), media_type=image.content_type)
+    data = await storage.get_bytes_async(image.storage_key)
+    return Response(content=data, media_type=image.content_type, headers=storage.IMAGE_CACHE_HEADERS)
 
 
 @router.post("/{property_id}/locations", response_model=list[LocationTagRead])

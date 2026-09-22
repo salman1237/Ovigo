@@ -93,7 +93,8 @@ async def get_attachment_file(
     db: AsyncSession = Depends(get_db),
 ):
     attachment = await service.get_attachment_or_404(db, user, thread_id, attachment_id)
-    return Response(content=storage.get_bytes(attachment.storage_key), media_type=attachment.content_type)
+    data = await storage.get_bytes_async(attachment.storage_key)
+    return Response(content=data, media_type=attachment.content_type)
 
 
 @router.post("/threads/{thread_id}/read", status_code=status.HTTP_204_NO_CONTENT)

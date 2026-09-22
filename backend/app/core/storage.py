@@ -13,9 +13,15 @@ import uuid
 import boto3
 from botocore.client import Config as BotoConfig
 from botocore.exceptions import ClientError
+from starlette.concurrency import run_in_threadpool
 
 from app.config import get_settings
 from app.core.exceptions import AppError, ConflictError
+
+# Long-lived, immutable cache for image responses: every object is stored under a
+# fresh uuid4 key (build_key below) and never overwritten in place, so once a URL
+# has been served its bytes will never change — safe to cache for a year.
+IMAGE_CACHE_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
 
 settings = get_settings()
 
@@ -63,6 +69,15 @@ def get_bytes(key: str) -> bytes:
         return obj["Body"].read()
     except ClientError as exc:
         raise AppError("Image not found in storage", status_code=404) from exc
+
+
+async def get_bytes_async(key: str) -> bytes:
+    """boto3 is synchronous — calling get_bytes directly from an async route handler
+    blocks the whole event loop for the duration of the MinIO/R2 round trip, so every
+    other concurrent request (including unrelated API calls and every other image on
+    the same page) queues up behind it one at a time. Runs it in a worker thread
+    instead so image requests actually happen in parallel."""
+    return await run_in_threadpool(get_bytes, key)
 
 
 def delete_object(key: str) -> None:

@@ -67,7 +67,8 @@ async def get_expert_photo_file(role_id: uuid.UUID, db: AsyncSession = Depends(g
     # Not gated on the profile's is_published — a profile photo isn't sensitive, and
     # search results already only surface published profiles anyway.
     key, content_type = await service.get_expert_photo(db, role_id)
-    return Response(content=storage.get_bytes(key), media_type=content_type)
+    data = await storage.get_bytes_async(key)
+    return Response(content=data, media_type=content_type, headers=storage.IMAGE_CACHE_HEADERS)
 
 
 @router.put("/host/photo", response_model=HostProfileRead)
@@ -85,4 +86,5 @@ async def set_host_photo(
 @router.get("/host/{role_id}/photo/file")
 async def get_host_photo_file(role_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     key, content_type = await service.get_host_photo(db, role_id)
-    return Response(content=storage.get_bytes(key), media_type=content_type)
+    data = await storage.get_bytes_async(key)
+    return Response(content=data, media_type=content_type, headers=storage.IMAGE_CACHE_HEADERS)
