@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import Response
@@ -53,13 +54,20 @@ async def upload_document(
     role_id: uuid.UUID,
     document_type: DocumentType = Form(...),
     file: UploadFile = File(...),
+    expiry_date: date | None = Form(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     role = await service.get_own_role_or_404(db, current_user, role_id)
     file_data = await file.read()
     return await service.upload_document(
-        db, role, document_type, file.filename or "upload", file.content_type or "application/octet-stream", file_data
+        db,
+        role,
+        document_type,
+        file.filename or "upload",
+        file.content_type or "application/octet-stream",
+        file_data,
+        expiry_date,
     )
 
 

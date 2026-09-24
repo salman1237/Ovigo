@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -11,8 +12,9 @@ import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { AdminBadge, BADGE_TYPE_LABELS, BadgeStatus } from "@/types/badges";
+import { isExpired, isExpiringSoon } from "@/types/partner";
 
-const TABS: BadgeStatus[] = ["pending", "approved", "rejected"];
+const TABS: BadgeStatus[] = ["pending", "approved", "rejected", "revoked"];
 
 export default function AdminBadgesPage() {
   const [tab, setTab] = useState<BadgeStatus>("pending");
@@ -64,7 +66,9 @@ export default function AdminBadgesPage() {
 
 function BadgeCard({ badge, onChange }: { badge: AdminBadge; onChange: () => void }) {
   const [showReject, setShowReject] = useState(false);
+  const [showRevoke, setShowRevoke] = useState(false);
   const [reason, setReason] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -72,7 +76,7 @@ function BadgeCard({ badge, onChange }: { badge: AdminBadge; onChange: () => voi
     setBusy(true);
     setError(null);
     try {
-      await apiClient.post(`/api/v1/admin/badges/${badge.id}/approve`, undefined, { auth: true });
+      await apiClient.post(`/api/v1/admin/badges/${badge.id}/approve`, { expiry_date: expiryDate || null }, { auth: true });
       onChange();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to approve");
@@ -95,6 +99,20 @@ function BadgeCard({ badge, onChange }: { badge: AdminBadge; onChange: () => voi
     }
   };
 
+  const revoke = async () => {
+    if (!reason.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiClient.post(`/api/v1/admin/badges/${badge.id}/revoke`, { reason }, { auth: true });
+      onChange();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to revoke");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Card>
       <div className="flex items-center justify-between">
@@ -104,17 +122,41 @@ function BadgeCard({ badge, onChange }: { badge: AdminBadge; onChange: () => voi
             {badge.entity_type} · {badge.entity_id.slice(0, 8)}
           </p>
         </div>
-        {badge.status === "pending" && (
-          <div className="flex gap-2">
-            <Button size="sm" onClick={approve} loading={busy}>
-              Approve
+        <div className="flex items-center gap-2">
+          {badge.status === "approved" && badge.expiry_date && (
+            <Badge variant={isExpired(badge.expiry_date) ? "danger" : isExpiringSoon(badge.expiry_date) ? "warning" : "neutral"}>
+              {isExpired(badge.expiry_date) ? "Expired" : "Expires"} {badge.expiry_date}
+            </Badge>
+          )}
+          {badge.status === "pending" && (
+            <div className="flex gap-2">
+              <Button size="sm" onClick={approve} loading={busy}>
+                Approve
+              </Button>
+              <Button size="sm" variant="destructive" onClick={() => setShowReject((s) => !s)} disabled={busy}>
+                Reject
+              </Button>
+            </div>
+          )}
+          {badge.status === "approved" && !badge.is_auto_awarded && (
+            <Button size="sm" variant="destructive" onClick={() => setShowRevoke((s) => !s)} disabled={busy}>
+              Revoke
             </Button>
-            <Button size="sm" variant="destructive" onClick={() => setShowReject((s) => !s)} disabled={busy}>
-              Reject
-            </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
+
+      {badge.status === "pending" && (
+        <div className="mt-2 flex items-center gap-2">
+          <label className="text-xs text-zinc-500">Validity (optional):</label>
+          <input
+            type="date"
+            value={expiryDate}
+            onChange={(e) => setExpiryDate(e.target.value)}
+            className="rounded-md border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+          />
+        </div>
+      )}
 
       {badge.private_note && (
         <p className="mt-2 rounded-lg bg-zinc-50 p-2 text-sm text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400">
@@ -122,12 +164,22 @@ function BadgeCard({ badge, onChange }: { badge: AdminBadge; onChange: () => voi
         </p>
       )}
       {badge.rejection_reason && <p className="mt-2 text-xs text-red-600">Rejected: {badge.rejection_reason}</p>}
+      {badge.revocation_reason && <p className="mt-2 text-xs text-red-600">Revoked: {badge.revocation_reason}</p>}
 
       {showReject && (
         <div className="mt-3 flex gap-2">
           <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Rejection reason" className="flex-1" />
           <Button size="sm" variant="destructive" onClick={reject} disabled={busy || !reason.trim()}>
             Confirm
+          </Button>
+        </div>
+      )}
+
+      {showRevoke && (
+        <div className="mt-3 flex gap-2">
+          <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Revocation reason" className="flex-1" />
+          <Button size="sm" variant="destructive" onClick={revoke} disabled={busy || !reason.trim()}>
+            Confirm revoke
           </Button>
         </div>
       )}

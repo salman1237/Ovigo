@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -88,6 +89,7 @@ async def upload_document(
     file_name: str,
     content_type: str,
     file_data: bytes,
+    expiry_date: date | None = None,
 ) -> PartnerDocument:
     if len(file_data) > MAX_DOCUMENT_SIZE_BYTES:
         raise ConflictError("File exceeds the 5MB upload limit")
@@ -98,6 +100,7 @@ async def upload_document(
         file_name=file_name,
         content_type=content_type,
         file_data=file_data,
+        expiry_date=expiry_date,
     )
     db.add(document)
     await db.commit()

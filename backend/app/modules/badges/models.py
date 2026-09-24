@@ -18,9 +18,9 @@ it after every new review rather than a partner applying for it manually.
 """
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -39,6 +39,8 @@ class BadgeStatus(str, enum.Enum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
+    REVOKED = "revoked"  # was APPROVED; an admin later withdrew it (distinct from a
+    # never-approved REJECTED application) — see badges/service.py::revoke_badge
 
 
 class Badge(Base):
@@ -56,6 +58,13 @@ class Badge(Base):
     )
     private_note: Mapped[str | None] = mapped_column(Text, nullable=True)  # never exposed publicly
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)  # never exposed publicly
+    revocation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)  # never exposed publicly
+    # No expiry means the badge is valid indefinitely once approved (e.g. VERIFIED
+    # identity), matching CommissionRule's optional-expiry pattern. A time-boxed
+    # badge (e.g. an annual SAFETY_CERTIFIED renewal) gets a real date here, set at
+    # approval time; list_for_entity (public display) excludes a past-expiry badge
+    # the same lazy, no-cron way documents do.
+    expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     awarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

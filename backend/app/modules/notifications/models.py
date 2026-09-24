@@ -52,6 +52,8 @@ class NotificationType(str, enum.Enum):
     REFERRAL_REJECTED = "referral_rejected"
     PAYOUT_PROCESSED = "payout_processed"
     PAYOUT_FAILED = "payout_failed"
+    DOCUMENT_EXPIRING = "document_expiring"
+    BADGE_REVOKED = "badge_revoked"
     BADGE_APPROVED = "badge_approved"
     BADGE_REJECTED = "badge_rejected"
     BADGE_AUTO_AWARDED = "badge_auto_awarded"

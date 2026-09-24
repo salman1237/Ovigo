@@ -12,11 +12,15 @@ import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import {
+  AdminExpiringDocument,
   AdminPartnerRole,
   DOCUMENT_TYPE_LABELS,
+  isExpired,
+  isExpiringSoon,
   PartnerRoleStatus,
   ROLE_LABELS,
 } from "@/types/partner";
+import type { AuditLog } from "@/types/audit";
 
 const TABS: PartnerRoleStatus[] = ["pending", "approved", "rejected", "suspended"];
 
@@ -65,6 +69,36 @@ export default function AdminPartnersPage() {
           <RoleReviewCard key={role.id} role={role} onChange={refetch} />
         ))}
       </div>
+
+      <ExpiringDocuments />
+    </div>
+  );
+}
+
+function ExpiringDocuments() {
+  const { data: documents } = useQuery({
+    queryKey: ["admin-partner-roles", "expiring-documents"],
+    queryFn: () =>
+      apiClient.get<AdminExpiringDocument[]>("/api/v1/admin/partners/documents/expiring?within_days=30", { auth: true }),
+  });
+
+  if (!documents || documents.length === 0) return null;
+
+  return (
+    <div className="mt-10">
+      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Documents expiring soon or expired</h2>
+      <Card className="mt-2 flex flex-col gap-2 p-4">
+        {documents.map((d) => (
+          <div key={d.id} className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-medium text-zinc-900 dark:text-zinc-50">{d.applicant.full_name}</span>
+            <span className="text-zinc-400">({ROLE_LABELS[d.role_type]})</span>
+            <span>{DOCUMENT_TYPE_LABELS[d.document_type]}</span>
+            <Badge variant={isExpired(d.expiry_date) ? "danger" : "warning"}>
+              {isExpired(d.expiry_date) ? "Expired" : "Expiring"} {d.expiry_date}
+            </Badge>
+          </div>
+        ))}
+      </Card>
     </div>
   );
 }
@@ -76,6 +110,7 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
   const [showSuspend, setShowSuspend] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const approve = async () => {
     setBusy(true);
@@ -174,6 +209,11 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
     onChange();
   };
 
+  const requestReverification = async (documentId: string) => {
+    await apiClient.post(`/api/v1/admin/partners/documents/${documentId}/request-reverification`, undefined, { auth: true });
+    onChange();
+  };
+
   return (
     <Card>
       <div className="flex items-center justify-between">
@@ -240,13 +280,23 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
         </div>
       )}
 
-      <button
-        onClick={toggleAccount}
-        disabled={busy}
-        className="mt-2 text-xs font-medium text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
-      >
-        {role.applicant.is_active ? "Suspend entire account" : "Reactivate account"}
-      </button>
+      <div className="mt-2 flex items-center gap-3">
+        <button
+          onClick={toggleAccount}
+          disabled={busy}
+          className="text-xs font-medium text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+        >
+          {role.applicant.is_active ? "Suspend entire account" : "Reactivate account"}
+        </button>
+        <button
+          onClick={() => setShowHistory((s) => !s)}
+          className="text-xs font-medium text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+        >
+          {showHistory ? "Hide" : "Show"} verification history
+        </button>
+      </div>
+
+      {showHistory && <VerificationHistory entityType="partner_role" entityId={role.id} />}
 
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
@@ -255,17 +305,27 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
           <p className="text-xs font-medium text-zinc-500">Documents</p>
           <ul className="mt-1 flex flex-col gap-1">
             {role.documents.map((doc) => (
-              <li key={doc.id} className="flex items-center gap-3 text-xs">
+              <li key={doc.id} className="flex flex-wrap items-center gap-3 text-xs">
                 <button
                   onClick={() => viewDocument(doc.id, doc.file_name)}
                   className="font-medium text-primary-600 underline hover:text-primary-700 dark:text-primary-400"
                 >
                   {DOCUMENT_TYPE_LABELS[doc.document_type]} — {doc.file_name}
                 </button>
+                {doc.expiry_date && <span className="text-zinc-400">expires {doc.expiry_date}</span>}
                 <Badge>{doc.status}</Badge>
+                {doc.status === "verified" && isExpired(doc.expiry_date) && <Badge variant="danger">Expired</Badge>}
+                {doc.status === "verified" && !isExpired(doc.expiry_date) && isExpiringSoon(doc.expiry_date) && (
+                  <Badge variant="warning">Expiring soon</Badge>
+                )}
                 {doc.status === "pending" && (
                   <button onClick={() => verifyDocument(doc.id)} className="font-medium text-emerald-600 underline hover:text-emerald-700">
                     Mark verified
+                  </button>
+                )}
+                {doc.status === "verified" && (isExpired(doc.expiry_date) || isExpiringSoon(doc.expiry_date)) && (
+                  <button onClick={() => requestReverification(doc.id)} className="font-medium text-amber-600 underline hover:text-amber-700">
+                    Request re-verification
                   </button>
                 )}
               </li>
@@ -274,5 +334,30 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
         </div>
       )}
     </Card>
+  );
+}
+
+function VerificationHistory({ entityType, entityId }: { entityType: string; entityId: string }) {
+  const { data: logs, isLoading } = useQuery({
+    queryKey: ["admin-audit-logs", entityType, entityId],
+    queryFn: () =>
+      apiClient.get<AuditLog[]>(`/api/v1/admin/audit-logs?entity_type=${entityType}&entity_id=${entityId}`, {
+        auth: true,
+      }),
+  });
+
+  return (
+    <div className="mt-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+      {isLoading && <Spinner />}
+      {!isLoading && (logs ?? []).length === 0 && <p className="text-xs text-zinc-400">No history yet.</p>}
+      <ul className="flex flex-col gap-1">
+        {(logs ?? []).map((log) => (
+          <li key={log.id} className="text-xs text-zinc-600 dark:text-zinc-400">
+            <span className="font-medium text-zinc-900 dark:text-zinc-50">{log.action}</span> —{" "}
+            {new Date(log.created_at).toLocaleString()}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

@@ -35,6 +35,7 @@ export interface PartnerDocument {
   content_type: string;
   status: DocumentStatus;
   rejection_reason: string | null;
+  expiry_date: string | null;
   created_at: string;
 }
 
@@ -64,4 +65,24 @@ export interface AdminPartnerRole {
   created_at: string;
   documents: PartnerDocument[];
   applicant: AdminUserSummary;
+}
+
+export interface AdminExpiringDocument {
+  id: string;
+  document_type: DocumentType;
+  expiry_date: string;
+  partner_role_id: string;
+  role_type: PartnerRoleType;
+  applicant: AdminUserSummary;
+}
+
+export function isExpired(dateStr: string | null): boolean {
+  if (!dateStr) return false;
+  return new Date(dateStr) < new Date(new Date().toDateString());
+}
+
+export function isExpiringSoon(dateStr: string | null, withinDays = 30): boolean {
+  if (!dateStr) return false;
+  const days = (new Date(dateStr).getTime() - Date.now()) / 86_400_000;
+  return days >= 0 && days <= withinDays;
 }

@@ -16,6 +16,7 @@ from app.modules.admin.models import AuditLog
 from app.modules.admin.schemas import (
     AdminAccountRead,
     AdminBookingRead,
+    AdminExpiringDocumentRead,
     AdminPartnerRoleRead,
     AdminPaymentRead,
     AdminPropertyRead,
@@ -160,9 +161,38 @@ async def reject_document(
     return {"message": "Document rejected"}
 
 
+@router.get("/partners/documents/expiring", response_model=list[AdminExpiringDocumentRead])
+async def list_expiring_documents(
+    within_days: int = 30,
+    current_user: User = Depends(require_admin_permission("verification.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.list_expiring_documents(db, within_days)
+
+
+@router.post("/partners/documents/{document_id}/request-reverification")
+async def request_reverification(
+    document_id: uuid.UUID,
+    current_user: User = Depends(require_admin_permission("verification.approve")),
+    db: AsyncSession = Depends(get_db),
+):
+    await service.request_reverification(db, current_user, document_id)
+    return {"message": "Re-verification requested"}
+
+
 @router.get("/audit-logs", response_model=list[AuditLogRead])
-async def list_audit_logs(limit: int = 100, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit))
+async def list_audit_logs(
+    limit: int = 100,
+    entity_type: str | None = None,
+    entity_id: uuid.UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(AuditLog)
+    if entity_type is not None:
+        query = query.where(AuditLog.entity_type == entity_type)
+    if entity_id is not None:
+        query = query.where(AuditLog.entity_id == entity_id)
+    result = await db.execute(query.order_by(AuditLog.created_at.desc()).limit(limit))
     return list(result.scalars().all())
 
 

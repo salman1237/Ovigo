@@ -1,10 +1,11 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
 from app.modules.bookings.models import BookingStatus
+from app.modules.partners.models import DocumentType
 from app.modules.partners.schemas import PartnerDocumentRead
 from app.modules.payments.models import EscrowStatus, PaymentProvider, PaymentStatus
 from app.modules.rentcar.models import VehicleStatus
@@ -60,6 +61,15 @@ class AdminPartnerRoleRead(BaseModel):
 
 class RejectRequest(BaseModel):
     reason: str
+
+
+class AdminExpiringDocumentRead(BaseModel):
+    id: uuid.UUID
+    document_type: DocumentType
+    expiry_date: date
+    partner_role_id: uuid.UUID
+    role_type: PartnerRoleType
+    applicant: AdminUserSummary
 
 
 class AdminTourRead(BaseModel):

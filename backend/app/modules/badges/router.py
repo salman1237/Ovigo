@@ -9,7 +9,7 @@ from app.modules.admin.schemas import RejectRequest
 from app.modules.auth.utils import get_current_user
 from app.modules.badges import service
 from app.modules.badges.models import BadgeStatus
-from app.modules.badges.schemas import AdminBadgeRead, BadgeApply, BadgeRead
+from app.modules.badges.schemas import AdminBadgeRead, BadgeApply, BadgeApprove, BadgeRead
 from app.modules.locations.models import TaggableEntityType
 from app.modules.users.models import User
 
@@ -47,10 +47,20 @@ async def admin_list_badges(status: BadgeStatus | None = None, db: AsyncSession 
 
 
 @admin_router.post("/{badge_id}/approve", response_model=AdminBadgeRead)
-async def admin_approve_badge(badge_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    return await service.approve_badge(db, badge_id)
+async def admin_approve_badge(badge_id: uuid.UUID, payload: BadgeApprove | None = None, db: AsyncSession = Depends(get_db)):
+    return await service.approve_badge(db, badge_id, payload.expiry_date if payload else None)
 
 
 @admin_router.post("/{badge_id}/reject", response_model=AdminBadgeRead)
 async def admin_reject_badge(badge_id: uuid.UUID, payload: RejectRequest, db: AsyncSession = Depends(get_db)):
     return await service.reject_badge(db, badge_id, payload.reason)
+
+
+@admin_router.post("/{badge_id}/revoke", response_model=AdminBadgeRead)
+async def admin_revoke_badge(
+    badge_id: uuid.UUID,
+    payload: RejectRequest,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.revoke_badge(db, current_user, badge_id, payload.reason)

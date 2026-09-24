@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -31,6 +31,7 @@ class PartnerDocumentRead(BaseModel):
     content_type: str
     status: DocumentStatus
     rejection_reason: str | None
+    expiry_date: date | None
     created_at: datetime
 
 

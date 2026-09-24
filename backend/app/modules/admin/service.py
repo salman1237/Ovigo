@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +9,7 @@ from app.core import audit, search_engine
 from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.admin.schemas import (
     AdminBookingRead,
+    AdminExpiringDocumentRead,
     AdminPartnerRoleRead,
     AdminPaymentRead,
     AdminPropertyRead,
@@ -332,6 +333,57 @@ async def reject_document(
     )
     await db.refresh(document)
     return document
+
+
+async def list_expiring_documents(db: AsyncSession, within_days: int = 30) -> list[AdminExpiringDocumentRead]:
+    """Documents needing re-verification: already expired, or expiring within
+    `within_days`. Only VERIFIED documents are relevant here — a PENDING or
+    REJECTED one isn't the partner's "current" verification for that document type."""
+    cutoff = date.today() + timedelta(days=within_days)
+    result = await db.execute(
+        select(PartnerDocument)
+        .where(PartnerDocument.status == DocumentStatus.VERIFIED, PartnerDocument.expiry_date <= cutoff)
+        .options(
+            selectinload(PartnerDocument.partner_role)
+            .selectinload(PartnerRole.partner_account)
+            .selectinload(PartnerAccount.user)
+        )
+        .order_by(PartnerDocument.expiry_date)
+    )
+    documents = result.scalars().all()
+    return [
+        AdminExpiringDocumentRead(
+            id=d.id,
+            document_type=d.document_type,
+            expiry_date=d.expiry_date,
+            partner_role_id=d.partner_role_id,
+            role_type=d.partner_role.role_type,
+            applicant=AdminUserSummary.model_validate(d.partner_role.partner_account.user),
+        )
+        for d in documents
+    ]
+
+
+async def request_reverification(db: AsyncSession, admin: User, document_id: uuid.UUID) -> None:
+    document = await _get_document_or_404(db, document_id)
+    owner_user_id = await _get_document_owner_user_id(db, document.partner_role_id)
+    await notifications_service.notify(
+        db,
+        user_id=owner_user_id,
+        type=NotificationType.DOCUMENT_EXPIRING,
+        title="Document re-verification needed",
+        message=(
+            f"Your {document.document_type.value.replace('_', ' ')} document is expired or expiring soon — "
+            "please upload a current copy for re-verification."
+        ),
+    )
+    await audit.record(
+        db,
+        actor_id=admin.id,
+        action="partner_document.request_reverification",
+        entity_type="partner_document",
+        entity_id=document.id,
+    )
 
 
 def _to_admin_tour_read(tour: Tour) -> AdminTourRead:

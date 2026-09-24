@@ -1,5 +1,5 @@
 export type BadgeType = "verified" | "top_rated" | "couple_friendly" | "safety_certified";
-export type BadgeStatus = "pending" | "approved" | "rejected";
+export type BadgeStatus = "pending" | "approved" | "rejected" | "revoked";
 export type BadgeEntityType = "partner_role" | "tour" | "property";
 
 export interface Badge {
@@ -9,6 +9,7 @@ export interface Badge {
   badge_type: BadgeType;
   status: BadgeStatus;
   is_auto_awarded: boolean;
+  expiry_date: string | null;
   awarded_at: string | null;
   created_at: string;
 }
@@ -16,6 +17,7 @@ export interface Badge {
 export interface AdminBadge extends Badge {
   private_note: string | null;
   rejection_reason: string | null;
+  revocation_reason: string | null;
   applied_by_user_id: string | null;
 }
 
@@ -30,4 +32,5 @@ export const BADGE_STATUS_LABELS: Record<BadgeStatus, string> = {
   pending: "Pending",
   approved: "Approved",
   rejected: "Rejected",
+  revoked: "Revoked",
 };

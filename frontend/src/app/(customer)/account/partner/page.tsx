@@ -15,7 +15,15 @@ import { Textarea } from "@/components/ui/Textarea";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Location } from "@/types/location";
-import { DOCUMENT_TYPE_LABELS, DocumentType, PartnerRole, PartnerRoleType, ROLE_LABELS } from "@/types/partner";
+import {
+  DOCUMENT_TYPE_LABELS,
+  DocumentType,
+  isExpired,
+  isExpiringSoon,
+  PartnerRole,
+  PartnerRoleType,
+  ROLE_LABELS,
+} from "@/types/partner";
 
 const ALL_ROLE_TYPES: PartnerRoleType[] = ["local_expert", "host", "guide", "hotel", "rent_a_car"];
 const ALL_DOCUMENT_TYPES: DocumentType[] = ["id_card", "trade_license", "property_deed", "vehicle_registration", "other"];
@@ -137,6 +145,7 @@ function RoleCard({ role, onChange }: { role: PartnerRole; onChange: () => void 
   const [locationsSaved, setLocationsSaved] = useState(false);
   const [documentType, setDocumentType] = useState<DocumentType>("id_card");
   const [file, setFile] = useState<File | null>(null);
+  const [expiryDate, setExpiryDate] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -157,8 +166,10 @@ function RoleCard({ role, onChange }: { role: PartnerRole; onChange: () => void 
       const formData = new FormData();
       formData.append("document_type", documentType);
       formData.append("file", file);
+      if (expiryDate) formData.append("expiry_date", expiryDate);
       await apiClient.postForm(`/api/v1/partners/roles/${role.id}/documents`, formData, { auth: true });
       setFile(null);
+      setExpiryDate("");
       onChange();
     } catch (err) {
       setUploadError(err instanceof ApiError ? err.message : "Upload failed");
@@ -179,45 +190,54 @@ function RoleCard({ role, onChange }: { role: PartnerRole; onChange: () => void 
       )}
 
       {role.status === "pending" && (
-        <>
-          <div className="mt-4">
-            <p className="text-xs font-medium text-zinc-500">Service locations</p>
-            <LocationPicker selected={locations} onChange={setLocations} />
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={saveLocations}
-              disabled={locations.length === 0}
-              className="mt-2"
-            >
-              Save locations
-            </Button>
-            {locationsSaved && <span className="ml-2 text-xs text-emerald-600">Saved</span>}
-          </div>
+        <div className="mt-4">
+          <p className="text-xs font-medium text-zinc-500">Service locations</p>
+          <LocationPicker selected={locations} onChange={setLocations} />
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={saveLocations}
+            disabled={locations.length === 0}
+            className="mt-2"
+          >
+            Save locations
+          </Button>
+          {locationsSaved && <span className="ml-2 text-xs text-emerald-600">Saved</span>}
+        </div>
+      )}
 
-          <div className="mt-4">
-            <p className="text-xs font-medium text-zinc-500">Upload a verification document</p>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <Select
-                value={documentType}
-                onChange={(e) => setDocumentType(e.target.value as DocumentType)}
-                className="w-auto py-1.5 pr-8 text-xs"
-              >
-                {ALL_DOCUMENT_TYPES.map((dt) => (
-                  <option key={dt} value={dt}>
-                    {DOCUMENT_TYPE_LABELS[dt]}
-                  </option>
-                ))}
-              </Select>
-              <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-xs" />
-              <Button type="button" variant="secondary" size="sm" onClick={uploadDocument} disabled={!file || uploading}>
-                {uploading ? "Uploading…" : "Upload"}
-              </Button>
-            </div>
-            {uploadError && <p className="mt-1 text-xs text-red-600">{uploadError}</p>}
+      {(role.status === "pending" || role.status === "approved") && (
+        <div className="mt-4">
+          <p className="text-xs font-medium text-zinc-500">
+            {role.status === "approved" ? "Upload a renewed or new document" : "Upload a verification document"}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <Select
+              value={documentType}
+              onChange={(e) => setDocumentType(e.target.value as DocumentType)}
+              className="w-auto py-1.5 pr-8 text-xs"
+            >
+              {ALL_DOCUMENT_TYPES.map((dt) => (
+                <option key={dt} value={dt}>
+                  {DOCUMENT_TYPE_LABELS[dt]}
+                </option>
+              ))}
+            </Select>
+            <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-xs" />
+            <input
+              type="date"
+              value={expiryDate}
+              onChange={(e) => setExpiryDate(e.target.value)}
+              title="Document expiry date (optional)"
+              className="rounded-md border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+            />
+            <Button type="button" variant="secondary" size="sm" onClick={uploadDocument} disabled={!file || uploading}>
+              {uploading ? "Uploading…" : "Upload"}
+            </Button>
           </div>
-        </>
+          {uploadError && <p className="mt-1 text-xs text-red-600">{uploadError}</p>}
+        </div>
       )}
 
       {role.documents.length > 0 && (
@@ -228,8 +248,15 @@ function RoleCard({ role, onChange }: { role: PartnerRole; onChange: () => void 
               <li key={doc.id} className="flex items-center justify-between text-xs">
                 <span>
                   {DOCUMENT_TYPE_LABELS[doc.document_type]} — {doc.file_name}
+                  {doc.expiry_date && <span className="text-zinc-400"> · expires {doc.expiry_date}</span>}
                 </span>
-                <StatusBadge status={doc.status} />
+                <span className="flex items-center gap-1.5">
+                  {doc.status === "verified" && isExpired(doc.expiry_date) && <Badge variant="danger">Expired</Badge>}
+                  {doc.status === "verified" && !isExpired(doc.expiry_date) && isExpiringSoon(doc.expiry_date) && (
+                    <Badge variant="warning">Expiring soon</Badge>
+                  )}
+                  <StatusBadge status={doc.status} />
+                </span>
               </li>
             ))}
           </ul>

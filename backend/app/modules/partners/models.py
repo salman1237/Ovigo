@@ -14,9 +14,9 @@ tracked as a follow-up once that credential exists.
 """
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, LargeBinary, String, Text, func
+from sqlalchemy import Date, DateTime, Enum, ForeignKey, LargeBinary, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -83,6 +83,13 @@ class PartnerDocument(Base):
         Enum(DocumentStatus, name="document_status"), default=DocumentStatus.PENDING
     )
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Self-reported at upload time (the partner knows their own document's expiry —
+    # e.g. a trade license or vehicle registration renewal date; a national ID
+    # typically has none, hence nullable). Verified/re-verified is a lazy check
+    # against today's date wherever this is read (see admin/service.py's
+    # list_expiring_documents) rather than a stored/cron-flipped status, matching
+    # the same effective/expiry-date pattern CommissionRule already uses.
+    expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

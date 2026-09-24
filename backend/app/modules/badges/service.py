@@ -1,10 +1,11 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import audit
 from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.modules.badges.models import Badge, BadgeStatus, BadgeType
 from app.modules.badges.schemas import BadgeApply
@@ -104,10 +105,15 @@ async def list_my_applications(db: AsyncSession, user: User) -> list[Badge]:
 
 
 async def list_for_entity(db: AsyncSession, entity_type: TaggableEntityType, entity_id: uuid.UUID) -> list[Badge]:
-    """Public: only APPROVED badges are ever shown for an entity."""
+    """Public: only APPROVED badges that haven't passed their own expiry_date (if any)
+    are ever shown for an entity — a lapsed time-boxed badge silently stops counting
+    without needing a cron to flip its status."""
     result = await db.execute(
         select(Badge).where(
-            Badge.entity_type == entity_type, Badge.entity_id == entity_id, Badge.status == BadgeStatus.APPROVED
+            Badge.entity_type == entity_type,
+            Badge.entity_id == entity_id,
+            Badge.status == BadgeStatus.APPROVED,
+            (Badge.expiry_date.is_(None)) | (Badge.expiry_date >= date.today()),
         )
     )
     return list(result.scalars().all())
@@ -129,11 +135,12 @@ async def _get_badge_or_404(db: AsyncSession, badge_id: uuid.UUID) -> Badge:
     return badge
 
 
-async def approve_badge(db: AsyncSession, badge_id: uuid.UUID) -> Badge:
+async def approve_badge(db: AsyncSession, badge_id: uuid.UUID, expiry_date: date | None = None) -> Badge:
     badge = await _get_badge_or_404(db, badge_id)
     if badge.status != BadgeStatus.PENDING:
         raise ConflictError(f"Badge is {badge.status.value}, not pending")
     badge.status = BadgeStatus.APPROVED
+    badge.expiry_date = expiry_date
     badge.awarded_at = datetime.now(timezone.utc)
 
     if badge.applied_by_user_id:
@@ -165,6 +172,32 @@ async def reject_badge(db: AsyncSession, badge_id: uuid.UUID, reason: str) -> Ba
             message=f"Your {badge.badge_type.value.replace('_', ' ')} badge application was rejected: {reason}",
         )
     await db.commit()
+    await db.refresh(badge)
+    return badge
+
+
+async def revoke_badge(db: AsyncSession, admin: User, badge_id: uuid.UUID, reason: str) -> Badge:
+    """Withdraws an already-APPROVED badge — distinct from reject_badge, which only
+    ever applies to a still-PENDING application. Once revoked it drops out of
+    list_for_entity immediately, same as an expired one."""
+    badge = await _get_badge_or_404(db, badge_id)
+    if badge.status != BadgeStatus.APPROVED:
+        raise ConflictError(f"Badge is {badge.status.value}, not approved")
+    badge.status = BadgeStatus.REVOKED
+    badge.revocation_reason = reason
+
+    if badge.applied_by_user_id:
+        await notifications_service.notify(
+            db,
+            user_id=badge.applied_by_user_id,
+            type=NotificationType.BADGE_REVOKED,
+            title="Badge revoked",
+            message=f"Your {badge.badge_type.value.replace('_', ' ')} badge was revoked: {reason}",
+        )
+    await db.commit()
+    await audit.record(
+        db, actor_id=admin.id, action="badge.revoke", entity_type="badge", entity_id=badge.id, extra={"reason": reason}
+    )
     await db.refresh(badge)
     return badge
 
