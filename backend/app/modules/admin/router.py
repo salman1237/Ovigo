@@ -23,13 +23,20 @@ from app.modules.admin.schemas import (
     AdminTourRead,
     AdminUserSummary,
     AdminVehicleRead,
+    AdPerformanceRow,
     AuditLogRead,
     BookingsSummaryRow,
+    CustomBidConversionRow,
+    CustomerRetentionRow,
     DisputeOverviewRow,
     FraudOverviewRow,
+    GuidePerformanceRow,
+    LocationPerformanceRow,
     PartnerApprovalFunnelRow,
     PartnerPerformanceRow,
+    PayoutSummaryRow,
     PlatformRevenueRow,
+    RefundSummaryRow,
     ReferralOverviewRow,
     RejectRequest,
     SetAdminPermissionRoleRequest,
@@ -333,3 +340,38 @@ async def get_referral_overview_report(csv: bool = False, db: AsyncSession = Dep
 @router.get("/reports/partner-approval-funnel", response_model=list[PartnerApprovalFunnelRow])
 async def get_partner_approval_funnel_report(csv: bool = False, db: AsyncSession = Depends(get_db)):
     return _csv_or_json(await reports.partner_approval_funnel(db), csv, "partner-approval-funnel")
+
+
+@router.get("/reports/payout-summary", response_model=list[PayoutSummaryRow])
+async def get_payout_summary_report(months: int = 12, csv: bool = False, db: AsyncSession = Depends(get_db)):
+    return _csv_or_json(await reports.payout_summary(db, months), csv, "payout-summary")
+
+
+@router.get("/reports/refund-summary", response_model=list[RefundSummaryRow])
+async def get_refund_summary_report(months: int = 12, csv: bool = False, db: AsyncSession = Depends(get_db)):
+    return _csv_or_json(await reports.refund_summary(db, months), csv, "refund-summary")
+
+
+@router.get("/reports/guide-performance", response_model=list[GuidePerformanceRow])
+async def get_guide_performance_report(limit: int = 20, csv: bool = False, db: AsyncSession = Depends(get_db)):
+    return _csv_or_json(await reports.guide_performance(db, limit), csv, "guide-performance")
+
+
+@router.get("/reports/custom-bid-conversion", response_model=list[CustomBidConversionRow])
+async def get_custom_bid_conversion_report(months: int = 12, csv: bool = False, db: AsyncSession = Depends(get_db)):
+    return _csv_or_json(await reports.custom_bid_conversion(db, months), csv, "custom-bid-conversion")
+
+
+@router.get("/reports/ad-performance", response_model=list[AdPerformanceRow])
+async def get_ad_performance_report(csv: bool = False, db: AsyncSession = Depends(get_db)):
+    return _csv_or_json(await reports.ad_performance(db), csv, "ad-performance")
+
+
+@router.get("/reports/location-performance", response_model=list[LocationPerformanceRow])
+async def get_location_performance_report(limit: int = 20, csv: bool = False, db: AsyncSession = Depends(get_db)):
+    return _csv_or_json(await reports.location_performance(db, limit), csv, "location-performance")
+
+
+@router.get("/reports/customer-retention", response_model=list[CustomerRetentionRow])
+async def get_customer_retention_report(months: int = 12, csv: bool = False, db: AsyncSession = Depends(get_db)):
+    return _csv_or_json(await reports.customer_retention(db, months), csv, "customer-retention")

@@ -217,3 +217,52 @@ class PartnerApprovalFunnelRow(BaseModel):
     role_type: PartnerRoleType
     status: PartnerRoleStatus
     role_count: int
+
+
+class PayoutSummaryRow(BaseModel):
+    period: str
+    status: str
+    payout_count: int
+    total_amount: Decimal
+
+
+class RefundSummaryRow(BaseModel):
+    period: str
+    refund_count: int
+    total_refunded: Decimal
+
+
+class GuidePerformanceRow(BaseModel):
+    guide_role_id: uuid.UUID
+    guide_name: str
+    completed_assignments: int
+    total_fees: Decimal
+
+
+class CustomBidConversionRow(BaseModel):
+    period: str
+    requests_count: int
+    bids_count: int
+    accepted_bids_count: int
+
+
+class AdPerformanceRow(BaseModel):
+    status: str
+    campaign_count: int
+    total_impressions: int
+    total_clicks: int
+    total_spend: Decimal
+    click_through_rate: float
+
+
+class LocationPerformanceRow(BaseModel):
+    location_id: uuid.UUID
+    location_name: str
+    booking_count: int
+    gross_revenue: Decimal
+
+
+class CustomerRetentionRow(BaseModel):
+    period: str
+    new_customers: int
+    returning_customers: int

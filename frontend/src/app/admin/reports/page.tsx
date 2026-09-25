@@ -18,9 +18,24 @@ const REPORTS = [
   { key: "dispute-overview", label: "Dispute Overview" },
   { key: "referral-overview", label: "Referral Overview" },
   { key: "partner-approval-funnel", label: "Partner Approval Funnel" },
+  { key: "payout-summary", label: "Payout Summary" },
+  { key: "refund-summary", label: "Refund Summary" },
+  { key: "guide-performance", label: "Guide Performance" },
+  { key: "custom-bid-conversion", label: "Custom-Bid Conversion" },
+  { key: "ad-performance", label: "Ad Performance" },
+  { key: "location-performance", label: "Location Performance" },
+  { key: "customer-retention", label: "Customer Retention" },
 ] as const;
 
-const MONEY_FIELDS = new Set(["gross_revenue", "platform_revenue", "partner_net_revenue"]);
+const MONEY_FIELDS = new Set([
+  "gross_revenue",
+  "platform_revenue",
+  "partner_net_revenue",
+  "total_amount",
+  "total_refunded",
+  "total_fees",
+  "total_spend",
+]);
 
 export default function AdminReportsPage() {
   const [active, setActive] = useState<(typeof REPORTS)[number]["key"]>("bookings-summary");
