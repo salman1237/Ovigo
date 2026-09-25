@@ -148,6 +148,11 @@ async def admin_list_campaigns(
     return await service.list_admin_campaigns(db, status)
 
 
+@admin_router.get("/campaigns/{campaign_id}/locations", response_model=list[LocationTagRead])
+async def admin_get_campaign_locations(campaign_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    return await service.get_admin_campaign_locations(db, campaign_id)
+
+
 @admin_router.post("/campaigns/{campaign_id}/approve", response_model=AdminAdCampaignRead)
 async def admin_approve_campaign(
     campaign_id: uuid.UUID, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)

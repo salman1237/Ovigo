@@ -12,6 +12,7 @@ import { apiClient, ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { formatMoney } from "@/lib/format";
 import { AdCampaignStatus, AdminAdCampaign, PLACEMENT_LABELS } from "@/types/ads";
+import type { LocationTag } from "@/types/location";
 
 const TABS: AdCampaignStatus[] = ["pending_review", "active", "paused", "rejected", "completed", "draft"];
 
@@ -68,6 +69,11 @@ function CampaignReviewCard({ campaign, onChange }: { campaign: AdminAdCampaign;
   const [showReject, setShowReject] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { data: locationTags } = useQuery({
+    queryKey: ["admin-ads", campaign.id, "locations"],
+    queryFn: () => apiClient.get<LocationTag[]>(`/api/v1/admin/ads/campaigns/${campaign.id}/locations`, { auth: true }),
+  });
+
   const approve = async () => {
     try {
       await apiClient.post(`/api/v1/admin/ads/campaigns/${campaign.id}/approve`, undefined, { auth: true });
@@ -97,6 +103,20 @@ function CampaignReviewCard({ campaign, onChange }: { campaign: AdminAdCampaign;
           <p className="text-xs text-zinc-500">
             by {campaign.applicant.full_name} ({campaign.applicant.email}) · {PLACEMENT_LABELS[campaign.placement_type]} ·{" "}
             {campaign.billing_model.toUpperCase()} {formatMoney(campaign.bid_amount)} · Budget {formatMoney(campaign.budget_total)}
+            {campaign.status !== "draft" && campaign.status !== "pending_review" && (
+              <> · Spent {formatMoney(campaign.budget_spent)} · {campaign.impressions_count} impressions · {campaign.clicks_count} clicks</>
+            )}
+          </p>
+          <p className="mt-1 text-xs text-zinc-400">
+            {campaign.start_date || campaign.end_date
+              ? `Runs ${campaign.start_date ?? "now"} → ${campaign.end_date ?? "no end date"}`
+              : "No schedule set — runs indefinitely until budget is exhausted"}
+            {" · Targets: "}
+            {locationTags === undefined
+              ? "loading…"
+              : locationTags.length > 0
+                ? locationTags.map((t) => t.location.name).join(", ")
+                : "none set"}
           </p>
         </div>
         {campaign.status === "pending_review" && (

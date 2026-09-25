@@ -116,6 +116,21 @@ async def create_campaign(db: AsyncSession, role: PartnerRole, payload: AdCampai
     return campaign
 
 
+async def _expire_if_past_end_date(db: AsyncSession, campaign: AdCampaign) -> None:
+    """Lazy status transition, same no-cron pattern as document/badge expiry
+    elsewhere in this codebase: get_sponsored_results already *skips* serving a
+    campaign past its end_date, but nothing previously flipped its stored status —
+    an admin or partner viewing it would see a stale "active"/"paused" indefinitely.
+    Checked wherever a campaign is fetched, so the correction is visible the next
+    time anyone looks at it rather than needing a scheduled job."""
+    if campaign.end_date and campaign.end_date < date.today() and campaign.status in (
+        AdCampaignStatus.ACTIVE, AdCampaignStatus.PAUSED
+    ):
+        campaign.status = AdCampaignStatus.COMPLETED
+        await db.commit()
+        await db.refresh(campaign)
+
+
 async def get_own_campaign_or_404(db: AsyncSession, role: PartnerRole, campaign_id: uuid.UUID) -> AdCampaign:
     result = await db.execute(
         select(AdCampaign).where(AdCampaign.id == campaign_id, AdCampaign.partner_role_id == role.id)
@@ -123,6 +138,7 @@ async def get_own_campaign_or_404(db: AsyncSession, role: PartnerRole, campaign_
     campaign = result.scalar_one_or_none()
     if campaign is None:
         raise NotFoundError("Campaign not found")
+    await _expire_if_past_end_date(db, campaign)
     return campaign
 
 
@@ -130,7 +146,10 @@ async def list_my_campaigns(db: AsyncSession, role: PartnerRole) -> list[AdCampa
     result = await db.execute(
         select(AdCampaign).where(AdCampaign.partner_role_id == role.id).order_by(AdCampaign.created_at.desc())
     )
-    return list(result.scalars().all())
+    campaigns = list(result.scalars().all())
+    for campaign in campaigns:
+        await _expire_if_past_end_date(db, campaign)
+    return campaigns
 
 
 async def update_campaign(
@@ -310,6 +329,8 @@ async def list_admin_campaigns(db: AsyncSession, status: AdCampaignStatus | None
         query = query.where(AdCampaign.status == status)
     result = await db.execute(query.order_by(AdCampaign.created_at.desc()))
     campaigns = list(result.scalars().all())
+    for campaign in campaigns:
+        await _expire_if_past_end_date(db, campaign)
     return [await _to_admin_read(db, c) for c in campaigns]
 
 
@@ -318,7 +339,13 @@ async def _get_campaign_or_404(db: AsyncSession, campaign_id: uuid.UUID) -> AdCa
     campaign = result.scalar_one_or_none()
     if campaign is None:
         raise NotFoundError("Campaign not found")
+    await _expire_if_past_end_date(db, campaign)
     return campaign
+
+
+async def get_admin_campaign_locations(db: AsyncSession, campaign_id: uuid.UUID) -> list[LocationTag]:
+    await _get_campaign_or_404(db, campaign_id)
+    return await locations_service.get_tags(db, TaggableEntityType.AD_CAMPAIGN, campaign_id)
 
 
 async def approve_campaign(db: AsyncSession, admin: User, campaign_id: uuid.UUID) -> AdminAdCampaignRead:

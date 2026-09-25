@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
-import type { Location } from "@/types/location";
+import type { Location, LocationTag } from "@/types/location";
 import { AdCampaign, AdCampaignStats, PLACEMENT_LABELS } from "@/types/ads";
 
 const STATUS_VARIANTS: Record<string, BadgeProps["variant"]> = {
@@ -130,6 +130,8 @@ function Stat({ label, value, highlight }: { label: string; value: string; highl
 function BudgetSection({ campaign, onChange }: { campaign: AdCampaign; onChange: () => void }) {
   const [bidAmount, setBidAmount] = useState(campaign.bid_amount);
   const [budgetTotal, setBudgetTotal] = useState(campaign.budget_total);
+  const [startDate, setStartDate] = useState(campaign.start_date ?? "");
+  const [endDate, setEndDate] = useState(campaign.end_date ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -137,7 +139,11 @@ function BudgetSection({ campaign, onChange }: { campaign: AdCampaign; onChange:
     setError(null);
     setSaving(true);
     try {
-      await apiClient.put(`/api/v1/ads/campaigns/${campaign.id}`, { bid_amount: bidAmount, budget_total: budgetTotal }, { auth: true });
+      await apiClient.put(
+        `/api/v1/ads/campaigns/${campaign.id}`,
+        { bid_amount: bidAmount, budget_total: budgetTotal, start_date: startDate || null, end_date: endDate || null },
+        { auth: true }
+      );
       onChange();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to save");
@@ -148,7 +154,7 @@ function BudgetSection({ campaign, onChange }: { campaign: AdCampaign; onChange:
 
   return (
     <Card className="mt-6">
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Bid &amp; Budget</h2>
+      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Bid, Budget &amp; Schedule</h2>
       <div className="mt-3 flex flex-wrap items-end gap-3">
         <Input
           type="number"
@@ -158,12 +164,15 @@ function BudgetSection({ campaign, onChange }: { campaign: AdCampaign; onChange:
           className="w-48"
         />
         <Input type="number" label="Total budget (৳)" value={budgetTotal} onChange={(e) => setBudgetTotal(e.target.value)} className="w-40" />
+        <Input type="date" label="Start date (optional)" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-44" />
+        <Input type="date" label="End date (optional)" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-44" />
         <Button size="sm" variant="secondary" onClick={save} loading={saving}>
           Save
         </Button>
       </div>
       <p className="mt-2 text-xs text-zinc-500">
         Spent so far: {formatMoney(campaign.budget_spent)} of {formatMoney(campaign.budget_total)}
+        {campaign.end_date && ` · Runs until ${campaign.end_date}, after which it completes automatically`}
       </p>
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </Card>
@@ -171,7 +180,30 @@ function BudgetSection({ campaign, onChange }: { campaign: AdCampaign; onChange:
 }
 
 function LocationsSection({ campaignId, run }: { campaignId: string; run: (fn: () => Promise<unknown>) => void }) {
-  const [locations, setLocations] = useState<Location[]>([]);
+  // Saving fully replaces the tag set (locations/service.py::set_tags), so the
+  // picker must be seeded with whatever's already saved before it can render —
+  // otherwise the next save would silently wipe out destinations set on a
+  // previous visit instead of adding to them.
+  const { data: existingTags, isLoading } = useQuery({
+    queryKey: ["ads", "campaign", campaignId, "locations"],
+    queryFn: () => apiClient.get<LocationTag[]>(`/api/v1/ads/campaigns/${campaignId}/locations`, { auth: true }),
+  });
+
+  if (isLoading) return <Spinner />;
+  return <LocationsPickerForm key={campaignId} campaignId={campaignId} initialTags={existingTags ?? []} run={run} />;
+}
+
+function LocationsPickerForm({
+  campaignId,
+  initialTags,
+  run,
+}: {
+  campaignId: string;
+  initialTags: LocationTag[];
+  run: (fn: () => Promise<unknown>) => void;
+}) {
+  const [locations, setLocations] = useState<Location[]>(() => initialTags.map((t) => t.location));
+
   return (
     <div className="mt-3">
       <LocationPicker selected={locations} onChange={setLocations} />
