@@ -103,6 +103,8 @@ async def approve_referral(db: AsyncSession, admin: User, referral_id: uuid.UUID
         message=f'Your referral for "{referral.business_name}" has been approved.',
     )
     await db.commit()
+    await fraud_service.check_referral_network_volume(db, referral.referring_expert_role_id)
+    await db.commit()
     await audit.record(
         db, actor_id=admin.id, action="business_referral.approve", entity_type="business_referral", entity_id=referral.id
     )

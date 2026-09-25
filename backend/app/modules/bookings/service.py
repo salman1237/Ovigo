@@ -375,6 +375,7 @@ async def _release_and_cancel(db: AsyncSession, booking: Booking, note: str | No
         link=f"/bookings/{booking.id}",
     )
     await fraud_service.check_rapid_cancellations(db, booking.user_id)
+    await fraud_service.check_instant_cancellation_pattern(db, booking.user_id)
 
 
 async def cancel_booking_by_id(db: AsyncSession, booking_id: uuid.UUID, note: str | None = None) -> None:

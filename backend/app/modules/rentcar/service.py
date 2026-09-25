@@ -9,6 +9,7 @@ from app.core import search_engine
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.ranking import RankingFactors, composite_score, relevance_for
 from app.modules.bookings.models import BookingItem, BookingItemStatus
+from app.modules.fraud import service as fraud_service
 from app.modules.locations import service as locations_service
 from app.modules.locations.models import LocationTag, TaggableEntityType
 from app.modules.rentcar.models import Driver, Vehicle, VehicleAvailability, VehicleStatus
@@ -207,9 +208,14 @@ async def update_vehicle(db: AsyncSession, role: PartnerRole, vehicle_id: uuid.U
     vehicle = await get_own_vehicle_or_404(db, role, vehicle_id)
     if vehicle.status == VehicleStatus.PENDING_REVIEW:
         raise ConflictError("Vehicle is pending review — cannot be edited until it's approved or rejected")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    old_price = vehicle.price_per_day
+    updates = payload.model_dump(exclude_unset=True)
+    for field, value in updates.items():
         setattr(vehicle, field, value)
     await db.commit()
+    if "price_per_day" in updates:
+        await fraud_service.check_sudden_price_change(db, role.id, old_price, vehicle.price_per_day, vehicle.id, "Vehicle")
+        await db.commit()
     if vehicle.status == VehicleStatus.PUBLISHED:
         await search_engine.index_vehicle(vehicle.id, vehicle.make, vehicle.model, vehicle.description, vehicle.vehicle_type.value)
     return await get_own_vehicle_or_404(db, role, vehicle_id)

@@ -10,6 +10,7 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.core.ranking import RankingFactors, composite_score, relevance_for
 from app.core.slugs import slugify, unique_suffix
 from app.modules.bookings.models import BookingItem, BookingItemStatus
+from app.modules.fraud import service as fraud_service
 from app.modules.locations import service as locations_service
 from app.modules.locations.models import TaggableEntityType
 from app.modules.reviews.models import Review
@@ -235,9 +236,14 @@ async def similar_tours(db: AsyncSession, tour: Tour, limit: int = SIMILAR_TOURS
 
 async def update_tour(db: AsyncSession, role: PartnerRole, tour_id: uuid.UUID, payload: TourUpdate) -> Tour:
     tour = await get_own_tour_or_404(db, role, tour_id)
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    old_price = tour.base_price
+    updates = payload.model_dump(exclude_unset=True)
+    for field, value in updates.items():
         setattr(tour, field, value)
     await db.commit()
+    if "base_price" in updates:
+        await fraud_service.check_sudden_price_change(db, role.id, old_price, tour.base_price, tour.id, "Tour")
+        await db.commit()
     if tour.status == TourStatus.PUBLISHED:
         await search_engine.index_tour(tour.id, tour.title, tour.description, tour.base_price)
     return await get_own_tour_or_404(db, role, tour_id)

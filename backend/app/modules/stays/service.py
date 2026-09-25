@@ -15,6 +15,7 @@ from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.ranking import RankingFactors, composite_score, relevance_for
 from app.core.slugs import slugify, unique_suffix
 from app.modules.bookings.models import Booking, BookingItem, BookingItemStatus, BookingItemType, BookingStatus
+from app.modules.fraud import service as fraud_service
 from app.modules.locations import service as locations_service
 from app.modules.locations.models import TaggableEntityType
 from app.modules.notifications import service as notifications_service
@@ -68,6 +69,8 @@ async def create_property(db: AsyncSession, role: PartnerRole, payload: Property
     slug = await _unique_slug(db, payload.name)
     property_ = Property(host_role_id=role.id, slug=slug, **payload.model_dump())
     db.add(property_)
+    await db.commit()
+    await fraud_service.check_duplicate_property(db, role.id, property_.id, property_.name)
     await db.commit()
     return await get_own_property_or_404(db, role, property_.id)
 
@@ -294,9 +297,14 @@ async def update_room_type(
     room_type = result.scalar_one_or_none()
     if room_type is None:
         raise NotFoundError("Room type not found")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    old_price = room_type.base_price
+    updates = payload.model_dump(exclude_unset=True)
+    for field, value in updates.items():
         setattr(room_type, field, value)
     await db.commit()
+    if "base_price" in updates:
+        await fraud_service.check_sudden_price_change(db, role.id, old_price, room_type.base_price, room_type.id, "Room type")
+        await db.commit()
     return await get_own_property_or_404(db, role, property_id)
 
 

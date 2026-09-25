@@ -36,12 +36,12 @@ export default function AdminFraudPage() {
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: ["admin-fraud-flags"] });
 
-  const runScan = async () => {
+  const runScan = async (endpoint: string) => {
     setScanning(true);
     setScanError(null);
     setScanResult(null);
     try {
-      const result = await apiClient.post<{ new_flags_count: number }>("/api/v1/admin/fraud/scan-documents", undefined, { auth: true });
+      const result = await apiClient.post<{ new_flags_count: number }>(`/api/v1/admin/fraud/${endpoint}`, undefined, { auth: true });
       setScanResult(`Scan complete: ${result.new_flags_count} new flag(s) found.`);
       refetch();
     } catch (err) {
@@ -53,17 +53,26 @@ export default function AdminFraudPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Fraud &amp; Risk</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Self-booking, self-review, self-referral and rapid-cancellation flags fire automatically. Duplicate identity
-            documents need a manual scan (cross-account comparison).
+            Self-booking, self-review, self-referral, rapid/instant-cancellation, sudden-price-change, duplicate-property
+            and referral-network-volume flags all fire automatically. Duplicate identity documents, expired vehicle
+            documents, and high refund rates are cross-account/aggregate checks that need a manual scan.
           </p>
         </div>
-        <Button size="sm" variant="secondary" onClick={runScan} loading={scanning}>
-          Scan documents
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onClick={() => runScan("scan-documents")} loading={scanning}>
+            Scan documents
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => runScan("scan-expired-vehicle-documents")} loading={scanning}>
+            Scan vehicle documents
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => runScan("scan-refund-rates")} loading={scanning}>
+            Scan refund rates
+          </Button>
+        </div>
       </div>
       {scanResult && <p className="mt-2 text-sm text-emerald-600">{scanResult}</p>}
       {scanError && <p className="mt-2 text-sm text-red-600">{scanError}</p>}

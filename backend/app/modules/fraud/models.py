@@ -26,6 +26,37 @@ so "duplicate accounts" can't be detected by those means. Instead:
   reactable to a single event, so it stays an admin-triggered batch scan
   (`POST /api/v1/admin/fraud/scan-documents`) instead of a real-time hook.
 
+Client feedback (Phase 8.5) asked for the rule set to go beyond those original 5:
+- **sudden_price_change** — a tour/room-type/vehicle price edited by ≥50% in one
+  update, checked inline in each module's own update function (it already has the
+  pre-update row in hand).
+- **duplicate_property_listing** — a new property whose name (case-insensitive)
+  matches an existing property owned by a *different* host, checked inline at
+  creation.
+- **expired_vehicle_document** — a published vehicle whose owning Rent-a-Car role
+  has a VERIFIED `vehicle_registration` document (see partners/models.py's
+  `PartnerDocument.expiry_date`, added in Phase 8.3) that's now in the past. Batch
+  scan, same shape as duplicate-document detection — not reactable to one event.
+- **high_refund_rate** — a partner whose commissions are CANCELLED (i.e. refunded
+  via a dispute — see commissions/models.py) at an unusually high rate relative to
+  their total volume. Batch scan, since it's a ratio over the partner's whole
+  history, not one event.
+- **referral_network_volume** — a Local Expert with an unusually high number of
+  business referrals *approved* in a short window — a network-farming heuristic,
+  checked inline whenever a referral is approved.
+- **instant_cancellation_pattern** — several bookings cancelled within minutes of
+  being created (as opposed to `rapid_cancellation_pattern`'s "several cancellations
+  over a week," which doesn't distinguish a considered cancellation from a
+  deliberate inventory-block/scrape pattern) — the closest buildable proxy for the
+  feedback's "fake bookings," checked inline alongside rapid-cancellation.
+
+**Deliberately not built**, same reasoning as "duplicate accounts" above — no
+reliable signal exists in this schema without new data collection this pass didn't
+add: **multiple accounts** (would need device/IP fingerprinting), **suspicious
+payout accounts** (payouts have no destination bank/mobile-wallet field at all —
+see payouts/models.py), **payment diversion** (would need classifying chat message
+*content*, beyond the contact-info-pattern redaction chat already does pre-booking).
+
 `context_id` + `rule_type` + `user_id` is unique so re-running a scan (or the same
 event firing twice) never creates duplicate flags for the same underlying evidence.
 """
@@ -46,6 +77,12 @@ class FraudRuleType(str, enum.Enum):
     SELF_REVIEW = "self_review"
     SELF_BOOKING = "self_booking"
     RAPID_CANCELLATION_PATTERN = "rapid_cancellation_pattern"
+    SUDDEN_PRICE_CHANGE = "sudden_price_change"
+    DUPLICATE_PROPERTY_LISTING = "duplicate_property_listing"
+    EXPIRED_VEHICLE_DOCUMENT = "expired_vehicle_document"
+    HIGH_REFUND_RATE = "high_refund_rate"
+    REFERRAL_NETWORK_VOLUME = "referral_network_volume"
+    INSTANT_CANCELLATION_PATTERN = "instant_cancellation_pattern"
 
 
 class FraudSeverity(str, enum.Enum):

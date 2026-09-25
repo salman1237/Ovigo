@@ -57,3 +57,19 @@ async def scan_documents(
 ):
     count = await service.scan_duplicate_identity_documents(db)
     return ScanResult(new_flags_count=count)
+
+
+@router.post("/scan-expired-vehicle-documents", response_model=ScanResult)
+async def scan_expired_vehicle_documents(
+    admin: User = Depends(require_admin_permission("fraud.view")), db: AsyncSession = Depends(get_db)
+):
+    count = await service.scan_expired_vehicle_documents(db)
+    return ScanResult(new_flags_count=count)
+
+
+@router.post("/scan-refund-rates", response_model=ScanResult)
+async def scan_refund_rates(
+    admin: User = Depends(require_admin_permission("fraud.view")), db: AsyncSession = Depends(get_db)
+):
+    count = await service.scan_high_refund_rate(db)
+    return ScanResult(new_flags_count=count)

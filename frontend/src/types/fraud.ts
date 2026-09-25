@@ -3,7 +3,13 @@ export type FraudRuleType =
   | "self_referral"
   | "self_review"
   | "self_booking"
-  | "rapid_cancellation_pattern";
+  | "rapid_cancellation_pattern"
+  | "sudden_price_change"
+  | "duplicate_property_listing"
+  | "expired_vehicle_document"
+  | "high_refund_rate"
+  | "referral_network_volume"
+  | "instant_cancellation_pattern";
 
 export type FraudSeverity = "low" | "medium" | "high" | "critical";
 export type FraudFlagStatus = "open" | "resolved" | "dismissed";
@@ -14,6 +20,12 @@ export const FRAUD_RULE_LABELS: Record<FraudRuleType, string> = {
   self_review: "Self Review",
   self_booking: "Self Booking",
   rapid_cancellation_pattern: "Rapid Cancellation Pattern",
+  sudden_price_change: "Sudden Price Change",
+  duplicate_property_listing: "Duplicate Property Listing",
+  expired_vehicle_document: "Expired Vehicle Document",
+  high_refund_rate: "High Refund Rate",
+  referral_network_volume: "Referral Network Volume",
+  instant_cancellation_pattern: "Instant Cancellation Pattern",
 };
 
 export interface FraudFlag {
