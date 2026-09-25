@@ -1,12 +1,27 @@
+import asyncio
+import logging
 import uuid
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
+from app.core.email import send_email
 from app.core.exceptions import NotFoundError
-from app.modules.notifications.models import CampaignAudience, Notification, NotificationCampaign, NotificationTemplate, NotificationType
-from app.modules.notifications.schemas import CampaignCreate, TemplateCreate, TemplateUpdate
+from app.core.push import PushSubscriptionGone, send_push
+from app.modules.notifications.models import (
+    CampaignAudience,
+    Notification,
+    NotificationCampaign,
+    NotificationTemplate,
+    NotificationType,
+    PushSubscription,
+)
+from app.modules.notifications.schemas import CampaignCreate, PushSubscribeRequest, TemplateCreate, TemplateUpdate
 from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleStatus, User
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
 
 
 async def notify(
@@ -18,14 +33,73 @@ async def notify(
     message: str,
     link: str | None = None,
 ) -> None:
-    """Create an in-app notification. Doesn't commit — callers already have an open
-    transaction for the event that triggered this (a booking status change, a role
-    approval, ...) and this should land in the same commit, not a separate one.
+    """Create an in-app notification, and fire best-effort email/push delivery
+    alongside it. Doesn't commit — callers already have an open transaction for
+    the event that triggered this (a booking status change, a role approval, ...)
+    and the in-app row should land in the same commit, not a separate one.
 
-    Email/SMS delivery would be added here once a provider is configured — see
-    module docstring.
+    Email/push delivery is fired via asyncio.create_task rather than awaited: an
+    SMTP round trip or a push-service call is real network I/O that has no business
+    adding latency to whatever booking/payment/approval endpoint happens to trigger
+    a notification (the same class of problem the image-serving fix addressed
+    elsewhere in this codebase, just avoided here up front). Both branches resolve
+    everything they need (the recipient's email, their push subscriptions) from
+    this already-open session *before* spawning the task, so the task itself never
+    touches `db` — it's closed by the time the request returns.
     """
     db.add(Notification(user_id=user_id, type=type, title=title, message=message, link=link))
+
+    if settings.smtp_configured:
+        result = await db.execute(select(User.email).where(User.id == user_id))
+        email = result.scalar_one_or_none()
+        if email:
+            asyncio.create_task(_deliver_email_safe(email, title, message))
+
+    if settings.vapid_configured:
+        result = await db.execute(select(PushSubscription).where(PushSubscription.user_id == user_id))
+        for sub in result.scalars().all():
+            asyncio.create_task(_deliver_push_safe(sub.id, sub.endpoint, sub.p256dh, sub.auth, title, message, link))
+
+
+async def _deliver_email_safe(email: str, title: str, message: str) -> None:
+    try:
+        await send_email(email, title, message)
+    except Exception:
+        logger.exception("Unexpected error sending notification email to %s", email)
+
+
+async def _deliver_push_safe(
+    subscription_id: uuid.UUID, endpoint: str, p256dh: str, auth: str, title: str, message: str, link: str | None
+) -> None:
+    try:
+        await send_push(endpoint, p256dh, auth, title, message, link)
+    except PushSubscriptionGone:
+        from app.database import AsyncSessionLocal  # local import: avoids a module-load cycle
+
+        async with AsyncSessionLocal() as cleanup_db:
+            await cleanup_db.execute(delete(PushSubscription).where(PushSubscription.id == subscription_id))
+            await cleanup_db.commit()
+    except Exception:
+        logger.exception("Unexpected error sending web push to subscription %s", subscription_id)
+
+
+async def save_push_subscription(db: AsyncSession, user_id: uuid.UUID, payload: PushSubscribeRequest) -> None:
+    result = await db.execute(select(PushSubscription).where(PushSubscription.endpoint == payload.endpoint))
+    existing = result.scalar_one_or_none()
+    if existing is not None:
+        existing.user_id = user_id
+        existing.p256dh = payload.p256dh
+        existing.auth = payload.auth
+    else:
+        db.add(PushSubscription(user_id=user_id, endpoint=payload.endpoint, p256dh=payload.p256dh, auth=payload.auth))
+    await db.commit()
+
+
+async def delete_push_subscription(db: AsyncSession, user_id: uuid.UUID, endpoint: str) -> None:
+    await db.execute(
+        delete(PushSubscription).where(PushSubscription.user_id == user_id, PushSubscription.endpoint == endpoint)
+    )
+    await db.commit()
 
 
 async def list_for_user(db: AsyncSession, user_id: uuid.UUID, unread_only: bool = False) -> list[Notification]:

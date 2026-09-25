@@ -23,6 +23,20 @@ class UnreadCount(BaseModel):
     count: int
 
 
+class PushSubscribeRequest(BaseModel):
+    endpoint: str
+    p256dh: str
+    auth: str
+
+
+class PushUnsubscribeRequest(BaseModel):
+    endpoint: str
+
+
+class VapidPublicKeyRead(BaseModel):
+    public_key: str | None
+
+
 class TemplateCreate(BaseModel):
     name: str
     subject: str

@@ -85,6 +85,31 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
+    # Email delivery (SMTP) — see app/core/email.py. Optional so the app boots fine
+    # with notifications staying in-app-only until this is configured, same pattern
+    # as R2/Triptel/SSLCommerz above.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from_email: str | None = None
+    smtp_from_name: str = "Ovigo"
+    smtp_use_tls: bool = True
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.smtp_host and self.smtp_user and self.smtp_password and self.smtp_from_email)
+
+    # Web Push (VAPID) — see app/core/push.py. Self-hosted, no third-party account:
+    # the key pair is generated once and set here, unlike the provider credentials above.
+    vapid_private_key: str | None = None
+    vapid_public_key: str | None = None
+    vapid_claim_email: str | None = None
+
+    @property
+    def vapid_configured(self) -> bool:
+        return bool(self.vapid_private_key and self.vapid_public_key and self.vapid_claim_email)
+
 
 @lru_cache
 def get_settings() -> Settings:

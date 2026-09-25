@@ -1,20 +1,24 @@
-"""In-app notifications only for now. Email/SMS/push delivery (technical document
-§18) needs a provider credential (SendGrid/SES, Twilio, FCM) that isn't configured
-yet — `service.notify()` is written so wiring those in later is a matter of adding
-a delivery branch there, not touching any of the ~15 call sites that create
-notifications today.
+"""In-app notifications, plus email (SMTP, app/core/email.py) and Web Push
+(VAPID, app/core/push.py) delivery — technical document §18. Both are optional:
+the app boots and every notification still lands in-app fine with either
+unconfigured, matching the same pattern as R2/Triptel/SSLCommerz. SMS was
+deliberately left out of this pass (no gateway account configured; Bangladesh
+SMS delivery needs a registered sender ID with per-message cost, a decision
+left to the user) — `service.notify()`'s per-channel branches make adding it
+later a matter of one more branch, not touching any of the ~15 call sites that
+create notifications today.
 
 Sprint 21-22 Part 2b adds `NotificationTemplate` (a reusable subject/body pair) and
 `NotificationCampaign` (an admin-triggered broadcast to a chosen audience) — the
 "Notification templates & campaign tools" and "emergency alerts" line items from
 the technical document's admin dashboard section. Every campaign is delivered
-through the exact same in-app `Notification` rows as every other notification in
-this codebase — there's no separate broadcast mechanism, and no push/SMS delivery
-for the same provider-credential reason noted above, so `is_urgent` is a display
-flag only (surfaced in the UI), not an actual out-of-band emergency channel. A
-campaign's `title`/`message` are snapshotted from the template at send time (or
-given ad-hoc) rather than referencing it live, so editing or deleting a template
-later never changes what a past campaign is recorded as having sent.
+through the exact same in-app `Notification` rows (and now the same email/push
+delivery) as every other notification in this codebase — there's no separate
+broadcast mechanism, so `is_urgent` is a display flag only (surfaced in the UI),
+not a distinct emergency channel. A campaign's `title`/`message` are snapshotted
+from the template at send time (or given ad-hoc) rather than referencing it live,
+so editing or deleting a template later never changes what a past campaign is
+recorded as having sent.
 """
 import enum
 import uuid
@@ -88,6 +92,25 @@ class Notification(Base):
     message: Mapped[str] = mapped_column(Text)
     link: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped["User"] = relationship()  # noqa: F821
+
+
+class PushSubscription(Base):
+    """One row per browser/device a user has enabled Web Push on (PushManager's
+    subscription is per browser-profile, so the same user can hold several).
+    Keyed unique on endpoint, not (user_id, endpoint) — a re-subscription from a
+    browser that already has a row (e.g. after clearing permission and re-granting)
+    reuses that row rather than leaving an orphaned duplicate."""
+
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    endpoint: Mapped[str] = mapped_column(Text, unique=True)
+    p256dh: Mapped[str] = mapped_column(String(255))
+    auth: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["User"] = relationship()  # noqa: F821

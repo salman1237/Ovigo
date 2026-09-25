@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.core.permissions import require_admin
 from app.database import get_db
 from app.modules.auth.utils import get_current_user
@@ -11,12 +12,17 @@ from app.modules.notifications.schemas import (
     CampaignCreate,
     CampaignRead,
     NotificationRead,
+    PushSubscribeRequest,
+    PushUnsubscribeRequest,
     TemplateCreate,
     TemplateRead,
     TemplateUpdate,
     UnreadCount,
+    VapidPublicKeyRead,
 )
 from app.modules.users.models import User
+
+settings = get_settings()
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["notifications"])
 admin_router = APIRouter(prefix="/api/v1/admin/notifications", tags=["notifications"], dependencies=[Depends(require_admin)])
@@ -48,6 +54,25 @@ async def mark_read(
 async def mark_all_read(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await service.mark_all_read(db, current_user.id)
     return {"message": "All marked as read"}
+
+
+@router.get("/push/vapid-public-key", response_model=VapidPublicKeyRead)
+async def get_vapid_public_key():
+    return VapidPublicKeyRead(public_key=settings.vapid_public_key if settings.vapid_configured else None)
+
+
+@router.post("/push/subscribe", status_code=204)
+async def subscribe_push(
+    payload: PushSubscribeRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    await service.save_push_subscription(db, current_user.id, payload)
+
+
+@router.post("/push/unsubscribe", status_code=204)
+async def unsubscribe_push(
+    payload: PushUnsubscribeRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    await service.delete_push_subscription(db, current_user.id, payload.endpoint)
 
 
 @admin_router.post("/templates", response_model=TemplateRead, status_code=201)

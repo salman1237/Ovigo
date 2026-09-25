@@ -1,17 +1,44 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell } from "lucide-react";
+import { Bell, BellRing } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from "@/lib/push";
 import { Notification } from "@/types/notification";
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!isPushSupported()) return;
+    getExistingSubscription().then((sub) => setPushEnabled(!!sub));
+  }, []);
+
+  const togglePush = async () => {
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      if (pushEnabled) {
+        await unsubscribeFromPush();
+        setPushEnabled(false);
+      } else {
+        await subscribeToPush();
+        setPushEnabled(true);
+      }
+    } catch (err) {
+      setPushError(err instanceof Error ? err.message : "Failed to update push notifications");
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   const { data: unread } = useQuery({
     queryKey: ["notifications", "unread-count"],
@@ -62,12 +89,26 @@ export function NotificationBell() {
           <div className="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-zinc-200 bg-white shadow-xl shadow-zinc-900/5 dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
               <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Notifications</span>
-              {count > 0 && (
-                <button onClick={markAllRead} className="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
-                  Mark all read
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                {isPushSupported() && (
+                  <button
+                    onClick={togglePush}
+                    disabled={pushBusy}
+                    title={pushEnabled ? "Disable browser push notifications" : "Enable browser push notifications"}
+                    className="flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-700 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-zinc-200"
+                  >
+                    {pushEnabled ? <BellRing className="h-3.5 w-3.5 text-primary-600 dark:text-primary-400" /> : <Bell className="h-3.5 w-3.5" />}
+                    {pushEnabled ? "Push on" : "Enable push"}
+                  </button>
+                )}
+                {count > 0 && (
+                  <button onClick={markAllRead} className="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                    Mark all read
+                  </button>
+                )}
+              </div>
             </div>
+            {pushError && <p className="border-b border-zinc-100 px-4 py-2 text-xs text-red-600 dark:border-zinc-800">{pushError}</p>}
             <div className="max-h-96 overflow-y-auto">
               {isLoading && <p className="px-4 py-6 text-center text-sm text-zinc-400">Loading…</p>}
               {!isLoading && (notifications ?? []).length === 0 && (
