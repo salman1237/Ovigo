@@ -23,6 +23,15 @@ from app.core.exceptions import AppError, ConflictError
 # has been served its bytes will never change — safe to cache for a year.
 IMAGE_CACHE_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
 
+# For images served from a *fixed* URL that can be replaced in place (cms/models.py's
+# hero/banner/tile images — an admin re-upload keeps the same endpoint, unlike a
+# tour/property image's fresh uuid4 key per upload) — the immutable header above
+# would actively hide a real update from every browser for up to a year. Short
+# cache instead; the frontend also appends a `?v=<updated_at>` cache-busting query
+# param so a fresh upload is visible immediately, this is just the fallback for a
+# raw/bookmarked URL without that param.
+MUTABLE_IMAGE_CACHE_HEADERS = {"Cache-Control": "public, max-age=3600"}
+
 settings = get_settings()
 
 MAX_IMAGE_SIZE_BYTES = 8 * 1024 * 1024  # 8MB

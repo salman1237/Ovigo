@@ -15,6 +15,7 @@ from app.modules.bidding import models as _bidding_models  # noqa: F401
 from app.modules.bookings import models as _bookings_models  # noqa: F401
 from app.modules.business_network import models as _business_network_models  # noqa: F401
 from app.modules.chat import models as _chat_models  # noqa: F401
+from app.modules.cms import models as _cms_models  # noqa: F401
 from app.modules.commissions import models as _commissions_models  # noqa: F401
 from app.modules.disputes import models as _disputes_models  # noqa: F401
 from app.modules.esim import models as _esim_models  # noqa: F401

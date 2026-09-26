@@ -26,3 +26,19 @@ export function destinationCoverUrl(dest: DestinationSummary): string | null {
 export function firstImageId<T extends { id: string; sort_order: number }>(images: T[]): T | undefined {
   return images.length > 0 ? [...images].sort((a, b) => a.sort_order - b.sort_order)[0] : undefined;
 }
+
+// Cache-bust with a timestamp query param on write, not on every read — these are
+// singleton/near-static images (one hero, one banner, one per tile) rather than
+// content-addressed uploads with a fresh key per file, so a browser that already
+// cached the old bytes under the same URL needs a nudge after a replace.
+export function cmsHeroImageUrl(version?: number): string {
+  return `${API_URL}/api/v1/cms/homepage/hero-image${version ? `?v=${version}` : ""}`;
+}
+
+export function cmsBannerImageUrl(version?: number): string {
+  return `${API_URL}/api/v1/cms/homepage/banner-image${version ? `?v=${version}` : ""}`;
+}
+
+export function cmsTileImageUrl(tileId: string, version?: number): string {
+  return `${API_URL}/api/v1/cms/homepage/tiles/${tileId}/image${version ? `?v=${version}` : ""}`;
+}

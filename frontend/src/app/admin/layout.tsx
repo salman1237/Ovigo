@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 import { useAuthStore } from "@/stores/auth-store";
 
 const NAV = [
+  { href: "/admin/cms", label: "Homepage" },
   { href: "/admin/partners", label: "Partner Approvals" },
   { href: "/admin/tours", label: "Tour Approvals" },
   { href: "/admin/properties", label: "Property Approvals" },

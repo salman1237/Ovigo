@@ -35,6 +35,8 @@ from app.modules.business_network.router import admin_router as business_network
 from app.modules.business_network.router import router as business_network_router
 from app.modules.chat.router import admin_router as chat_admin_router
 from app.modules.chat.router import router as chat_router
+from app.modules.cms.router import admin_router as cms_admin_router
+from app.modules.cms.router import router as cms_router
 from app.modules.commissions.router import admin_router as commissions_admin_router
 from app.modules.commissions.router import router as commissions_router
 from app.modules.disputes.router import admin_router as disputes_admin_router
@@ -88,6 +90,7 @@ OPENAPI_TAGS = [
     {"name": "commissions", "description": "A partner's own earnings/commission breakdown."},
     {"name": "reviews", "description": "Traveler reviews left on a completed booking item."},
     {"name": "chat", "description": "In-app messaging between travelers and partners, plus REST + WebSocket message delivery."},
+    {"name": "cms", "description": "Homepage content: hero/banner copy and images, featured tours/stays, and category tiles."},
     {"name": "loyalty", "description": "A traveler's reward-points balance and history."},
     {"name": "promotions", "description": "Validate a promo code before checkout."},
     {"name": "fx", "description": "Live currency-conversion rates for display only — every booking is still charged in BDT."},
@@ -186,6 +189,8 @@ app.include_router(notifications_router)
 app.include_router(notifications_admin_router)
 app.include_router(chat_router)
 app.include_router(chat_admin_router)
+app.include_router(cms_router)
+app.include_router(cms_admin_router)
 app.include_router(disputes_router)
 app.include_router(disputes_admin_router)
 app.include_router(fraud_router)
