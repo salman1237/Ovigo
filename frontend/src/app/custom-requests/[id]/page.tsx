@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import {
@@ -26,6 +27,7 @@ export default function CustomRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const [error, setError] = useState<string | null>(null);
   const [busyBidId, setBusyBidId] = useState<string | null>(null);
 
@@ -47,6 +49,14 @@ export default function CustomRequestDetailPage() {
   const refetch = () => queryClient.invalidateQueries({ queryKey: ["custom-requests", id] });
 
   const cancelRequest = async () => {
+    const ok = await confirm({
+      title: "Cancel this request?",
+      description: "This can't be undone. Experts will no longer be able to bid on this request.",
+      confirmLabel: "Cancel request",
+      cancelLabel: "Keep request",
+      destructive: true,
+    });
+    if (!ok) return;
     setError(null);
     try {
       await apiClient.post(`/api/v1/custom-requests/${id}/cancel`, undefined, { auth: true });

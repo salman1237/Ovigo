@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import {
@@ -22,6 +23,7 @@ import type { Tour } from "@/types/tour";
 
 export default function MyGuidesPage() {
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteBusy, setInviteBusy] = useState(false);
@@ -61,6 +63,14 @@ export default function MyGuidesPage() {
   };
 
   const cancelAssignment = async (id: string) => {
+    const ok = await confirm({
+      title: "Cancel this assignment?",
+      description: "This can't be undone. The guide will no longer be assigned to this departure.",
+      confirmLabel: "Cancel assignment",
+      cancelLabel: "Keep assignment",
+      destructive: true,
+    });
+    if (!ok) return;
     await apiClient.post(`/api/v1/guides/assignments/${id}/cancel`, undefined, { auth: true });
     refetch();
   };

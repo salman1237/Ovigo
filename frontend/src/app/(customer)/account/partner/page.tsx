@@ -4,11 +4,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 
+import { Upload } from "lucide-react";
+
 import { LocationPicker } from "@/components/shared/LocationPicker";
 import { Badge, type BadgeProps } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
 import { Textarea } from "@/components/ui/Textarea";
@@ -212,11 +215,11 @@ function RoleCard({ role, onChange }: { role: PartnerRole; onChange: () => void 
           <p className="text-xs font-medium text-zinc-500">
             {role.status === "approved" ? "Upload a renewed or new document" : "Upload a verification document"}
           </p>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-end gap-2">
             <Select
               value={documentType}
               onChange={(e) => setDocumentType(e.target.value as DocumentType)}
-              className="w-auto py-1.5 pr-8 text-xs"
+              className="w-auto"
             >
               {ALL_DOCUMENT_TYPES.map((dt) => (
                 <option key={dt} value={dt}>
@@ -224,13 +227,17 @@ function RoleCard({ role, onChange }: { role: PartnerRole; onChange: () => void 
                 </option>
               ))}
             </Select>
-            <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-xs" />
-            <input
+            <label className="flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 text-sm text-zinc-600 shadow-sm transition-colors hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-primary-700 dark:hover:bg-zinc-800">
+              <Upload className="h-4 w-4" />
+              {file ? file.name : "Choose file"}
+              <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="hidden" />
+            </label>
+            <Input
               type="date"
               value={expiryDate}
               onChange={(e) => setExpiryDate(e.target.value)}
-              title="Document expiry date (optional)"
-              className="rounded-md border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+              label="Expiry (optional)"
+              className="w-40"
             />
             <Button type="button" variant="secondary" size="sm" onClick={uploadDocument} disabled={!file || uploading}>
               {uploading ? "Uploading…" : "Upload"}

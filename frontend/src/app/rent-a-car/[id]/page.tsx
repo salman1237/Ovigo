@@ -37,7 +37,7 @@ export default function VehicleDetailPage() {
   const TypeIcon = VEHICLE_TYPE_ICONS[vehicle.vehicle_type];
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
+    <div className="mx-auto w-full max-w-6xl flex-1 px-6 pb-24 pt-12 lg:pb-12">
       <div className="flex aspect-[21/9] w-full items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-indigo-600">
         <TypeIcon className="h-20 w-20 text-white/90" strokeWidth={1.25} />
       </div>
@@ -61,11 +61,33 @@ export default function VehicleDetailPage() {
         </div>
 
         <div className="lg:w-80 lg:shrink-0">
-          <div className="lg:sticky lg:top-20">
+          <div id="book-section" className="scroll-mt-24 lg:sticky lg:top-20">
             <BookVehicleSection vehicle={vehicle} />
           </div>
         </div>
       </div>
+
+      <MobileBookBar priceLabel={formatMoney(vehicle.price_per_day)} priceSuffix="/ day" />
+    </div>
+  );
+}
+
+/** Mobile-only fixed CTA bar — on small screens the booking card sits at the
+ * bottom of a long page, so this keeps price + a way to book always reachable
+ * without requiring a full scroll. Scrolls to the real booking section (which
+ * still does the actual booking) rather than duplicating its logic. */
+function MobileBookBar({ priceLabel, priceSuffix }: { priceLabel: string; priceSuffix: string }) {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-3 border-t border-zinc-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:hidden dark:border-zinc-800 dark:bg-zinc-950/95">
+      <p className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+        {priceLabel} <span className="text-xs font-normal text-zinc-500">{priceSuffix}</span>
+      </p>
+      <Button
+        size="md"
+        onClick={() => document.getElementById("book-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+      >
+        Book now
+      </Button>
     </div>
   );
 }

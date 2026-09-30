@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
+import { Tabs } from "@/components/ui/Tabs";
 import { Textarea } from "@/components/ui/Textarea";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
@@ -159,67 +160,92 @@ function RequestForm({ onCreated }: { onCreated: () => void }) {
   };
 
   return (
-    <Card className="mt-4 flex flex-col gap-3">
-      <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Trip title (e.g. 5-day Sundarbans family trip)" />
-      <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what you're looking for…" rows={3} />
-      <div>
-        <Input value={location ? location.name : query} onChange={(e) => search(e.target.value)} placeholder="Destination" />
-        {results.length > 0 && !location && (
-          <ul className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
-            {results.map((loc) => (
-              <li key={loc.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLocation(loc);
-                    setResults([]);
-                  }}
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-primary-50 dark:hover:bg-primary-950/40"
-                >
-                  {loc.name} <span className="text-xs text-zinc-400">({loc.type})</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Input type="date" label="Start date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-        <Input type="date" label="End date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        <Input type="number" label="Adults" min={1} value={adults} onChange={(e) => setAdults(Number(e.target.value))} />
-        <Input type="number" label="Children" min={0} value={children} onChange={(e) => setChildren(Number(e.target.value))} />
-        <Input type="number" label="Infants" min={0} value={infants} onChange={(e) => setInfants(Number(e.target.value))} />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Input type="number" label="Budget min (optional)" value={budgetMin} onChange={(e) => setBudgetMin(e.target.value)} />
-        <Input type="number" label="Budget max (optional)" value={budgetMax} onChange={(e) => setBudgetMax(e.target.value)} />
-      </div>
-      {budgetMin && budgetMax && (
-        <p className="text-xs text-zinc-400">
-          Budget range: {formatMoney(budgetMin)} – {formatMoney(budgetMax)}
-        </p>
-      )}
+    <Card variant="elevated" className="mt-4">
+      <Tabs
+        items={[
+          {
+            key: "basics",
+            label: "Trip basics",
+            content: (
+              <div className="flex flex-col gap-3">
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Trip title (e.g. 5-day Sundarbans family trip)" />
+                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what you're looking for…" rows={3} />
+                <div>
+                  <Input value={location ? location.name : query} onChange={(e) => search(e.target.value)} placeholder="Destination" />
+                  {results.length > 0 && !location && (
+                    <ul className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+                      {results.map((loc) => (
+                        <li key={loc.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLocation(loc);
+                              setResults([]);
+                            }}
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-primary-50 dark:hover:bg-primary-950/40"
+                          >
+                            {loc.name} <span className="text-xs text-zinc-400">({loc.type})</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input type="date" label="Start date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                  <Input type="date" label="End date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <Input type="number" label="Adults" min={1} value={adults} onChange={(e) => setAdults(Number(e.target.value))} />
+                  <Input type="number" label="Children" min={0} value={children} onChange={(e) => setChildren(Number(e.target.value))} />
+                  <Input type="number" label="Infants" min={0} value={infants} onChange={(e) => setInfants(Number(e.target.value))} />
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: "budget",
+            label: "Budget & preferences",
+            content: (
+              <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <Input type="number" label="Budget min (optional)" value={budgetMin} onChange={(e) => setBudgetMin(e.target.value)} />
+                  <Input type="number" label="Budget max (optional)" value={budgetMax} onChange={(e) => setBudgetMax(e.target.value)} />
+                </div>
+                {budgetMin && budgetMax && (
+                  <p className="text-xs text-zinc-400">
+                    Budget range: {formatMoney(budgetMin)} – {formatMoney(budgetMax)}
+                  </p>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <Input label="Pickup location (optional)" value={pickupLocation} onChange={(e) => setPickupLocation(e.target.value)} />
+                  <Input label="Special occasion (optional)" value={specialOccasion} onChange={(e) => setSpecialOccasion(e.target.value)} placeholder="e.g. honeymoon" />
+                </div>
+                <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                  <input type="checkbox" checked={guideRequested} onChange={(e) => setGuideRequested(e.target.checked)} className="rounded border-zinc-300" />
+                  A guide is needed
+                </label>
+              </div>
+            ),
+          },
+          {
+            key: "details",
+            label: "Optional details",
+            content: (
+              <div className="flex flex-col gap-3">
+                <Textarea label="Food preference (optional)" value={foodPreference} onChange={(e) => setFoodPreference(e.target.value)} rows={2} />
+                <Textarea label="Accessibility needs (optional)" value={accessibilityNeeds} onChange={(e) => setAccessibilityNeeds(e.target.value)} rows={2} />
+                <Textarea label="Safety / privacy notes (optional)" value={safetyPrivacyNotes} onChange={(e) => setSafetyPrivacyNotes(e.target.value)} rows={2} />
+                <Textarea label="Additional notes (optional)" value={additionalNotes} onChange={(e) => setAdditionalNotes(e.target.value)} rows={2} />
+                <Input type="date" label="Bid deadline (optional)" value={bidDeadline} onChange={(e) => setBidDeadline(e.target.value)} className="max-w-xs" />
+              </div>
+            ),
+          },
+        ]}
+      />
 
-      <div className="grid grid-cols-2 gap-3">
-        <Input label="Pickup location (optional)" value={pickupLocation} onChange={(e) => setPickupLocation(e.target.value)} />
-        <Input label="Special occasion (optional)" value={specialOccasion} onChange={(e) => setSpecialOccasion(e.target.value)} placeholder="e.g. honeymoon" />
-      </div>
-      <Textarea label="Food preference (optional)" value={foodPreference} onChange={(e) => setFoodPreference(e.target.value)} rows={2} />
-      <Textarea label="Accessibility needs (optional)" value={accessibilityNeeds} onChange={(e) => setAccessibilityNeeds(e.target.value)} rows={2} />
-      <Textarea label="Safety / privacy notes (optional)" value={safetyPrivacyNotes} onChange={(e) => setSafetyPrivacyNotes(e.target.value)} rows={2} />
-      <Textarea label="Additional notes (optional)" value={additionalNotes} onChange={(e) => setAdditionalNotes(e.target.value)} rows={2} />
-      <div className="grid grid-cols-2 gap-3 sm:items-end">
-        <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-          <input type="checkbox" checked={guideRequested} onChange={(e) => setGuideRequested(e.target.checked)} className="rounded border-zinc-300" />
-          A guide is needed
-        </label>
-        <Input type="date" label="Bid deadline (optional)" value={bidDeadline} onChange={(e) => setBidDeadline(e.target.value)} />
-      </div>
-
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <Button onClick={submit} loading={busy} disabled={!title || !description || !startDate || !endDate} className="self-start">
+      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+      <Button onClick={submit} loading={busy} disabled={!title || !description || !startDate || !endDate} className="mt-4">
         Post request
       </Button>
     </Card>

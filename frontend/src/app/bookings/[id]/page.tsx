@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
 import { Textarea } from "@/components/ui/Textarea";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { BOOKING_STATUS_LABELS, type Booking, type BookingItem } from "@/types/booking";
@@ -31,6 +32,7 @@ function BookingDetailContent() {
   const paymentResult = searchParams.get("payment");
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   const { data: booking, isLoading } = useQuery({
     queryKey: ["booking", id],
@@ -100,7 +102,16 @@ function BookingDetailContent() {
         {(booking.status === "pending_payment" || booking.status === "confirmed") && (
           <Button
             variant="destructive"
-            onClick={() => run(() => apiClient.post(`/api/v1/bookings/${id}/cancel`, undefined, { auth: true }))}
+            onClick={async () => {
+              const ok = await confirm({
+                title: "Cancel this booking?",
+                description: "This can't be undone. Depending on the cancellation policy, you may be eligible for a refund.",
+                confirmLabel: "Cancel booking",
+                cancelLabel: "Keep booking",
+                destructive: true,
+              });
+              if (ok) run(() => apiClient.post(`/api/v1/bookings/${id}/cancel`, undefined, { auth: true }));
+            }}
           >
             Cancel booking
           </Button>

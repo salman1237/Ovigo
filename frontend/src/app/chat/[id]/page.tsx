@@ -1,12 +1,14 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Flag, Languages, MapPin, Paperclip, Send, ShieldAlert } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
+import { Textarea } from "@/components/ui/Textarea";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { WS_URL } from "@/lib/constants";
 import { cn } from "@/lib/cn";
@@ -114,14 +116,17 @@ export default function ChatThreadPage() {
     }
   };
 
-  const reportMessage = async (messageId: string) => {
-    const reason = window.prompt("What's wrong with this message?");
-    if (!reason || reason.trim().length < 3) return;
+  const [reportTarget, setReportTarget] = useState<string | null>(null);
+  const [reportStatus, setReportStatus] = useState<string | null>(null);
+
+  const reportMessage = async (messageId: string, reason: string) => {
     try {
       await apiClient.post(`/api/v1/chat/messages/${messageId}/report`, { reason }, { auth: true });
-      window.alert("Reported to our team — thanks for flagging it.");
+      setReportStatus("Reported to our team — thanks for flagging it.");
     } catch (err) {
-      window.alert(err instanceof ApiError ? err.message : "Failed to report message");
+      setReportStatus(err instanceof ApiError ? err.message : "Failed to report message");
+    } finally {
+      setReportTarget(null);
     }
   };
 
@@ -145,17 +150,24 @@ export default function ChatThreadPage() {
         </p>
       )}
       {isClosed && <p className="mt-3 text-xs text-red-600">This conversation was closed by an admin.</p>}
+      {reportStatus && <p className="mt-3 text-xs text-emerald-600">{reportStatus}</p>}
 
       <div className="flex-1 overflow-y-auto py-4">
         <div className="flex flex-col gap-3">
           {(messages ?? []).map((m) => (
-            <MessageBubble key={m.id} message={m} isMine={m.sender_id === currentUserId} onReport={() => reportMessage(m.id)} />
+            <MessageBubble key={m.id} message={m} isMine={m.sender_id === currentUserId} onReport={() => setReportTarget(m.id)} />
           ))}
           <div ref={bottomRef} />
         </div>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      <ReportMessageDialog
+        open={reportTarget !== null}
+        onCancel={() => setReportTarget(null)}
+        onSubmit={(reason) => reportTarget && reportMessage(reportTarget, reason)}
+      />
 
       {!isClosed && (
         <div className="mt-2 flex flex-col gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
@@ -274,6 +286,60 @@ function MessageBubble({ message, isMine, onReport }: { message: ChatMessage; is
           <Flag className="h-3 w-3" /> Report
         </button>
       </div>
+    </motion.div>
+  );
+}
+
+function ReportMessageDialog({ open, onCancel, onSubmit }: { open: boolean; onCancel: () => void; onSubmit: (reason: string) => void }) {
+  return (
+    <AnimatePresence>
+      {open && <ReportMessageDialogContent onCancel={onCancel} onSubmit={onSubmit} />}
+    </AnimatePresence>
+  );
+}
+
+function ReportMessageDialogContent({ onCancel, onSubmit }: { onCancel: () => void; onSubmit: (reason: string) => void }) {
+  const [reason, setReason] = useState("");
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/50 p-4 backdrop-blur-sm"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onCancel}
+    >
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-6 shadow-elevated dark:border-zinc-800 dark:bg-zinc-900"
+        initial={{ opacity: 0, scale: 0.95, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 8 }}
+        transition={{ duration: 0.15 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-50">
+          <Flag className="h-4 w-4 text-red-500" /> Report this message
+        </h2>
+        <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400">Tell us what&apos;s wrong — our team will review it.</p>
+        <Textarea
+          autoFocus
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="What's wrong with this message?"
+          rows={3}
+          className="mt-3"
+        />
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button size="sm" disabled={reason.trim().length < 3} onClick={() => onSubmit(reason.trim())}>
+            Submit report
+          </Button>
+        </div>
+      </motion.div>
     </motion.div>
   );
 }

@@ -1,17 +1,35 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  BadgeCheck,
+  Bus,
+  CalendarDays,
+  ClipboardList,
+  Hotel,
+  ImageIcon,
+  ListTree,
+  MapPin,
+  Plus,
+  PlusCircle,
+  Settings2,
+  Trash2,
+  UtensilsCrossed,
+} from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
 import { BadgeApplications } from "@/components/shared/BadgeApplications";
 import { ImageGallery } from "@/components/shared/ImageGallery";
 import { LocationPicker } from "@/components/shared/LocationPicker";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
+import { Tabs } from "@/components/ui/Tabs";
 import { Textarea } from "@/components/ui/Textarea";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
@@ -20,6 +38,8 @@ import { TOUR_TYPE_LABELS, type MealType, type Tour, type TourType } from "@/typ
 
 const MEAL_TYPES: MealType[] = ["breakfast", "lunch", "dinner", "snack"];
 const TOUR_TYPES = Object.keys(TOUR_TYPE_LABELS) as TourType[];
+
+type RunFn = (fn: () => Promise<unknown>) => void;
 
 export default function TourEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -33,7 +53,7 @@ export default function TourEditPage() {
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: ["tour", id] });
 
-  const run = async (fn: () => Promise<unknown>) => {
+  const run: RunFn = async (fn) => {
     setError(null);
     try {
       await fn();
@@ -43,14 +63,24 @@ export default function TourEditPage() {
     }
   };
 
-  if (isLoading || !tour) return <Spinner />;
+  if (isLoading || !tour) {
+    return (
+      <div className="flex flex-1 items-center justify-center py-24">
+        <Spinner />
+      </div>
+    );
+  }
+
+  const statusVariant = tour.status === "published" ? "success" : tour.status === "rejected" ? "danger" : tour.status === "pending_review" ? "warning" : "neutral";
 
   return (
-    <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto w-full max-w-4xl flex-1 px-4 py-10 sm:px-6 sm:py-12">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{tour.title}</h1>
-          <p className="text-sm capitalize text-zinc-500">{tour.status.replace("_", " ")}</p>
+          <h1 className="text-2xl font-bold text-zinc-900 sm:text-3xl dark:text-zinc-50">{tour.title}</h1>
+          <Badge variant={statusVariant} className="mt-2 capitalize">
+            {tour.status.replace("_", " ")}
+          </Badge>
         </div>
         {(tour.status === "draft" || tour.status === "rejected") && (
           <Button onClick={() => run(() => apiClient.post(`/api/v1/tours/${id}/submit`, undefined, { auth: true }))}>
@@ -60,54 +90,111 @@ export default function TourEditPage() {
       </div>
 
       {tour.rejection_reason && (
-        <p className="mt-2 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          Rejected: {tour.rejection_reason}
-        </p>
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+          <span className="font-semibold">Rejected: </span>
+          {tour.rejection_reason}
+        </div>
       )}
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && (
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+          {error}
+        </div>
+      )}
 
-      <Section title="Photos">
-        <ImageGallery basePath={`/api/v1/tours/${tour.id}`} images={tour.images} onChange={refetch} editable={tour.status !== "pending_review"} />
-      </Section>
-
-      <Section title="Trust Badges">
-        <BadgeApplications entityType="tour" entityId={tour.id} />
-      </Section>
-
-      <DetailsSection tour={tour} run={run} />
-      <LocationsSection tourId={id} run={run} />
-      <ItinerarySection tour={tour} run={run} />
-      <DeparturesSection tour={tour} run={run} />
-      <MealsSection tour={tour} run={run} />
-      <ActivitiesSection tour={tour} run={run} />
-      <AddonsSection tour={tour} run={run} />
-      <TransportSection tour={tour} run={run} />
-      <StaysSection tour={tour} run={run} />
+      <Tabs
+        className="mt-8"
+        items={[
+          {
+            key: "overview",
+            label: "Overview & Pricing",
+            icon: <Settings2 className="h-4 w-4" />,
+            content: (
+              <div className="flex flex-col gap-6">
+                <Section title="Photos" icon={<ImageIcon className="h-4 w-4" />}>
+                  <ImageGallery basePath={`/api/v1/tours/${tour.id}`} images={tour.images} onChange={refetch} editable={tour.status !== "pending_review"} />
+                </Section>
+                <Section title="Trust Badges" icon={<BadgeCheck className="h-4 w-4" />}>
+                  <BadgeApplications entityType="tour" entityId={tour.id} />
+                </Section>
+                <Section title="Destinations" icon={<MapPin className="h-4 w-4" />}>
+                  <LocationsSection tourId={id} run={run} />
+                </Section>
+                <DetailsSection tour={tour} run={run} />
+              </div>
+            ),
+          },
+          {
+            key: "itinerary",
+            label: "Itinerary",
+            icon: <ListTree className="h-4 w-4" />,
+            content: (
+              <div className="flex flex-col gap-6">
+                <ItinerarySection tour={tour} run={run} />
+                <DeparturesSection tour={tour} run={run} />
+              </div>
+            ),
+          },
+          {
+            key: "inclusions",
+            label: "Inclusions",
+            icon: <ClipboardList className="h-4 w-4" />,
+            content: (
+              <div className="flex flex-col gap-6">
+                <MealsSection tour={tour} run={run} />
+                <ActivitiesSection tour={tour} run={run} />
+                <AddonsSection tour={tour} run={run} />
+                <TransportSection tour={tour} run={run} />
+                <StaysSection tour={tour} run={run} />
+              </div>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <Card className="mt-6">
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{title}</h2>
-      <div className="mt-3">{children}</div>
+    <Card variant="elevated">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+        {icon && <span className="text-primary-600 dark:text-primary-400">{icon}</span>}
+        {title}
+      </h2>
+      <div className="mt-4">{children}</div>
     </Card>
   );
 }
 
-function RemoveButton({ onClick }: { onClick: () => void }) {
+function ItemRow({ children, onRemove }: { children: React.ReactNode; onRemove: () => void }) {
+  const confirm = useConfirm();
   return (
-    <button onClick={onClick} className="text-xs font-medium text-red-600 hover:text-red-700">
-      Remove
-    </button>
+    <li className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50/60 px-3.5 py-2.5 text-sm dark:border-zinc-800 dark:bg-zinc-900/40">
+      <span className="text-zinc-700 dark:text-zinc-300">{children}</span>
+      <button
+        type="button"
+        onClick={async () => {
+          const ok = await confirm({
+            title: "Remove this item?",
+            description: "This can't be undone.",
+            confirmLabel: "Remove",
+            destructive: true,
+          });
+          if (ok) onRemove();
+        }}
+        className="shrink-0 rounded-full p-1.5 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
+        aria-label="Remove"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </li>
   );
 }
 
-function LocationsSection({ tourId, run }: { tourId: string; run: (fn: () => Promise<unknown>) => void }) {
+function LocationsSection({ tourId, run }: { tourId: string; run: RunFn }) {
   const [locations, setLocations] = useState<Location[]>([]);
   return (
-    <Section title="Destinations">
+    <>
       <LocationPicker selected={locations} onChange={setLocations} />
       <Button
         size="sm"
@@ -118,11 +205,11 @@ function LocationsSection({ tourId, run }: { tourId: string; run: (fn: () => Pro
           )
         }
         disabled={locations.length === 0}
-        className="mt-2"
+        className="mt-3"
       >
         Save destinations
       </Button>
-    </Section>
+    </>
   );
 }
 
@@ -135,7 +222,7 @@ function fromPercentInput(value: string): number | undefined {
   return value.trim() ? Number(value) / 100 : undefined;
 }
 
-function DetailsSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<unknown>) => void }) {
+function DetailsSection({ tour, run }: { tour: Tour; run: RunFn }) {
   const [tourType, setTourType] = useState<TourType | "">(tour.tour_type ?? "");
   const [childPrice, setChildPrice] = useState(tour.child_price ?? "");
   const [infantPrice, setInfantPrice] = useState(tour.infant_price ?? "");
@@ -150,9 +237,11 @@ function DetailsSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<unk
   const [weatherRiskNote, setWeatherRiskNote] = useState(tour.weather_risk_note ?? "");
   const [activityRiskNote, setActivityRiskNote] = useState(tour.activity_risk_note ?? "");
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const save = () => {
     setSaving(true);
+    setSaved(false);
     run(() =>
       apiClient
         .put(
@@ -174,13 +263,14 @@ function DetailsSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<unk
           },
           { auth: true }
         )
+        .then(() => setSaved(true))
         .finally(() => setSaving(false))
     );
   };
 
   return (
-    <Section title="Tour details">
-      <div className="flex flex-col gap-4">
+    <Section title="Tour type, pricing & policies" icon={<Settings2 className="h-4 w-4" />}>
+      <div className="flex flex-col gap-5">
         <Select label="Tour type" value={tourType} onChange={(e) => setTourType(e.target.value as TourType | "")}>
           <option value="">Not set</option>
           {TOUR_TYPES.map((t) => (
@@ -191,7 +281,7 @@ function DetailsSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<unk
         </Select>
 
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Pricing</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">Pricing</p>
           <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
             <Input label="Child price (৳)" value={childPrice} onChange={(e) => setChildPrice(e.target.value)} placeholder="Same as adult if empty" />
             <Input label="Infant price (৳)" value={infantPrice} onChange={(e) => setInfantPrice(e.target.value)} placeholder="Often free" />
@@ -209,7 +299,7 @@ function DetailsSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<unk
         </div>
 
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Policies</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">Policies</p>
           <div className="mt-2 flex flex-col gap-3">
             <Textarea label="Cancellation policy" value={cancellationPolicy} onChange={(e) => setCancellationPolicy(e.target.value)} rows={2} />
             <Textarea label="Refund policy" value={refundPolicy} onChange={(e) => setRefundPolicy(e.target.value)} rows={2} />
@@ -218,7 +308,7 @@ function DetailsSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<unk
         </div>
 
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Safety</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">Safety</p>
           <div className="mt-2 flex flex-col gap-3">
             <Input label="Emergency contact phone" value={emergencyContactPhone} onChange={(e) => setEmergencyContactPhone(e.target.value)} />
             <Textarea label="Weather risk note" value={weatherRiskNote} onChange={(e) => setWeatherRiskNote(e.target.value)} rows={2} />
@@ -226,15 +316,18 @@ function DetailsSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<unk
           </div>
         </div>
 
-        <Button size="sm" onClick={save} loading={saving} className="self-start">
-          Save tour details
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button size="sm" onClick={save} loading={saving} className="self-start">
+            Save tour details
+          </Button>
+          {saved && <span className="text-xs font-medium text-emerald-600">Saved ✓</span>}
+        </div>
       </div>
     </Section>
   );
 }
 
-function ItinerarySection({ tour, run }: { tour: Tour; run: (fn: () => Promise<unknown>) => void }) {
+function ItinerarySection({ tour, run }: { tour: Tour; run: RunFn }) {
   const [day, setDay] = useState(tour.itinerary.length + 1);
   const [title, setTitle] = useState("");
   const [locationName, setLocationName] = useState("");
@@ -262,50 +355,48 @@ function ItinerarySection({ tour, run }: { tour: Tour; run: (fn: () => Promise<u
   };
 
   return (
-    <Section title="Itinerary">
-      <ul className="flex flex-col gap-1">
+    <Section title="Itinerary" icon={<ListTree className="h-4 w-4" />}>
+      <ul className="flex flex-col gap-2">
         {tour.itinerary.map((d) => (
-          <li key={d.id} className="flex items-center justify-between text-sm">
-            <span>
-              Day {d.day_number}: {d.title}
-              {d.location_name && <span className="text-zinc-400"> · {d.location_name}</span>}
-              {(d.arrival_time || d.departure_time) && (
-                <span className="text-zinc-400"> · {d.arrival_time ?? "?"}–{d.departure_time ?? "?"}</span>
-              )}
-            </span>
-            <RemoveButton onClick={() => run(() => apiClient.delete(`/api/v1/tours/${tour.id}/itinerary/${d.id}`, { auth: true }))} />
-          </li>
+          <ItemRow key={d.id} onRemove={() => run(() => apiClient.delete(`/api/v1/tours/${tour.id}/itinerary/${d.id}`, { auth: true }))}>
+            <span className="font-medium text-zinc-900 dark:text-zinc-50">Day {d.day_number}:</span> {d.title}
+            {d.location_name && <span className="text-zinc-400"> · {d.location_name}</span>}
+            {(d.arrival_time || d.departure_time) && (
+              <span className="text-zinc-400"> · {d.arrival_time ?? "?"}–{d.departure_time ?? "?"}</span>
+            )}
+          </ItemRow>
         ))}
+        {tour.itinerary.length === 0 && <p className="text-sm text-zinc-400">No days added yet.</p>}
       </ul>
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-4 flex flex-wrap gap-2 rounded-xl border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
         <Input type="number" min={1} value={day} onChange={(e) => setDay(Number(e.target.value))} className="w-20" />
-        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Day title" className="flex-1" />
+        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Day title" className="flex-1 min-w-[10rem]" />
         <Input value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="Location visited" className="w-40" />
         <Input value={arrivalTime} onChange={(e) => setArrivalTime(e.target.value)} placeholder="Arrival, e.g. 9:00 AM" className="w-36" />
         <Input value={departureTime} onChange={(e) => setDepartureTime(e.target.value)} placeholder="Departure" className="w-32" />
         <Button size="sm" variant="secondary" onClick={add} disabled={!title}>
-          Add
+          <Plus className="h-4 w-4" /> Add day
         </Button>
       </div>
     </Section>
   );
 }
 
-function DeparturesSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<unknown>) => void }) {
+function DeparturesSection({ tour, run }: { tour: Tour; run: RunFn }) {
   const [date, setDate] = useState("");
   const [seats, setSeats] = useState(10);
 
   return (
-    <Section title="Departure dates">
-      <ul className="flex flex-col gap-1">
+    <Section title="Departure dates" icon={<CalendarDays className="h-4 w-4" />}>
+      <ul className="flex flex-col gap-2">
         {tour.departures.map((d) => (
-          <li key={d.id} className="flex items-center justify-between text-sm">
-            <span>{d.departure_date} — {d.available_seats} seats</span>
-            <RemoveButton onClick={() => run(() => apiClient.delete(`/api/v1/tours/${tour.id}/departures/${d.id}`, { auth: true }))} />
-          </li>
+          <ItemRow key={d.id} onRemove={() => run(() => apiClient.delete(`/api/v1/tours/${tour.id}/departures/${d.id}`, { auth: true }))}>
+            {d.departure_date} — {d.available_seats} seats
+          </ItemRow>
         ))}
+        {tour.departures.length === 0 && <p className="text-sm text-zinc-400">No departure dates added yet.</p>}
       </ul>
-      <div className="mt-2 flex gap-2">
+      <div className="mt-4 flex flex-wrap gap-2 rounded-xl border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
         <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         <Input type="number" min={1} value={seats} onChange={(e) => setSeats(Number(e.target.value))} className="w-24" />
         <Button
@@ -314,39 +405,39 @@ function DeparturesSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<
           onClick={() => run(() => apiClient.post(`/api/v1/tours/${tour.id}/departures`, { departure_date: date, available_seats: seats }, { auth: true }))}
           disabled={!date}
         >
-          Add
+          <Plus className="h-4 w-4" /> Add
         </Button>
       </div>
     </Section>
   );
 }
 
-function MealsSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<unknown>) => void }) {
+function MealsSection({ tour, run }: { tour: Tour; run: RunFn }) {
   const [mealType, setMealType] = useState<MealType>("breakfast");
 
   return (
-    <Section title="Meals">
-      <ul className="flex flex-col gap-1">
+    <Section title="Meals" icon={<UtensilsCrossed className="h-4 w-4" />}>
+      <ul className="flex flex-col gap-2">
         {tour.meals.map((m) => (
-          <li key={m.id} className="flex items-center justify-between text-sm capitalize">
-            <span>{m.meal_type}</span>
-            <RemoveButton onClick={() => run(() => apiClient.delete(`/api/v1/tours/${tour.id}/meals/${m.id}`, { auth: true }))} />
-          </li>
+          <ItemRow key={m.id} onRemove={() => run(() => apiClient.delete(`/api/v1/tours/${tour.id}/meals/${m.id}`, { auth: true }))}>
+            <span className="capitalize">{m.meal_type}</span>
+          </ItemRow>
         ))}
+        {tour.meals.length === 0 && <p className="text-sm text-zinc-400">No meals added yet.</p>}
       </ul>
-      <div className="mt-2 flex gap-2">
+      <div className="mt-4 flex gap-2 rounded-xl border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
         <Select value={mealType} onChange={(e) => setMealType(e.target.value as MealType)} className="w-auto">
           {MEAL_TYPES.map((m) => <option key={m} value={m}>{m}</option>)}
         </Select>
         <Button size="sm" variant="secondary" onClick={() => run(() => apiClient.post(`/api/v1/tours/${tour.id}/meals`, { meal_type: mealType }, { auth: true }))}>
-          Add
+          <Plus className="h-4 w-4" /> Add
         </Button>
       </div>
     </Section>
   );
 }
 
-function ActivitiesSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<unknown>) => void }) {
+function ActivitiesSection({ tour, run }: { tour: Tour; run: RunFn }) {
   const [name, setName] = useState("");
   const [durationHours, setDurationHours] = useState("");
   const [locationName, setLocationName] = useState("");
@@ -387,75 +478,77 @@ function ActivitiesSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<
   };
 
   return (
-    <Section title="Activities">
-      <ul className="flex flex-col gap-1">
+    <Section title="Activities" icon={<ClipboardList className="h-4 w-4" />}>
+      <ul className="flex flex-col gap-2">
         {tour.activities.map((a) => (
-          <li key={a.id} className="flex items-center justify-between text-sm">
-            <span>
-              {a.name}
-              {a.difficulty && <span className="text-zinc-400"> · {a.difficulty}</span>}
-              {a.duration_hours && <span className="text-zinc-400"> · {a.duration_hours}h</span>}
-              {a.guide_required && <span className="text-zinc-400"> · guide required</span>}
-              {a.is_high_risk && <span className="text-red-500"> · high risk</span>}
-            </span>
-            <RemoveButton onClick={() => run(() => apiClient.delete(`/api/v1/tours/${tour.id}/activities/${a.id}`, { auth: true }))} />
-          </li>
+          <ItemRow key={a.id} onRemove={() => run(() => apiClient.delete(`/api/v1/tours/${tour.id}/activities/${a.id}`, { auth: true }))}>
+            <span className="font-medium text-zinc-900 dark:text-zinc-50">{a.name}</span>
+            {a.difficulty && <span className="text-zinc-400"> · {a.difficulty}</span>}
+            {a.duration_hours && <span className="text-zinc-400"> · {a.duration_hours}h</span>}
+            {a.guide_required && <span className="text-zinc-400"> · guide required</span>}
+            {a.is_high_risk && <span className="text-red-500"> · high risk</span>}
+          </ItemRow>
         ))}
+        {tour.activities.length === 0 && <p className="text-sm text-zinc-400">No activities added yet.</p>}
       </ul>
-      <div className="mt-2 flex flex-wrap items-end gap-2">
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Activity name" className="flex-1" />
-        <Input value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="Location" className="w-32" />
-        <Input value={durationHours} onChange={(e) => setDurationHours(e.target.value)} placeholder="Duration (hrs)" className="w-28" />
-        <Select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-auto">
-          <option value="">Difficulty</option>
-          <option value="easy">Easy</option>
-          <option value="moderate">Moderate</option>
-          <option value="challenging">Challenging</option>
-        </Select>
-        <Input type="number" min={0} value={minAge} onChange={(e) => setMinAge(e.target.value)} placeholder="Min age" className="w-24" />
-        <Input type="number" min={1} value={maxCapacity} onChange={(e) => setMaxCapacity(e.target.value)} placeholder="Max capacity" className="w-28" />
-        <Input value={equipmentNeeded} onChange={(e) => setEquipmentNeeded(e.target.value)} placeholder="Equipment needed" className="w-40" />
-        <label className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
-          <input type="checkbox" checked={guideRequired} onChange={(e) => setGuideRequired(e.target.checked)} className="rounded border-zinc-300" />
-          Guide required
-        </label>
-        <label className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
-          <input type="checkbox" checked={isHighRisk} onChange={(e) => setIsHighRisk(e.target.checked)} className="rounded border-zinc-300" />
-          High risk (requires a Level 2 certified guide)
-        </label>
-        <Button size="sm" variant="secondary" onClick={add} disabled={!name}>
-          Add
-        </Button>
+      <div className="mt-4 flex flex-col gap-2 rounded-xl border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
+        <div className="flex flex-wrap gap-2">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Activity name" className="flex-1 min-w-[10rem]" />
+          <Input value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="Location" className="w-32" />
+          <Input value={durationHours} onChange={(e) => setDurationHours(e.target.value)} placeholder="Duration (hrs)" className="w-28" />
+          <Select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-auto">
+            <option value="">Difficulty</option>
+            <option value="easy">Easy</option>
+            <option value="moderate">Moderate</option>
+            <option value="challenging">Challenging</option>
+          </Select>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input type="number" min={0} value={minAge} onChange={(e) => setMinAge(e.target.value)} placeholder="Min age" className="w-24" />
+          <Input type="number" min={1} value={maxCapacity} onChange={(e) => setMaxCapacity(e.target.value)} placeholder="Max capacity" className="w-28" />
+          <Input value={equipmentNeeded} onChange={(e) => setEquipmentNeeded(e.target.value)} placeholder="Equipment needed" className="w-40" />
+          <label className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+            <input type="checkbox" checked={guideRequired} onChange={(e) => setGuideRequired(e.target.checked)} className="rounded border-zinc-300" />
+            Guide required
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+            <input type="checkbox" checked={isHighRisk} onChange={(e) => setIsHighRisk(e.target.checked)} className="rounded border-zinc-300" />
+            High risk
+          </label>
+          <Button size="sm" variant="secondary" onClick={add} disabled={!name} className="ml-auto">
+            <Plus className="h-4 w-4" /> Add
+          </Button>
+        </div>
       </div>
     </Section>
   );
 }
 
-function AddonsSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<unknown>) => void }) {
+function AddonsSection({ tour, run }: { tour: Tour; run: RunFn }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   return (
-    <Section title="Add-ons">
-      <ul className="flex flex-col gap-1">
+    <Section title="Add-ons" icon={<PlusCircle className="h-4 w-4" />}>
+      <ul className="flex flex-col gap-2">
         {tour.addons.map((a) => (
-          <li key={a.id} className="flex items-center justify-between text-sm">
-            <span>{a.name} — {formatMoney(a.price)}</span>
-            <RemoveButton onClick={() => run(() => apiClient.delete(`/api/v1/tours/${tour.id}/addons/${a.id}`, { auth: true }))} />
-          </li>
+          <ItemRow key={a.id} onRemove={() => run(() => apiClient.delete(`/api/v1/tours/${tour.id}/addons/${a.id}`, { auth: true }))}>
+            {a.name} — {formatMoney(a.price)}
+          </ItemRow>
         ))}
+        {tour.addons.length === 0 && <p className="text-sm text-zinc-400">No add-ons added yet.</p>}
       </ul>
-      <div className="mt-2 flex gap-2">
+      <div className="mt-4 flex gap-2 rounded-xl border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Add-on name" className="flex-1" />
         <Input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Price" className="w-28" />
         <Button size="sm" variant="secondary" onClick={() => { run(() => apiClient.post(`/api/v1/tours/${tour.id}/addons`, { name, price }, { auth: true })); setName(""); setPrice(""); }} disabled={!name || !price}>
-          Add
+          <Plus className="h-4 w-4" /> Add
         </Button>
       </div>
     </Section>
   );
 }
 
-function TransportSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<unknown>) => void }) {
+function TransportSection({ tour, run }: { tour: Tour; run: RunFn }) {
   const [mode, setMode] = useState("");
   const [vehicleType, setVehicleType] = useState("");
   const [hasAc, setHasAc] = useState(false);
@@ -484,23 +577,21 @@ function TransportSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<u
   };
 
   return (
-    <Section title="Transport">
-      <ul className="flex flex-col gap-1">
+    <Section title="Transport" icon={<Bus className="h-4 w-4" />}>
+      <ul className="flex flex-col gap-2">
         {tour.transport.map((t) => (
-          <li key={t.id} className="flex items-center justify-between text-sm">
-            <span>
-              {t.mode}
-              {t.vehicle_type && <span className="text-zinc-400"> · {t.vehicle_type}</span>}
-              {t.has_ac && <span className="text-zinc-400"> · AC</span>}
-              {t.capacity && <span className="text-zinc-400"> · {t.capacity} seats</span>}
-              {t.driver_name && <span className="text-zinc-400"> · driver: {t.driver_name}</span>}
-            </span>
-            <RemoveButton onClick={() => run(() => apiClient.delete(`/api/v1/tours/${tour.id}/transport/${t.id}`, { auth: true }))} />
-          </li>
+          <ItemRow key={t.id} onRemove={() => run(() => apiClient.delete(`/api/v1/tours/${tour.id}/transport/${t.id}`, { auth: true }))}>
+            {t.mode}
+            {t.vehicle_type && <span className="text-zinc-400"> · {t.vehicle_type}</span>}
+            {t.has_ac && <span className="text-zinc-400"> · AC</span>}
+            {t.capacity && <span className="text-zinc-400"> · {t.capacity} seats</span>}
+            {t.driver_name && <span className="text-zinc-400"> · driver: {t.driver_name}</span>}
+          </ItemRow>
         ))}
+        {tour.transport.length === 0 && <p className="text-sm text-zinc-400">No transport added yet.</p>}
       </ul>
-      <div className="mt-2 flex flex-wrap items-end gap-2">
-        <Input value={mode} onChange={(e) => setMode(e.target.value)} placeholder="e.g. AC Bus" className="flex-1" />
+      <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
+        <Input value={mode} onChange={(e) => setMode(e.target.value)} placeholder="e.g. AC Bus" className="flex-1 min-w-[8rem]" />
         <Input value={vehicleType} onChange={(e) => setVehicleType(e.target.value)} placeholder="Vehicle type/model" className="w-40" />
         <Input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="Capacity" className="w-24" />
         <Input value={driverName} onChange={(e) => setDriverName(e.target.value)} placeholder="Driver (if assigned)" className="w-40" />
@@ -508,15 +599,15 @@ function TransportSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<u
           <input type="checkbox" checked={hasAc} onChange={(e) => setHasAc(e.target.checked)} className="rounded border-zinc-300" />
           AC
         </label>
-        <Button size="sm" variant="secondary" onClick={add} disabled={!mode}>
-          Add
+        <Button size="sm" variant="secondary" onClick={add} disabled={!mode} className="ml-auto">
+          <Plus className="h-4 w-4" /> Add
         </Button>
       </div>
     </Section>
   );
 }
 
-function StaysSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<unknown>) => void }) {
+function StaysSection({ tour, run }: { tour: Tour; run: RunFn }) {
   const [description, setDescription] = useState("");
   const [nights, setNights] = useState(1);
   const [propertyType, setPropertyType] = useState("");
@@ -536,26 +627,24 @@ function StaysSection({ tour, run }: { tour: Tour; run: (fn: () => Promise<unkno
   };
 
   return (
-    <Section title="Stays included">
-      <ul className="flex flex-col gap-1">
+    <Section title="Stays included" icon={<Hotel className="h-4 w-4" />}>
+      <ul className="flex flex-col gap-2">
         {tour.stays.map((s) => (
-          <li key={s.id} className="flex items-center justify-between text-sm">
-            <span>
-              {s.description} — {s.nights} night(s)
-              {s.property_type && <span className="text-zinc-400"> · {s.property_type}</span>}
-              {s.room_category && <span className="text-zinc-400"> · {s.room_category}</span>}
-            </span>
-            <RemoveButton onClick={() => run(() => apiClient.delete(`/api/v1/tours/${tour.id}/stays/${s.id}`, { auth: true }))} />
-          </li>
+          <ItemRow key={s.id} onRemove={() => run(() => apiClient.delete(`/api/v1/tours/${tour.id}/stays/${s.id}`, { auth: true }))}>
+            {s.description} — {s.nights} night(s)
+            {s.property_type && <span className="text-zinc-400"> · {s.property_type}</span>}
+            {s.room_category && <span className="text-zinc-400"> · {s.room_category}</span>}
+          </ItemRow>
         ))}
+        {tour.stays.length === 0 && <p className="text-sm text-zinc-400">No stays added yet.</p>}
       </ul>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. 3-star hotel" className="flex-1" />
+      <div className="mt-4 flex flex-wrap gap-2 rounded-xl border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
+        <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. 3-star hotel" className="flex-1 min-w-[10rem]" />
         <Input type="number" min={1} value={nights} onChange={(e) => setNights(Number(e.target.value))} className="w-24" />
         <Input value={propertyType} onChange={(e) => setPropertyType(e.target.value)} placeholder="Property type" className="w-32" />
         <Input value={roomCategory} onChange={(e) => setRoomCategory(e.target.value)} placeholder="Room/category" className="w-32" />
         <Button size="sm" variant="secondary" onClick={add} disabled={!description}>
-          Add
+          <Plus className="h-4 w-4" /> Add
         </Button>
       </div>
     </Section>

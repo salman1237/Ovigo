@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import {
@@ -34,6 +35,7 @@ function daysFromNow(n: number): string {
 
 export default function GuideDashboardPage() {
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
 
   const {
     data: supervision,
@@ -100,6 +102,14 @@ export default function GuideDashboardPage() {
 
   const terminate = async () => {
     if (!supervision) return;
+    const ok = await confirm({
+      title: "End supervision of this guide?",
+      description: "This can't be undone. You'll no longer be supervised by this expert.",
+      confirmLabel: "End supervision",
+      cancelLabel: "Cancel",
+      destructive: true,
+    });
+    if (!ok) return;
     await apiClient.post(`/api/v1/guides/supervisions/${supervision.id}/terminate`, undefined, { auth: true });
     refetch();
   };

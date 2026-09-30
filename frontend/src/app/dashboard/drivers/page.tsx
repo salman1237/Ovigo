@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users } from "lucide-react";
+import { Trash2, Users } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/Button";
@@ -9,6 +9,8 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
+import { Switch } from "@/components/ui/Switch";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Driver } from "@/types/rentcar";
@@ -16,6 +18,7 @@ import { Driver } from "@/types/rentcar";
 export default function DashboardDriversPage() {
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const [fullName, setFullName] = useState("");
   const [licenseNumber, setLicenseNumber] = useState("");
   const [phone, setPhone] = useState("");
@@ -55,6 +58,14 @@ export default function DashboardDriversPage() {
   };
 
   const remove = async (id: string) => {
+    const ok = await confirm({
+      title: "Remove this driver?",
+      description: "This can't be undone. The driver will no longer be assignable to vehicles.",
+      confirmLabel: "Remove",
+      cancelLabel: "Cancel",
+      destructive: true,
+    });
+    if (!ok) return;
     await apiClient.delete(`/api/v1/drivers/${id}`, { auth: true });
     refetch();
   };
@@ -87,20 +98,24 @@ export default function DashboardDriversPage() {
 
       <div className="mt-6 flex flex-col gap-3">
         {(drivers ?? []).map((d) => (
-          <Card key={d.id} className="flex items-center justify-between">
+          <Card key={d.id} variant="elevated" className="flex items-center justify-between">
             <div>
               <p className="font-medium text-zinc-900 dark:text-zinc-50">{d.full_name}</p>
               <p className="text-xs text-zinc-500">{d.license_number}{d.phone && ` · ${d.phone}`}</p>
             </div>
-            <div className="flex items-center gap-3">
-              <span className={`text-xs font-medium ${d.is_available ? "text-emerald-600" : "text-zinc-400"}`}>
-                {d.is_available ? "Available" : "Unavailable"}
-              </span>
-              <button onClick={() => toggleAvailable(d)} className="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
-                Toggle
-              </button>
-              <button onClick={() => remove(d.id)} className="text-xs font-medium text-red-600 hover:text-red-700">
-                Remove
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2">
+                <span className={`text-xs font-medium ${d.is_available ? "text-emerald-600" : "text-zinc-400"}`}>
+                  {d.is_available ? "Available" : "Unavailable"}
+                </span>
+                <Switch checked={d.is_available} onChange={() => toggleAvailable(d)} label={`Toggle availability for ${d.full_name}`} />
+              </label>
+              <button
+                onClick={() => remove(d.id)}
+                aria-label={`Remove ${d.full_name}`}
+                className="rounded-full p-1.5 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>
           </Card>
