@@ -1,7 +1,13 @@
 FROM node:22-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+# npm ci requires the lockfile to exactly match package.json's resolved tree,
+# including platform-specific optional deps — a lockfile regenerated on
+# Windows can omit Linux-only optional packages (e.g. @emnapi/*) that this
+# Linux build container needs, so npm ci fails with "lock file out of sync"
+# even though nothing is actually wrong. npm install resolves/updates as
+# needed instead of hard-failing on that mismatch.
+RUN npm install
 
 FROM node:22-slim AS builder
 WORKDIR /app
