@@ -1,6 +1,23 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import {
+  AlertTriangle,
+  Bus,
+  CalendarDays,
+  Clock,
+  CloudRain,
+  Gift,
+  Hotel,
+  ListTree,
+  MapPin,
+  Phone,
+  ShieldCheck,
+  Sparkles,
+  Users,
+  UtensilsCrossed,
+} from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
@@ -37,212 +54,296 @@ export default function TourDetailPage() {
     retry: false,
   });
 
-  if (isLoading) return <Spinner />;
+  if (isLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center py-24">
+        <Spinner />
+      </div>
+    );
+  }
   if (error || !tour) return <ErrorState message="Tour not found." />;
 
+  const hasInclusions =
+    tour.meals.length > 0 || tour.activities.length > 0 || tour.transport.length > 0 || tour.stays.length > 0;
+  const hasPolicies =
+    tour.cancellation_policy ||
+    tour.refund_policy ||
+    tour.child_policy ||
+    tour.emergency_contact_phone ||
+    tour.weather_risk_note ||
+    tour.activity_risk_note;
+
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 px-6 pb-24 pt-12 lg:pb-12">
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{tour.title}</h1>
-        {tour.tour_type && <Badge variant="accent">{TOUR_TYPE_LABELS[tour.tour_type]}</Badge>}
-      </div>
-      <p className="mt-1 text-sm font-medium text-primary-600 dark:text-primary-400">
-        {tour.duration_days} days · from {formatMoney(tour.base_price)} <ApproxPrice amountBDT={tour.base_price} /> · up to {tour.max_group_size} people
-      </p>
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <TrustBadges entityType="tour" entityId={tour.id} />
-        <MessageButton contextType="tour" contextId={tour.id} label="Message this Expert" />
-      </div>
+    <div className="relative">
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-gradient-to-b from-primary-50 to-transparent dark:from-primary-950/30" />
 
-      <PhotoGallery images={tour.images} urlFor={(img) => tourImageUrl(tour.id, img.id)} alt={tour.title} />
-
-      <div className="mt-8 flex flex-col gap-10 lg:flex-row">
-        <div className="min-w-0 flex-1">
-          {tour.description && <p className="text-sm text-zinc-700 dark:text-zinc-300">{tour.description}</p>}
-
-          {tour.itinerary.length > 0 && (
-            <div className="mt-6">
-              <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Itinerary</h2>
-              <ol className="mt-2 flex flex-col gap-2">
-                {tour.itinerary.map((day) => (
-                  <li key={day.id} className="text-sm">
-                    <span className="font-medium">Day {day.day_number}: {day.title}</span>
-                    {day.location_name && <span className="text-zinc-400"> · {day.location_name}</span>}
-                    {(day.arrival_time || day.departure_time) && (
-                      <span className="text-zinc-400">
-                        {" "}
-                        · {day.arrival_time ?? "—"} to {day.departure_time ?? "—"}
-                      </span>
-                    )}
-                    {day.description && <p className="text-zinc-500">{day.description}</p>}
-                  </li>
-                ))}
-              </ol>
+      <div className="mx-auto w-full max-w-6xl flex-1 px-6 pb-24 pt-10 lg:pb-12">
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                {tour.tour_type && <Badge variant="accent">{TOUR_TYPE_LABELS[tour.tour_type]}</Badge>}
+                <TrustBadges entityType="tour" entityId={tour.id} />
+              </div>
+              <h1 className="mt-2 text-3xl font-bold text-zinc-900 sm:text-4xl dark:text-zinc-50">{tour.title}</h1>
             </div>
-          )}
+            <MessageButton contextType="tour" contextId={tour.id} label="Message this Expert" />
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="flex items-center gap-1.5">
+              <Clock className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+              {tour.duration_days} day{tour.duration_days === 1 ? "" : "s"}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Users className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+              Up to {tour.max_group_size} people
+            </span>
+            <span className="flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-zinc-50">
+              from {formatMoney(tour.base_price)} <ApproxPrice amountBDT={tour.base_price} />
+            </span>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.05 }}
+          className="overflow-hidden rounded-3xl shadow-elevated"
+        >
+          <PhotoGallery images={tour.images} urlFor={(img) => tourImageUrl(tour.id, img.id)} alt={tour.title} />
+        </motion.div>
+
+        <div className="mt-8 flex flex-col gap-10 lg:flex-row">
+          <div className="min-w-0 flex-1 space-y-6">
+            {tour.description && (
+              <Section>
+                <p className="text-[15px] leading-relaxed text-zinc-700 dark:text-zinc-300">{tour.description}</p>
+              </Section>
+            )}
+
+            {tour.itinerary.length > 0 && (
+              <Section title="Itinerary" icon={<ListTree className="h-4 w-4" />}>
+                <ol className="flex flex-col">
+                  {tour.itinerary.map((day, i) => (
+                    <li key={day.id} className="relative flex gap-4 pb-6 last:pb-0">
+                      {i < tour.itinerary.length - 1 && (
+                        <span className="absolute left-4 top-9 h-[calc(100%-2rem)] w-px bg-zinc-200 dark:bg-zinc-800" />
+                      )}
+                      <span className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-600 to-indigo-600 text-xs font-semibold text-white shadow-md shadow-primary-600/20">
+                        {day.day_number}
+                      </span>
+                      <div className="min-w-0 flex-1 pt-0.5">
+                        <p className="font-medium text-zinc-900 dark:text-zinc-50">{day.title}</p>
+                        <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-zinc-500">
+                          {day.location_name && (
+                            <span className="flex items-center gap-1">
+                              <MapPin className="h-3 w-3" /> {day.location_name}
+                            </span>
+                          )}
+                          {(day.arrival_time || day.departure_time) && (
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" /> {day.arrival_time ?? "—"} to {day.departure_time ?? "—"}
+                            </span>
+                          )}
+                        </p>
+                        {day.description && <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400">{day.description}</p>}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </Section>
+            )}
+
+            {tour.departures.length > 0 && (
+              <Section title="Upcoming departures" icon={<CalendarDays className="h-4 w-4" />}>
+                <div className="flex flex-wrap gap-2.5">
+                  {tour.departures.map((d) => {
+                    const low = d.available_seats > 0 && d.available_seats <= 3;
+                    const full = d.available_seats < 1;
+                    return (
+                      <div
+                        key={d.id}
+                        className={`rounded-xl border px-4 py-2.5 text-sm ${
+                          full
+                            ? "border-zinc-200 bg-zinc-50 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/40"
+                            : "border-primary-200 bg-primary-50 text-zinc-900 dark:border-primary-900 dark:bg-primary-950/30 dark:text-zinc-50"
+                        }`}
+                      >
+                        <p className="font-medium">{d.departure_date}</p>
+                        <p className={`mt-0.5 text-xs ${full ? "text-zinc-400" : low ? "font-medium text-accent-600 dark:text-accent-400" : "text-zinc-500"}`}>
+                          {full ? "Fully booked" : `${d.available_seats} seat${d.available_seats === 1 ? "" : "s"} left`}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Section>
+            )}
+
+            {hasInclusions && (
+              <Section title="What's included" icon={<Sparkles className="h-4 w-4" />}>
+                <div className="grid gap-6 sm:grid-cols-2">
+                  {tour.meals.length > 0 && (
+                    <InclusionGroup icon={<UtensilsCrossed className="h-4 w-4" />} title="Meals">
+                      {tour.meals.map((m) => (
+                        <InclusionChip key={m.id}>{m.meal_type}</InclusionChip>
+                      ))}
+                    </InclusionGroup>
+                  )}
+                  {tour.activities.length > 0 && (
+                    <InclusionGroup icon={<Sparkles className="h-4 w-4" />} title="Activities">
+                      {tour.activities.map((a) => (
+                        <InclusionChip key={a.id}>
+                          {a.name}
+                          {a.difficulty && <span className="text-zinc-400"> · {a.difficulty}</span>}
+                          {a.duration_hours && <span className="text-zinc-400"> · {a.duration_hours}h</span>}
+                        </InclusionChip>
+                      ))}
+                    </InclusionGroup>
+                  )}
+                  {tour.transport.length > 0 && (
+                    <InclusionGroup icon={<Bus className="h-4 w-4" />} title="Transport">
+                      {tour.transport.map((t) => (
+                        <InclusionChip key={t.id}>
+                          {t.mode}
+                          {t.vehicle_type && <span className="text-zinc-400"> · {t.vehicle_type}</span>}
+                          {t.has_ac && <span className="text-zinc-400"> · AC</span>}
+                        </InclusionChip>
+                      ))}
+                    </InclusionGroup>
+                  )}
+                  {tour.stays.length > 0 && (
+                    <InclusionGroup icon={<Hotel className="h-4 w-4" />} title="Accommodation">
+                      {tour.stays.map((s) => (
+                        <InclusionChip key={s.id}>
+                          {s.description} · {s.nights} night{s.nights === 1 ? "" : "s"}
+                        </InclusionChip>
+                      ))}
+                    </InclusionGroup>
+                  )}
+                </div>
+                {tour.addons.length > 0 && (
+                  <div className="mt-6 border-t border-zinc-100 pt-5 dark:border-zinc-800">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+                      <Gift className="h-3.5 w-3.5" /> Optional add-ons
+                    </p>
+                    <div className="mt-2.5 flex flex-wrap gap-2">
+                      {tour.addons.map((a) => (
+                        <span
+                          key={a.id}
+                          className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                        >
+                          {a.name} <span className="text-primary-600 dark:text-primary-400">+{formatMoney(a.price)}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Section>
+            )}
+
+            {hasPolicies && (
+              <Section title="Policies & safety" icon={<ShieldCheck className="h-4 w-4" />}>
+                <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
+                  {tour.cancellation_policy && (
+                    <PolicyRow icon={<CalendarDays className="h-4 w-4" />} label="Cancellation">
+                      {tour.cancellation_policy}
+                    </PolicyRow>
+                  )}
+                  {tour.refund_policy && (
+                    <PolicyRow icon={<ShieldCheck className="h-4 w-4" />} label="Refund">
+                      {tour.refund_policy}
+                    </PolicyRow>
+                  )}
+                  {tour.child_policy && (
+                    <PolicyRow icon={<Users className="h-4 w-4" />} label="Children">
+                      {tour.child_policy}
+                    </PolicyRow>
+                  )}
+                  {tour.emergency_contact_phone && (
+                    <PolicyRow icon={<Phone className="h-4 w-4" />} label="Emergency contact">
+                      {tour.emergency_contact_phone}
+                    </PolicyRow>
+                  )}
+                  {tour.weather_risk_note && (
+                    <PolicyRow icon={<CloudRain className="h-4 w-4" />} label="Weather">
+                      {tour.weather_risk_note}
+                    </PolicyRow>
+                  )}
+                  {tour.activity_risk_note && (
+                    <PolicyRow icon={<AlertTriangle className="h-4 w-4" />} label="Activity risk">
+                      {tour.activity_risk_note}
+                    </PolicyRow>
+                  )}
+                </div>
+              </Section>
+            )}
+
+            <Section title="Reviews">
+              <ReviewsList tourId={tour.id} />
+            </Section>
+
+            <FrequentlyBookedWith endpoint={`/api/v1/tours/${tour.id}/frequently-booked-with`} />
+            <SimilarTours tourId={tour.id} />
+          </div>
 
           {tour.departures.length > 0 && (
-            <div className="mt-6">
-              <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Upcoming departures</h2>
-              <ul className="mt-2 flex flex-wrap gap-2">
-                {tour.departures.map((d) => (
-                  <li key={d.id}>
-                    <Badge variant="primary">
-                      {d.departure_date} — {d.available_seats} seats
-                    </Badge>
-                  </li>
-                ))}
-              </ul>
+            <div className="lg:w-80 lg:shrink-0">
+              <div id="book-section" className="scroll-mt-24 lg:sticky lg:top-20">
+                <BookTourSection tour={tour} />
+              </div>
             </div>
           )}
-
-          <div className="mt-6 grid gap-6 sm:grid-cols-2">
-            {tour.meals.length > 0 && (
-              <div>
-                <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Meals</h2>
-                <ul className="mt-2 text-sm capitalize text-zinc-600 dark:text-zinc-400">
-                  {tour.meals.map((m) => <li key={m.id}>{m.meal_type}</li>)}
-                </ul>
-              </div>
-            )}
-            {tour.activities.length > 0 && (
-              <div>
-                <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Activities</h2>
-                <ul className="mt-2 flex flex-col gap-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  {tour.activities.map((a) => (
-                    <li key={a.id}>
-                      {a.name}
-                      {a.duration_hours && <span className="text-zinc-400"> · {a.duration_hours}h</span>}
-                      {a.difficulty && <span className="text-zinc-400"> · {a.difficulty}</span>}
-                      {a.min_age != null && <span className="text-zinc-400"> · {a.min_age}+ yrs</span>}
-                      {a.guide_required && <span className="text-zinc-400"> · guide required</span>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {tour.transport.length > 0 && (
-              <div>
-                <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Transport</h2>
-                <ul className="mt-2 flex flex-col gap-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  {tour.transport.map((t) => (
-                    <li key={t.id}>
-                      {t.mode}
-                      {t.vehicle_type && <span className="text-zinc-400"> · {t.vehicle_type}</span>}
-                      {t.has_ac && <span className="text-zinc-400"> · AC</span>}
-                      {t.capacity && <span className="text-zinc-400"> · {t.capacity} seats</span>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {tour.stays.length > 0 && (
-              <div>
-                <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Stays</h2>
-                <ul className="mt-2 flex flex-col gap-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  {tour.stays.map((s) => (
-                    <li key={s.id}>
-                      {s.description} ({s.nights} nights)
-                      {s.property_type && <span className="text-zinc-400"> · {s.property_type}</span>}
-                      {s.room_category && <span className="text-zinc-400"> · {s.room_category}</span>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {tour.addons.length > 0 && (
-              <div>
-                <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Optional add-ons</h2>
-                <ul className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  {tour.addons.map((a) => <li key={a.id}>{a.name} — {formatMoney(a.price)}</li>)}
-                </ul>
-              </div>
-            )}
-          </div>
-
-          {(tour.cancellation_policy ||
-            tour.refund_policy ||
-            tour.child_policy ||
-            tour.emergency_contact_phone ||
-            tour.weather_risk_note ||
-            tour.activity_risk_note) && (
-            <div className="mt-6 grid gap-6 sm:grid-cols-2">
-              {(tour.cancellation_policy || tour.refund_policy || tour.child_policy) && (
-                <div>
-                  <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Policies</h2>
-                  <ul className="mt-2 flex flex-col gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                    {tour.cancellation_policy && (
-                      <li>
-                        <span className="font-medium text-zinc-700 dark:text-zinc-300">Cancellation: </span>
-                        {tour.cancellation_policy}
-                      </li>
-                    )}
-                    {tour.refund_policy && (
-                      <li>
-                        <span className="font-medium text-zinc-700 dark:text-zinc-300">Refund: </span>
-                        {tour.refund_policy}
-                      </li>
-                    )}
-                    {tour.child_policy && (
-                      <li>
-                        <span className="font-medium text-zinc-700 dark:text-zinc-300">Children: </span>
-                        {tour.child_policy}
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              )}
-              {(tour.emergency_contact_phone || tour.weather_risk_note || tour.activity_risk_note) && (
-                <div>
-                  <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Safety</h2>
-                  <ul className="mt-2 flex flex-col gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                    {tour.emergency_contact_phone && (
-                      <li>
-                        <span className="font-medium text-zinc-700 dark:text-zinc-300">Emergency contact: </span>
-                        {tour.emergency_contact_phone}
-                      </li>
-                    )}
-                    {tour.weather_risk_note && (
-                      <li>
-                        <span className="font-medium text-zinc-700 dark:text-zinc-300">Weather: </span>
-                        {tour.weather_risk_note}
-                      </li>
-                    )}
-                    {tour.activity_risk_note && (
-                      <li>
-                        <span className="font-medium text-zinc-700 dark:text-zinc-300">Activity risk: </span>
-                        {tour.activity_risk_note}
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="mt-10">
-            <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Reviews</h2>
-            <div className="mt-2">
-              <ReviewsList tourId={tour.id} />
-            </div>
-          </div>
-
-          <FrequentlyBookedWith endpoint={`/api/v1/tours/${tour.id}/frequently-booked-with`} />
-          <SimilarTours tourId={tour.id} />
         </div>
 
         {tour.departures.length > 0 && (
-          <div className="lg:w-80 lg:shrink-0">
-            <div id="book-section" className="scroll-mt-24 lg:sticky lg:top-20">
-              <BookTourSection tour={tour} />
-            </div>
-          </div>
+          <MobileBookBar priceLabel={formatMoney(tour.base_price)} priceSuffix="/ person" />
         )}
       </div>
+    </div>
+  );
+}
 
-      {tour.departures.length > 0 && (
-        <MobileBookBar priceLabel={formatMoney(tour.base_price)} priceSuffix="/ person" />
-      )}
+function Section({ title, icon, children }: { title?: string; icon?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
+      <Card variant="elevated">
+        {title && (
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            {icon && <span className="text-primary-600 dark:text-primary-400">{icon}</span>}
+            {title}
+          </h2>
+        )}
+        <div className={title ? "mt-4" : undefined}>{children}</div>
+      </Card>
+    </motion.div>
+  );
+}
+
+function InclusionGroup({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+        {icon} {title}
+      </p>
+      <ul className="mt-2 flex flex-col gap-1.5">{children}</ul>
+    </div>
+  );
+}
+
+function InclusionChip({ children }: { children: React.ReactNode }) {
+  return <li className="text-sm capitalize text-zinc-700 dark:text-zinc-300">{children}</li>;
+}
+
+function PolicyRow({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-2.5 text-sm">
+      <span className="mt-0.5 shrink-0 text-primary-600 dark:text-primary-400">{icon}</span>
+      <p className="text-zinc-600 dark:text-zinc-400">
+        <span className="font-medium text-zinc-900 dark:text-zinc-50">{label}: </span>
+        {children}
+      </p>
     </div>
   );
 }
@@ -343,14 +444,14 @@ function BookTourSection({ tour }: { tour: Tour }) {
 
   return (
     <Card variant="elevated">
-      <p className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+      <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
         {formatMoney(price)} <span className="text-sm font-normal text-zinc-500">/ person</span>
       </p>
       <p className="text-xs text-zinc-400">
         <ApproxPrice amountBDT={price} />
       </p>
       {(tour.child_price || tour.infant_price || tour.tax_rate || tour.service_charge_rate || tour.deposit_percentage) && (
-        <ul className="mt-2 flex flex-col gap-0.5 text-xs text-zinc-500">
+        <ul className="mt-3 flex flex-col gap-1 rounded-xl bg-zinc-50 p-3 text-xs text-zinc-500 dark:bg-zinc-900/40">
           {tour.child_price && <li>Child: {formatMoney(tour.child_price)}</li>}
           {tour.infant_price && <li>Infant: {formatMoney(tour.infant_price)}</li>}
           {tour.tax_rate && <li>+{(Number(tour.tax_rate) * 100).toFixed(0)}% tax</li>}
@@ -363,7 +464,7 @@ function BookTourSection({ tour }: { tour: Tour }) {
           )}
         </ul>
       )}
-      <div className="mt-4 flex flex-col gap-3">
+      <div className="mt-5 flex flex-col gap-3">
         <Select label="Departure date" value={departureId} onChange={(e) => setDepartureId(e.target.value)}>
           {tour.departures.map((d) => (
             <option key={d.id} value={d.id} disabled={d.available_seats < 1}>
@@ -391,7 +492,7 @@ function BookTourSection({ tour }: { tour: Tour }) {
         </div>
         <div className="flex items-center justify-between border-t border-zinc-100 pt-3 text-sm dark:border-zinc-800">
           <span className="text-zinc-500">Total</span>
-          <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span>
+          <span className="text-lg font-bold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span>
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <Button
