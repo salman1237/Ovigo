@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Building2, Upload, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
@@ -8,6 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
+import { Switch } from "@/components/ui/Switch";
 import { Textarea } from "@/components/ui/Textarea";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
@@ -21,18 +23,30 @@ export default function ProfileSettingsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
-      <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Public Profiles</h1>
+    <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-10 sm:px-6 sm:py-12">
+      <h1 className="text-2xl font-bold text-zinc-900 sm:text-3xl dark:text-zinc-50">Public Profiles</h1>
       <p className="mt-1 text-sm text-zinc-500">
         These are shown to travelers browsing experts and hosts. Requires an approved partner role of the
         matching type.
       </p>
 
-      <div className="mt-6 flex flex-col gap-6">
+      <div className="mt-8 flex flex-col gap-6">
         <ExpertProfileCard />
         <HostProfileCard />
       </div>
     </div>
+  );
+}
+
+function Section({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <Card variant="elevated">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+        {icon && <span className="text-primary-600 dark:text-primary-400">{icon}</span>}
+        {title}
+      </h2>
+      <div className="mt-4">{children}</div>
+    </Card>
   );
 }
 
@@ -58,6 +72,25 @@ function ProfilePhoto({ src, alt }: { src: string; alt: string }) {
   return <img src={url} alt={alt} className="h-16 w-16 rounded-full object-cover" />;
 }
 
+function PhotoUpload({ onUpload }: { onUpload: (file: File) => void }) {
+  return (
+    <label className="flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3.5 text-sm text-zinc-600 shadow-sm transition-colors hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-primary-700 dark:hover:bg-zinc-800">
+      <Upload className="h-4 w-4" />
+      Upload photo
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onUpload(file);
+          e.target.value = "";
+        }}
+        className="hidden"
+      />
+    </label>
+  );
+}
+
 function ExpertProfileCard() {
   const { data: profile, isLoading, isError, error: queryError } = useQuery({
     queryKey: ["my-expert-profile"],
@@ -69,19 +102,14 @@ function ExpertProfileCard() {
   const otherError = isError && !notEligible;
 
   return (
-    <Card>
-      <h2 className="font-medium text-zinc-900 dark:text-zinc-50">Local Expert Profile</h2>
+    <Section title="Local Expert Profile" icon={<UserRound className="h-4 w-4" />}>
       {isLoading && <Spinner />}
-      {notEligible && <p className="mt-2 text-sm text-zinc-500">You need an approved Local Expert role to set this up.</p>}
-      {otherError && (
-        <div className="mt-2">
-          <ErrorState message="Couldn't load your expert profile. Try signing out and back in." />
-        </div>
-      )}
+      {notEligible && <p className="text-sm text-zinc-500">You need an approved Local Expert role to set this up.</p>}
+      {otherError && <ErrorState message="Couldn't load your expert profile. Try signing out and back in." />}
       {!isLoading && !notEligible && !otherError && (
         <ExpertProfileForm key={profile?.id ?? "new"} profile={profile ?? null} />
       )}
-    </Card>
+    </Section>
   );
 }
 
@@ -126,21 +154,12 @@ function ExpertProfileForm({ profile }: { profile: LocalExpertProfile | null }) 
   };
 
   return (
-    <div className="mt-3 flex flex-col gap-3">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
         {profile?.has_photo && (
           <ProfilePhoto src={`/api/v1/partners/profiles/expert/${profile.partner_role_id}/photo/file`} alt="Profile photo" />
         )}
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) uploadPhoto(file);
-            e.target.value = "";
-          }}
-          className="text-xs"
-        />
+        <PhotoUpload onUpload={uploadPhoto} />
       </div>
 
       <Input value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="Headline (e.g. Cox's Bazar specialist)" />
@@ -153,8 +172,8 @@ function ExpertProfileForm({ profile }: { profile: LocalExpertProfile | null }) 
         placeholder="Years of experience"
         className="w-44"
       />
-      <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-        <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} />
+      <label className="flex items-center gap-2.5 text-sm text-zinc-600 dark:text-zinc-400">
+        <Switch checked={isPublished} onChange={setIsPublished} label="Published (visible in search)" />
         Published (visible in search)
       </label>
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -176,19 +195,14 @@ function HostProfileCard() {
   const otherError = isError && !notEligible;
 
   return (
-    <Card>
-      <h2 className="font-medium text-zinc-900 dark:text-zinc-50">Host Profile</h2>
+    <Section title="Host Profile" icon={<Building2 className="h-4 w-4" />}>
       {isLoading && <Spinner />}
-      {notEligible && <p className="mt-2 text-sm text-zinc-500">You need an approved Host or Hotel role to set this up.</p>}
-      {otherError && (
-        <div className="mt-2">
-          <ErrorState message="Couldn't load your host profile. Try signing out and back in." />
-        </div>
-      )}
+      {notEligible && <p className="text-sm text-zinc-500">You need an approved Host or Hotel role to set this up.</p>}
+      {otherError && <ErrorState message="Couldn't load your host profile. Try signing out and back in." />}
       {!isLoading && !notEligible && !otherError && (
         <HostProfileForm key={profile?.id ?? "new"} profile={profile ?? null} />
       )}
-    </Card>
+    </Section>
   );
 }
 
@@ -232,27 +246,18 @@ function HostProfileForm({ profile }: { profile: HostProfile | null }) {
   };
 
   return (
-    <div className="mt-3 flex flex-col gap-3">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
         {profile?.has_photo && (
           <ProfilePhoto src={`/api/v1/partners/profiles/host/${profile.partner_role_id}/photo/file`} alt="Profile photo" />
         )}
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) uploadPhoto(file);
-            e.target.value = "";
-          }}
-          className="text-xs"
-        />
+        <PhotoUpload onUpload={uploadPhoto} />
       </div>
 
       <Input value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="Business name" />
       <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Bio" rows={3} />
-      <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-        <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} />
+      <label className="flex items-center gap-2.5 text-sm text-zinc-600 dark:text-zinc-400">
+        <Switch checked={isPublished} onChange={setIsPublished} label="Published (visible in search)" />
         Published (visible in search)
       </label>
       {error && <p className="text-sm text-red-600">{error}</p>}

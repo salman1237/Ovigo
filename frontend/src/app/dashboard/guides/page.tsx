@@ -3,6 +3,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { ClipboardCheck, MailPlus, UserPlus, Users } from "lucide-react";
+
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -20,6 +22,18 @@ import {
   Supervision,
 } from "@/types/guides";
 import type { Tour } from "@/types/tour";
+
+function Section({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <Card variant="elevated">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+        {icon && <span className="text-primary-600 dark:text-primary-400">{icon}</span>}
+        {title}
+      </h2>
+      <div className="mt-4">{children}</div>
+    </Card>
+  );
+}
 
 export default function MyGuidesPage() {
   const queryClient = useQueryClient();
@@ -78,7 +92,9 @@ export default function MyGuidesPage() {
   if (notEligible) {
     return (
       <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">My Guides</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+          <Users className="h-6 w-6 text-primary-600 dark:text-primary-400" /> My Guides
+        </h1>
         <p className="mt-4 text-sm text-zinc-500">This is for approved Local Experts only.</p>
       </div>
     );
@@ -90,61 +106,77 @@ export default function MyGuidesPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
-      <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">My Guides</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+        <Users className="h-6 w-6 text-primary-600 dark:text-primary-400" /> My Guides
+      </h1>
       <p className="mt-1 text-sm text-zinc-500">
         Invite someone who already has an Ovigo account to be your supervised Guide.
       </p>
 
-      <div className="mt-4 flex gap-2">
-        <Input
-          type="email"
-          value={inviteEmail}
-          onChange={(e) => setInviteEmail(e.target.value)}
-          placeholder="Guide's email"
-          className="flex-1"
-        />
-        <Button onClick={invite} loading={inviteBusy} disabled={!inviteEmail}>
-          Invite
-        </Button>
-      </div>
-      {inviteError && <p className="mt-1 text-sm text-red-600">{inviteError}</p>}
+      <div className="mt-6 flex flex-col gap-6">
+        <Section title="Invite a guide" icon={<MailPlus className="h-4 w-4" />}>
+          <div className="flex gap-2">
+            <Input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="Guide's email"
+              className="flex-1"
+            />
+            <Button onClick={invite} loading={inviteBusy} disabled={!inviteEmail}>
+              <UserPlus className="h-4 w-4" /> Invite
+            </Button>
+          </div>
+          {inviteError && <p className="mt-2 text-sm text-red-600">{inviteError}</p>}
+        </Section>
 
-      {isLoading && <Spinner />}
+        {isLoading && (
+          <div className="flex justify-center">
+            <Spinner />
+          </div>
+        )}
 
-      <div className="mt-6 flex flex-col gap-3">
-        {(guides ?? []).map((s) => (
-          <GuideCard key={s.id} supervision={s} departures={departures} onChange={refetch} />
-        ))}
-        {!isLoading && (guides ?? []).length === 0 && (
-          <EmptyState title="No guides invited yet" description="Invite someone by email above." />
+        <Section title="Guides" icon={<Users className="h-4 w-4" />}>
+          <div className="flex flex-col gap-3">
+            {(guides ?? []).map((s) => (
+              <GuideCard key={s.id} supervision={s} departures={departures} onChange={refetch} />
+            ))}
+            {!isLoading && (guides ?? []).length === 0 && (
+              <EmptyState title="No guides invited yet" description="Invite someone by email above." />
+            )}
+          </div>
+        </Section>
+
+        {(assignments ?? []).length > 0 && (
+          <Section title="Assignments" icon={<ClipboardCheck className="h-4 w-4" />}>
+            <ul className="flex flex-col gap-2">
+              {(assignments ?? []).map((a) => (
+                <li
+                  key={a.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50/60 px-3.5 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-900/40"
+                >
+                  <div>
+                    <p className="font-medium text-zinc-900 dark:text-zinc-50">
+                      {a.guide.full_name} → {a.departure.tour_title} ({a.departure.departure_date})
+                    </p>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
+                      <Badge variant={a.status === "completed" ? "success" : a.status === "cancelled" ? "danger" : "neutral"} className="capitalize">
+                        {ASSIGNMENT_STATUS_LABELS[a.status]}
+                      </Badge>
+                      {a.fee_amount && <span>Fee: {formatMoney(a.fee_amount)}</span>}
+                    </div>
+                  </div>
+                  {(a.status === "assigned" || a.status === "checked_in") && (
+                    <button onClick={() => cancelAssignment(a.id)} className="shrink-0 text-xs font-medium text-red-600 hover:text-red-700">
+                      Cancel
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Section>
         )}
       </div>
-
-      {(assignments ?? []).length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Assignments</h2>
-          <div className="mt-2 flex flex-col gap-2">
-            {(assignments ?? []).map((a) => (
-              <Card key={a.id} className="flex items-center justify-between p-3 text-sm">
-                <div>
-                  <p className="font-medium text-zinc-900 dark:text-zinc-50">
-                    {a.guide.full_name} → {a.departure.tour_title} ({a.departure.departure_date})
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    {ASSIGNMENT_STATUS_LABELS[a.status]}
-                    {a.fee_amount && ` · Fee: ${formatMoney(a.fee_amount)}`}
-                  </p>
-                </div>
-                {(a.status === "assigned" || a.status === "checked_in") && (
-                  <button onClick={() => cancelAssignment(a.id)} className="text-xs font-medium text-red-600 hover:text-red-700">
-                    Cancel
-                  </button>
-                )}
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -189,15 +221,15 @@ function GuideCard({
   };
 
   return (
-    <Card>
-      <div className="flex items-center justify-between">
+    <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="font-medium text-zinc-900 dark:text-zinc-50">{supervision.guide.full_name}</h3>
           <p className="text-xs text-zinc-500">{supervision.guide.email}</p>
         </div>
-        <Badge>
+        <Badge variant={supervision.status === "accepted" ? "success" : supervision.status === "rejected" || supervision.status === "terminated" ? "danger" : "neutral"} className="shrink-0 capitalize">
           {SUPERVISION_STATUS_LABELS[supervision.status]}
-          {supervision.status === "accepted" && !supervision.guide_role_approved && " (role pending admin approval)"}
+          {supervision.status === "accepted" && !supervision.guide_role_approved && " · role pending admin approval"}
         </Badge>
       </div>
 
@@ -209,7 +241,7 @@ function GuideCard({
             </Button>
           )}
           {showAssign && (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 rounded-xl border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
               <Select value={departureId} onChange={(e) => setDepartureId(e.target.value)}>
                 <option value="">Select a departure…</option>
                 {departures.map((d) => (
@@ -232,6 +264,6 @@ function GuideCard({
           )}
         </div>
       )}
-    </Card>
+    </div>
   );
 }

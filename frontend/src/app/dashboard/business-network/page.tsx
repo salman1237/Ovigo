@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, Copy, Network, Plus, X } from "lucide-react";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/Badge";
@@ -33,19 +34,29 @@ export default function BusinessNetworkPage() {
 
   if (notEligible) {
     return (
-      <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Business Network</h1>
+      <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-10 sm:px-6 sm:py-12">
+        <h1 className="text-2xl font-bold text-zinc-900 sm:text-3xl dark:text-zinc-50">Business Network</h1>
         <p className="mt-4 text-sm text-zinc-500">This is for approved Local Experts only.</p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Business Network</h1>
+    <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-10 sm:px-6 sm:py-12">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-zinc-900 sm:text-3xl dark:text-zinc-50">Business Network</h1>
         <Button size="sm" variant={showForm ? "secondary" : "primary"} onClick={() => setShowForm((s) => !s)}>
-          {showForm ? "Cancel" : "Add business"}
+          {showForm ? (
+            <>
+              <X className="h-3.5 w-3.5" />
+              Cancel
+            </>
+          ) : (
+            <>
+              <Plus className="h-3.5 w-3.5" />
+              Add business
+            </>
+          )}
         </Button>
       </div>
       <p className="mt-1 text-sm text-zinc-500">
@@ -53,25 +64,35 @@ export default function BusinessNetworkPage() {
       </p>
 
       {showForm && (
-        <ReferralForm
-          onCreated={() => {
-            setShowForm(false);
-            refetch();
-          }}
-        />
-      )}
-
-      {isLoading && <Spinner />}
-      {!isLoading && (referrals ?? []).length === 0 && (
         <div className="mt-6">
-          <EmptyState title="No businesses yet" description="Add a local business you own or trust above." />
+          <ReferralForm
+            onCreated={() => {
+              setShowForm(false);
+              refetch();
+            }}
+          />
         </div>
       )}
 
-      <div className="mt-6 flex flex-col gap-3">
-        {(referrals ?? []).map((r) => (
-          <ReferralCard key={r.id} referral={r} onChange={refetch} />
-        ))}
+      <div className="mt-8">
+        <Card variant="elevated">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            <span className="text-primary-600 dark:text-primary-400">
+              <Network className="h-4 w-4" />
+            </span>
+            Your businesses
+          </h2>
+
+          <div className="mt-4 flex flex-col gap-3">
+            {isLoading && <Spinner />}
+            {!isLoading && (referrals ?? []).length === 0 && (
+              <EmptyState title="No businesses yet" description="Add a local business you own or trust above." />
+            )}
+            {(referrals ?? []).map((r) => (
+              <ReferralCard key={r.id} referral={r} onChange={refetch} />
+            ))}
+          </div>
+        </Card>
       </div>
     </div>
   );
@@ -98,8 +119,8 @@ function ReferralCard({ referral: r, onChange }: { referral: BusinessReferral; o
   const claimUrl = r.invite_token ? `${window.location.origin}/business-network/claim/${r.invite_token}` : null;
 
   return (
-    <Card>
-      <div className="flex items-center justify-between">
+    <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 px-3.5 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-900/40">
+      <div className="flex items-center justify-between gap-3">
         <h3 className="font-medium text-zinc-900 dark:text-zinc-50">{r.business_name}</h3>
         <div className="flex items-center gap-1.5">
           {r.is_business_verified && <Badge variant="success">Verified</Badge>}
@@ -115,7 +136,7 @@ function ReferralCard({ referral: r, onChange }: { referral: BusinessReferral; o
       )}
 
       {r.ownership_type === "referred" && r.status === "approved" && (
-        <div className="mt-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+        <div className="mt-2 border-t border-zinc-200 pt-2 dark:border-zinc-800">
           {r.invite_token ? (
             <div className="flex flex-col gap-1">
               <p className="text-xs text-zinc-500">
@@ -133,7 +154,17 @@ function ReferralCard({ referral: r, onChange }: { referral: BusinessReferral; o
                       setTimeout(() => setCopied(false), 2000);
                     }}
                   >
-                    {copied ? "Copied!" : "Copy"}
+                    {copied ? (
+                      <>
+                        <Check className="h-3.5 w-3.5" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy
+                      </>
+                    )}
                   </Button>
                 </div>
               )}
@@ -146,7 +177,7 @@ function ReferralCard({ referral: r, onChange }: { referral: BusinessReferral; o
           {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -185,13 +216,19 @@ function ReferralForm({ onCreated }: { onCreated: () => void }) {
   };
 
   return (
-    <Card className="mt-4 flex flex-col gap-3">
+    <Card variant="elevated" className="flex flex-col gap-3">
+      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Add a business</h2>
       <Input value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="Business name" />
       <Input value={businessType} onChange={(e) => setBusinessType(e.target.value)} placeholder="Type (e.g. restaurant, shop, transport)" />
       <div className="flex gap-4">
         {(["owned", "referred"] as OwnershipType[]).map((t) => (
-          <label key={t} className="flex items-center gap-1.5 text-xs">
-            <input type="radio" checked={ownershipType === t} onChange={() => setOwnershipType(t)} />
+          <label key={t} className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+            <input
+              type="radio"
+              checked={ownershipType === t}
+              onChange={() => setOwnershipType(t)}
+              className="h-3.5 w-3.5 accent-primary-600"
+            />
             {OWNERSHIP_TYPE_LABELS[t]}
           </label>
         ))}

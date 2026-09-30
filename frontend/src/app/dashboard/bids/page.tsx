@@ -1,8 +1,10 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Boxes, Coins, Gavel, ListTree, MessageCircleQuestion, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -39,7 +41,9 @@ export default function ExpertBidsPage() {
   if (notEligibleRole) {
     return (
       <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Custom Tour Bids</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+          <Gavel className="h-6 w-6 text-primary-600 dark:text-primary-400" /> Custom Tour Bids
+        </h1>
         <p className="mt-4 text-sm text-zinc-500">
           This is for approved Local Experts only. Apply to become one from &quot;Become a Partner&quot;.
         </p>
@@ -49,7 +53,9 @@ export default function ExpertBidsPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
-      <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Custom Tour Bids</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+        <Gavel className="h-6 w-6 text-primary-600 dark:text-primary-400" /> Custom Tour Bids
+      </h1>
       <p className="mt-1 text-sm text-zinc-500">
         Requests here are filtered to destinations you&apos;re tagged for.
       </p>
@@ -110,6 +116,15 @@ const emptyBidForm = {
   cancellationTerms: "",
   validUntil: "",
 };
+
+function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">{label}</p>
+      <div className="mt-2 flex flex-col gap-2">{children}</div>
+    </div>
+  );
+}
 
 function RequestCard({ request, onBidSubmitted }: { request: CustomTourRequest; onBidSubmitted: () => void }) {
   const [showForm, setShowForm] = useState(false);
@@ -189,8 +204,8 @@ function RequestCard({ request, onBidSubmitted }: { request: CustomTourRequest; 
   };
 
   return (
-    <Card>
-      <h3 className="font-medium text-zinc-900 dark:text-zinc-50">{request.title}</h3>
+    <Card variant="elevated">
+      <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">{request.title}</h3>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{request.description}</p>
       <p className="mt-1 text-xs text-zinc-500">
         {request.start_date} → {request.end_date} · {request.adults} adult{request.adults === 1 ? "" : "s"}
@@ -211,7 +226,10 @@ function RequestCard({ request, onBidSubmitted }: { request: CustomTourRequest; 
       )}
 
       {(myQuestions ?? []).length > 0 && (
-        <div className="mt-2 flex flex-col gap-1 border-t border-zinc-100 pt-2 text-xs dark:border-zinc-800">
+        <div className="mt-3 flex flex-col gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900/40">
+          <p className="flex items-center gap-1.5 font-semibold text-zinc-600 dark:text-zinc-300">
+            <MessageCircleQuestion className="h-3.5 w-3.5 text-primary-600 dark:text-primary-400" /> Your questions
+          </p>
           {(myQuestions ?? []).map((q) => (
             <p key={q.id}>
               <span className="text-zinc-500">Q: {q.question}</span>
@@ -249,51 +267,63 @@ function RequestCard({ request, onBidSubmitted }: { request: CustomTourRequest; 
       {questionError && <p className="mt-1 text-xs text-red-600">{questionError}</p>}
 
       {showForm && (
-        <div className="mt-3 flex flex-col gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-          <div className="grid grid-cols-2 gap-2">
-            <Input type="number" value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} placeholder="Your price (৳)" />
-            <Input type="date" value={form.validUntil} onChange={(e) => setForm((f) => ({ ...f, validUntil: e.target.value }))} placeholder="Bid valid until" />
-          </div>
-          <Textarea value={form.message} onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))} placeholder="Message to the traveler (optional)" rows={2} />
-
-          <p className="text-xs font-medium text-zinc-500">Itinerary</p>
-          {itinerary.map((day, i) => (
-            <div key={i} className="flex gap-2">
-              <span className="mt-2 text-xs text-zinc-400">Day {day.day_number}</span>
-              <Input value={day.title} onChange={(e) => updateDay(i, "title", e.target.value)} placeholder="Title" className="flex-1" />
-              <Input value={day.description ?? ""} onChange={(e) => updateDay(i, "description", e.target.value)} placeholder="Details (optional)" className="flex-1" />
+        <div className="mt-4 flex flex-col gap-5 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+          <FieldGroup label="Bid details">
+            <div className="grid grid-cols-2 gap-2">
+              <Input type="number" value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} placeholder="Your price (৳)" />
+              <Input type="date" value={form.validUntil} onChange={(e) => setForm((f) => ({ ...f, validUntil: e.target.value }))} placeholder="Bid valid until" />
             </div>
-          ))}
-          <button onClick={addDay} type="button" className="self-start text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
-            + Add another day
-          </button>
+            <Textarea value={form.message} onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))} placeholder="Message to the traveler (optional)" rows={2} />
+          </FieldGroup>
 
-          <div className="grid grid-cols-3 gap-2">
-            <Input value={form.stayName} onChange={(e) => setForm((f) => ({ ...f, stayName: e.target.value }))} placeholder="Stay name" />
-            <Input value={form.transportDetails} onChange={(e) => setForm((f) => ({ ...f, transportDetails: e.target.value }))} placeholder="Transport details" />
-            <Input value={form.foodMenu} onChange={(e) => setForm((f) => ({ ...f, foodMenu: e.target.value }))} placeholder="Food menu" />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Input value={form.includedServices} onChange={(e) => setForm((f) => ({ ...f, includedServices: e.target.value }))} placeholder="Included services" />
-            <Input value={form.excludedServices} onChange={(e) => setForm((f) => ({ ...f, excludedServices: e.target.value }))} placeholder="Excluded services" />
-          </div>
-
-          <p className="text-xs font-medium text-zinc-500">Add-ons</p>
-          {addons.map((a, i) => (
-            <div key={i} className="flex gap-2">
-              <Input value={a.name} onChange={(e) => updateAddon(i, "name", e.target.value)} placeholder="Add-on name" className="flex-1" />
-              <Input value={a.price} onChange={(e) => updateAddon(i, "price", e.target.value)} placeholder="Price" className="w-28" />
+          <FieldGroup label="Itinerary">
+            <div className="flex flex-col gap-2 rounded-xl border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
+              {itinerary.map((day, i) => (
+                <div key={i} className="flex gap-2">
+                  <span className="mt-2 shrink-0 text-xs text-zinc-400">Day {day.day_number}</span>
+                  <Input value={day.title} onChange={(e) => updateDay(i, "title", e.target.value)} placeholder="Title" className="flex-1" />
+                  <Input value={day.description ?? ""} onChange={(e) => updateDay(i, "description", e.target.value)} placeholder="Details (optional)" className="flex-1" />
+                </div>
+              ))}
+              <button onClick={addDay} type="button" className="self-start text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                <ListTree className="mr-1 inline h-3 w-3" /> Add another day
+              </button>
             </div>
-          ))}
-          <button onClick={addAddon} type="button" className="self-start text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
-            + Add an add-on
-          </button>
+          </FieldGroup>
 
-          <div className="grid grid-cols-2 gap-2">
-            <Input value={form.taxAmount} onChange={(e) => setForm((f) => ({ ...f, taxAmount: e.target.value }))} placeholder="Tax amount (৳)" />
-            <Input value={form.depositAmount} onChange={(e) => setForm((f) => ({ ...f, depositAmount: e.target.value }))} placeholder="Deposit amount (৳)" />
-          </div>
-          <Textarea value={form.cancellationTerms} onChange={(e) => setForm((f) => ({ ...f, cancellationTerms: e.target.value }))} placeholder="Cancellation terms" rows={2} />
+          <FieldGroup label="Inclusions">
+            <div className="grid grid-cols-3 gap-2">
+              <Input value={form.stayName} onChange={(e) => setForm((f) => ({ ...f, stayName: e.target.value }))} placeholder="Stay name" />
+              <Input value={form.transportDetails} onChange={(e) => setForm((f) => ({ ...f, transportDetails: e.target.value }))} placeholder="Transport details" />
+              <Input value={form.foodMenu} onChange={(e) => setForm((f) => ({ ...f, foodMenu: e.target.value }))} placeholder="Food menu" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Input value={form.includedServices} onChange={(e) => setForm((f) => ({ ...f, includedServices: e.target.value }))} placeholder="Included services" />
+              <Input value={form.excludedServices} onChange={(e) => setForm((f) => ({ ...f, excludedServices: e.target.value }))} placeholder="Excluded services" />
+            </div>
+          </FieldGroup>
+
+          <FieldGroup label="Add-ons">
+            <div className="flex flex-col gap-2 rounded-xl border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
+              {addons.map((a, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input value={a.name} onChange={(e) => updateAddon(i, "name", e.target.value)} placeholder="Add-on name" className="flex-1" />
+                  <Input value={a.price} onChange={(e) => updateAddon(i, "price", e.target.value)} placeholder="Price" className="w-28" />
+                </div>
+              ))}
+              <button onClick={addAddon} type="button" className="self-start text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                <Boxes className="mr-1 inline h-3 w-3" /> Add an add-on
+              </button>
+            </div>
+          </FieldGroup>
+
+          <FieldGroup label="Terms">
+            <div className="grid grid-cols-2 gap-2">
+              <Input value={form.taxAmount} onChange={(e) => setForm((f) => ({ ...f, taxAmount: e.target.value }))} placeholder="Tax amount (৳)" />
+              <Input value={form.depositAmount} onChange={(e) => setForm((f) => ({ ...f, depositAmount: e.target.value }))} placeholder="Deposit amount (৳)" />
+            </div>
+            <Textarea value={form.cancellationTerms} onChange={(e) => setForm((f) => ({ ...f, cancellationTerms: e.target.value }))} placeholder="Cancellation terms" rows={2} />
+          </FieldGroup>
 
           {error && <p className="text-xs text-red-600">{error}</p>}
           <div className="flex gap-2">
@@ -344,18 +374,27 @@ function MyBidCard({ bid, onChange }: { bid: TourBid; onChange: () => void }) {
     }
   };
 
+  const statusVariant =
+    bid.status === "accepted" ? "success" : bid.status === "rejected" || bid.status === "withdrawn" ? "danger" : "neutral";
+
   return (
     <Card variant={bid.is_shortlisted ? "elevated" : "flat"}>
       <div className="flex items-center justify-between">
         {editing ? (
           <Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} className="w-32" />
         ) : (
-          <span className="text-lg font-semibold text-primary-600 dark:text-primary-400">{formatMoney(bid.price)}</span>
+          <span className="flex items-center gap-1.5 text-lg font-semibold text-primary-600 dark:text-primary-400">
+            <Coins className="h-4 w-4" /> {formatMoney(bid.price)}
+          </span>
         )}
-        <span className="text-xs capitalize text-zinc-500">
-          {BID_STATUS_LABELS[bid.status]}
-          {bid.is_shortlisted && " · Shortlisted"}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <Badge variant={statusVariant} className="capitalize">{BID_STATUS_LABELS[bid.status]}</Badge>
+          {bid.is_shortlisted && (
+            <Badge variant="accent" className="gap-1">
+              <ShieldCheck className="h-3 w-3" /> Shortlisted
+            </Badge>
+          )}
+        </div>
       </div>
       {editing ? (
         <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={2} className="mt-2" />
