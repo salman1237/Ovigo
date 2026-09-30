@@ -45,6 +45,7 @@ from app.modules.esim.router import admin_router as esim_admin_router
 from app.modules.esim.router import router as esim_router
 from app.modules.fraud.router import router as fraud_router
 from app.modules.fx.router import router as fx_router
+from app.modules.geocoding.router import router as geocoding_router
 from app.modules.guides.router import admin_router as guides_admin_router
 from app.modules.guides.router import router as guides_router
 from app.modules.locations.router import router as locations_router
@@ -62,6 +63,8 @@ from app.modules.promotions.router import router as promotions_router
 from app.modules.rentcar.router import drivers_router as rentcar_drivers_router
 from app.modules.rentcar.router import router as rentcar_router
 from app.modules.reviews.router import router as reviews_router
+from app.modules.ride_requests.router import bids_router as ride_bids_router
+from app.modules.ride_requests.router import router as ride_requests_router
 from app.modules.search.router import router as search_router
 from app.modules.stays.router import ical_router as stays_ical_router
 from app.modules.stays.router import router as stays_router
@@ -96,6 +99,8 @@ OPENAPI_TAGS = [
     {"name": "fx", "description": "Live currency-conversion rates for display only — every booking is still charged in BDT."},
     {"name": "guides", "description": "Guide invitations and assignments a Local Expert manages."},
     {"name": "custom-tour-bidding", "description": "A traveler's custom trip request and the bids Local Experts submit on it."},
+    {"name": "rent-a-car-bidding", "description": "A traveler's ride request (pickup/drop-off route) and the bids Rent-a-Car partners submit on it."},
+    {"name": "geocoding", "description": "Free-text and reverse geocoding for the ride-request map picker, proxied through OpenStreetMap's Nominatim."},
     {"name": "business-network", "description": "Partner-to-partner referrals."},
     {"name": "partners", "description": "Applying for and managing a partner role (Local Expert, Host, Rent-a-Car, ...)."},
     {"name": "badges", "description": "Trust badge applications a partner submits for admin review."},
@@ -170,6 +175,9 @@ app.include_router(stays_staff_router)
 app.include_router(stays_ical_router)
 app.include_router(rentcar_router)
 app.include_router(rentcar_drivers_router)
+app.include_router(ride_requests_router)
+app.include_router(ride_bids_router)
+app.include_router(geocoding_router)
 app.include_router(search_router)
 app.include_router(bookings_router)
 app.include_router(front_desk_router)

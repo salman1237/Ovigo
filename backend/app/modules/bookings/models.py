@@ -58,6 +58,7 @@ class BookingItemType(str, enum.Enum):
     ROOM_TYPE = "room_type"
     CUSTOM_BID = "custom_bid"
     VEHICLE_RENTAL = "vehicle_rental"
+    RIDE_BID = "ride_bid"
 
 
 class BookingItemStatus(str, enum.Enum):
@@ -131,6 +132,9 @@ class BookingItem(Base):
     )
     custom_bid_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tour_bids.id", ondelete="SET NULL"), nullable=True
+    )
+    ride_bid_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("ride_bids.id", ondelete="SET NULL"), nullable=True
     )
     vehicle_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="SET NULL"), nullable=True

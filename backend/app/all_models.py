@@ -31,6 +31,7 @@ from app.modules.profiles import models as _profiles_models  # noqa: F401
 from app.modules.promotions import models as _promotions_models  # noqa: F401
 from app.modules.rentcar import models as _rentcar_models  # noqa: F401
 from app.modules.reviews import models as _reviews_models  # noqa: F401
+from app.modules.ride_requests import models as _ride_requests_models  # noqa: F401
 from app.modules.stays import models as _stays_models  # noqa: F401
 from app.modules.tours import models as _tours_models  # noqa: F401
 from app.modules.users import models as _users_models  # noqa: F401

@@ -310,6 +310,33 @@ async def create_booking_from_bid(
     return await get_own_booking_or_404(db, user, booking.id)
 
 
+async def create_booking_from_ride_bid(
+    db: AsyncSession, user: User, bid_id: uuid.UUID, price: Decimal
+) -> Booking:
+    """Converts an accepted rent-a-car ride bid straight into a real booking —
+    same reasoning as create_booking_from_bid above (kept as a separate sibling
+    function, not a shared one, since the two bid tables have their own FK
+    columns on BookingItem and this avoids a bookings <-> ride_requests import
+    cycle the same way the tour-bid version avoids one with bidding)."""
+    booking = Booking(user_id=user.id, total_amount=price)
+    db.add(booking)
+    await db.flush()
+
+    db.add(
+        BookingItem(
+            booking_id=booking.id,
+            item_type=BookingItemType.RIDE_BID,
+            ride_bid_id=bid_id,
+            quantity=1,
+            unit_price=price,
+            subtotal=price,
+        )
+    )
+    db.add(BookingStatusHistory(booking_id=booking.id, to_status=BookingStatus.PENDING_PAYMENT.value))
+    await db.commit()
+    return await get_own_booking_or_404(db, user, booking.id)
+
+
 async def get_own_booking_or_404(db: AsyncSession, user: User, booking_id: uuid.UUID) -> Booking:
     result = await db.execute(
         select(Booking)

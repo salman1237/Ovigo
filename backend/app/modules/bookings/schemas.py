@@ -38,6 +38,9 @@ class BookingItemCreate(BaseModel):
             # never through this generic endpoint — the price has to come from the
             # accepted bid, not from client input, so this path is deliberately closed.
             raise ValueError("Custom bid bookings are created by accepting a bid, not directly")
+        elif self.item_type == BookingItemType.RIDE_BID:
+            # Same reasoning as CUSTOM_BID above — created by ride_requests.service.accept_bid.
+            raise ValueError("Ride bid bookings are created by accepting a bid, not directly")
         return self
 
 

@@ -56,6 +56,7 @@ const PARTNER_LINKS: { href: string; label: string; roles: PartnerRoleType[] }[]
   { href: "/dashboard/properties", label: "My Properties", roles: ["host", "hotel"] },
   { href: "/dashboard/vehicles", label: "My Vehicles", roles: ["rent_a_car"] },
   { href: "/dashboard/drivers", label: "My Drivers", roles: ["rent_a_car"] },
+  { href: "/dashboard/ride-bids", label: "Ride Requests", roles: ["rent_a_car"] },
   { href: "/dashboard/bids", label: "Bid Requests", roles: ["local_expert"] },
   { href: "/dashboard/guides", label: "My Guides", roles: ["local_expert"] },
   { href: "/dashboard/guide", label: "Guide Dashboard", roles: ["guide"] },
@@ -69,6 +70,7 @@ const PARTNER_LINKS: { href: string; label: string; roles: PartnerRoleType[] }[]
 const TRAVELER_LINKS = [
   { href: "/bookings", label: "My Bookings" },
   { href: "/custom-requests", label: "Custom Trip" },
+  { href: "/rent-a-car/requests", label: "Request a Ride" },
   { href: "/esim/orders", label: "My eSIMs" },
 ];
 

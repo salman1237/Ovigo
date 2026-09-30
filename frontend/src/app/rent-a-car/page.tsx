@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Car, Search } from "lucide-react";
+import { Car, MapPinned, Search } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
@@ -96,6 +96,22 @@ function RentACarSearchContent() {
       </form>
 
       {searchTerm && <div className="mt-8"><SponsoredResults locationSlug={searchTerm} entityType="vehicle" linkPrefix="/rent-a-car" /></div>}
+
+      <Link
+        href="/rent-a-car/requests"
+        className="mt-6 flex items-center justify-between gap-3 rounded-2xl border border-primary-200 bg-primary-50 px-5 py-4 transition-colors hover:border-primary-300 dark:border-primary-900 dark:bg-primary-950/30"
+      >
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-600 to-indigo-600 text-white">
+            <MapPinned className="h-4 w-4" />
+          </span>
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">
+            <span className="font-semibold text-zinc-900 dark:text-zinc-50">Need a specific route or driver? </span>
+            Request a ride and get bids from local operators.
+          </p>
+        </div>
+        <span className="shrink-0 text-sm font-medium text-primary-600 dark:text-primary-400">Request a ride →</span>
+      </Link>
 
       <div className="mt-8 flex flex-col gap-8 lg:flex-row">
         <aside className="flex shrink-0 flex-col gap-3 lg:w-64">
