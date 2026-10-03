@@ -1,20 +1,24 @@
 import uuid
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Request, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import storage
 from app.core.permissions import require_approved_role
+from app.core.rate_limit import limiter
 from app.database import get_db
+from app.modules.auth.utils import get_current_user
 from app.modules.profiles import service
 from app.modules.profiles.schemas import (
     HostProfileRead,
     HostProfileUpsert,
     LocalExpertProfileRead,
     LocalExpertProfileUpsert,
+    ProfileReportCreate,
+    PublicLocalExpertProfile,
 )
-from app.modules.users.models import PartnerRole, PartnerRoleType
+from app.modules.users.models import PartnerRole, PartnerRoleType, User
 
 router = APIRouter(prefix="/api/v1/partners/profiles", tags=["profiles"])
 
@@ -88,3 +92,21 @@ async def get_host_photo_file(role_id: uuid.UUID, db: AsyncSession = Depends(get
     key, content_type = await service.get_host_photo(db, role_id)
     data = await storage.get_bytes_async(key)
     return Response(content=data, media_type=content_type, headers=storage.IMAGE_CACHE_HEADERS)
+
+
+@router.get("/expert/{role_id}/public", response_model=PublicLocalExpertProfile)
+@router.get("/public/expert/{role_id}", response_model=PublicLocalExpertProfile)
+async def get_public_expert_profile(role_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    return await service.get_public_expert_profile(db, role_id)
+
+
+@router.post("/expert/{role_id}/report", status_code=204)
+@limiter.limit("5/minute")
+async def report_expert_profile(
+    request: Request,
+    role_id: uuid.UUID,
+    payload: ProfileReportCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await service.report_expert_profile(db, current_user, role_id, payload.reason)

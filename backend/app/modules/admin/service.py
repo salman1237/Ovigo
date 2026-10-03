@@ -33,27 +33,53 @@ from app.modules.tours.models import Tour, TourStatus
 from app.modules.users.models import AdminPermissionRole, PartnerAccount, PartnerRole, PartnerRoleStatus, SystemRole, User
 
 
-def _to_admin_read(role: PartnerRole) -> AdminPartnerRoleRead:
+def _to_admin_read(role: PartnerRole, profile_details: dict | None = None) -> AdminPartnerRoleRead:
     return AdminPartnerRoleRead(
         id=role.id,
         role_type=role.role_type,
         status=role.status,
         approved_at=role.approved_at,
         created_at=role.created_at,
-        documents=list(role.documents),
+        documents=list(role.documents) if hasattr(role, "documents") and role.documents else [],
         applicant=AdminUserSummary.model_validate(role.partner_account.user),
+        profile_details=profile_details,
+        applications=list(role.applications) if hasattr(role, "applications") and role.applications else [],
     )
 
 
 async def list_roles(db: AsyncSession, status: PartnerRoleStatus | None) -> list[AdminPartnerRoleRead]:
     query = select(PartnerRole).options(
         selectinload(PartnerRole.documents),
+        selectinload(PartnerRole.applications),
         selectinload(PartnerRole.partner_account).selectinload(PartnerAccount.user),
     )
     if status is not None:
         query = query.where(PartnerRole.status == status)
     result = await db.execute(query.order_by(PartnerRole.created_at.desc()))
-    return [_to_admin_read(role) for role in result.scalars().all()]
+    roles = result.scalars().all()
+
+    role_ids = [r.id for r in roles]
+    profiles_by_role_id: dict[uuid.UUID, dict] = {}
+    if role_ids:
+        from app.modules.profiles.models import LocalExpertProfile
+        prof_result = await db.execute(
+            select(LocalExpertProfile).where(LocalExpertProfile.partner_role_id.in_(role_ids))
+        )
+        for prof in prof_result.scalars().all():
+            profiles_by_role_id[prof.partner_role_id] = {
+                "headline": prof.headline,
+                "bio": prof.bio,
+                "years_experience": prof.years_experience,
+                "languages": prof.languages,
+                "secondary_destinations": prof.secondary_destinations,
+                "expertise_categories": prof.expertise_categories,
+                "emergency_handling_capability": prof.emergency_handling_capability,
+                "emergency_contact_number": prof.emergency_contact_number,
+                "security_verification_status": prof.security_verification_status,
+                "badge_level": prof.badge_level,
+            }
+
+    return [_to_admin_read(role, profiles_by_role_id.get(role.id)) for role in roles]
 
 
 async def _get_role_with_relations(db: AsyncSession, role_id: uuid.UUID) -> PartnerRole:
@@ -250,22 +276,35 @@ async def list_admins(db: AsyncSession) -> list[User]:
 
 
 async def set_admin_permission_role(
-    db: AsyncSession, super_admin: User, user_id: uuid.UUID, role: AdminPermissionRole | None
+    db: AsyncSession,
+    super_admin: User,
+    user_id: uuid.UUID,
+    role: AdminPermissionRole | None,
+    system_role: SystemRole | None = None,
+    admin_permissions: list[str] | None = None,
 ) -> User:
-    """SUPER_ADMIN-only — granting or narrowing another admin's permission scope is
-    itself sensitive enough that it shouldn't be delegated to a scoped admin role."""
+    """SUPER_ADMIN-only — granting, promoting or narrowing another admin's permission scope."""
     target = await _get_user_or_404(db, user_id)
-    if target.system_role not in (SystemRole.ADMIN, SystemRole.SUPER_ADMIN):
-        raise ConflictError("Only an ADMIN or SUPER_ADMIN account can be assigned a permission role")
+    if system_role is not None:
+        target.system_role = system_role
+    elif target.system_role not in (SystemRole.ADMIN, SystemRole.SUPER_ADMIN):
+        # Promoting user to admin role
+        target.system_role = SystemRole.ADMIN
+
     target.admin_permission_role = role
+    target.admin_permissions = admin_permissions
     await db.commit()
     await audit.record(
         db,
         actor_id=super_admin.id,
-        action="admin.set_permission_role",
+        action="admin.set_permissions",
         entity_type="user",
         entity_id=target.id,
-        extra={"admin_permission_role": role.value if role else None},
+        extra={
+            "system_role": target.system_role.value,
+            "admin_permission_role": role.value if role else None,
+            "admin_permissions": admin_permissions,
+        },
     )
     await db.refresh(target)
     return target
@@ -387,16 +426,34 @@ async def request_reverification(db: AsyncSession, admin: User, document_id: uui
 
 
 def _to_admin_tour_read(tour: Tour) -> AdminTourRead:
+    docs = list(tour.local_expert_role.documents) if tour.local_expert_role and hasattr(tour.local_expert_role, "documents") else []
     return AdminTourRead(
         id=tour.id,
+        local_expert_role_id=tour.local_expert_role_id,
         title=tour.title,
         slug=tour.slug,
         description=tour.description,
+        short_summary=tour.short_summary,
         duration_days=tour.duration_days,
+        duration_nights=tour.duration_nights,
+        base_price=tour.base_price,
+        currency=tour.currency or "BDT",
+        tour_type=tour.tour_type.value if tour.tour_type else None,
         status=tour.status,
         rejection_reason=tour.rejection_reason,
         created_at=tour.created_at,
+        pickup_location=tour.pickup_location,
+        dropoff_location=tour.dropoff_location,
+        pickup_time=tour.pickup_time,
+        dropoff_time=tour.dropoff_time,
+        pickup_coordinates=tour.pickup_coordinates,
+        nearest_hospital=tour.nearest_hospital,
+        emergency_contact_phone=tour.emergency_contact_phone,
+        permit_requirements=tour.permit_requirements,
+        first_aid_available=bool(tour.first_aid_available),
+        insurance_included=bool(tour.insurance_included),
         applicant=AdminUserSummary.model_validate(tour.local_expert_role.partner_account.user),
+        expert_documents=docs,
     )
 
 
@@ -404,7 +461,8 @@ async def list_tours(db: AsyncSession, status: TourStatus | None) -> list[AdminT
     query = select(Tour).options(
         selectinload(Tour.local_expert_role)
         .selectinload(PartnerRole.partner_account)
-        .selectinload(PartnerAccount.user)
+        .selectinload(PartnerAccount.user),
+        selectinload(Tour.local_expert_role).selectinload(PartnerRole.documents),
     )
     if status is not None:
         query = query.where(Tour.status == status)
@@ -419,7 +477,8 @@ async def _get_tour_with_relations(db: AsyncSession, tour_id: uuid.UUID) -> Tour
         .options(
             selectinload(Tour.local_expert_role)
             .selectinload(PartnerRole.partner_account)
-            .selectinload(PartnerAccount.user)
+            .selectinload(PartnerAccount.user),
+            selectinload(Tour.local_expert_role).selectinload(PartnerRole.documents),
         )
     )
     tour = result.scalar_one_or_none()
@@ -430,7 +489,10 @@ async def _get_tour_with_relations(db: AsyncSession, tour_id: uuid.UUID) -> Tour
 
 async def approve_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID) -> AdminTourRead:
     tour = await _get_tour_with_relations(db, tour_id)
-    if tour.status != TourStatus.PENDING_REVIEW:
+    # SUBMITTED_FOR_REVIEW is the current PRD 10.4 status a submission lands in;
+    # PENDING_REVIEW is kept for any tour already in that state from before this
+    # status set existed (see tours/models.py's "Backward compatibility aliases").
+    if tour.status not in (TourStatus.PENDING_REVIEW, TourStatus.SUBMITTED_FOR_REVIEW):
         raise ConflictError(f"Tour is {tour.status.value}, not pending review")
     tour.status = TourStatus.PUBLISHED
     await notifications_service.notify(
@@ -449,7 +511,7 @@ async def approve_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID) -> Adm
 
 async def reject_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID, reason: str) -> AdminTourRead:
     tour = await _get_tour_with_relations(db, tour_id)
-    if tour.status != TourStatus.PENDING_REVIEW:
+    if tour.status not in (TourStatus.PENDING_REVIEW, TourStatus.SUBMITTED_FOR_REVIEW):
         raise ConflictError(f"Tour is {tour.status.value}, not pending review")
     tour.status = TourStatus.REJECTED
     tour.rejection_reason = reason
@@ -464,6 +526,69 @@ async def reject_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID, reason:
     await audit.record(
         db, actor_id=admin.id, action="tour.reject", entity_type="tour", entity_id=tour.id, extra={"reason": reason}
     )
+    return _to_admin_tour_read(tour)
+
+
+async def request_tour_changes(db: AsyncSession, admin: User, tour_id: uuid.UUID, reason: str) -> AdminTourRead:
+    """PRD 10.4/10.5's "Changes Requested" — distinct from reject_tour: the expert
+    is asked to revise specific things and resubmit, not told the tour is
+    permanently declined. tours.service.submit_for_review already accepts
+    CHANGES_REQUESTED as a resubmittable status."""
+    tour = await _get_tour_with_relations(db, tour_id)
+    if tour.status not in (TourStatus.PENDING_REVIEW, TourStatus.SUBMITTED_FOR_REVIEW):
+        raise ConflictError(f"Tour is {tour.status.value}, not pending review")
+    tour.status = TourStatus.CHANGES_REQUESTED
+    tour.rejection_reason = reason
+    await notifications_service.notify(
+        db,
+        user_id=tour.local_expert_role.partner_account.user_id,
+        type=NotificationType.LISTING_CHANGES_REQUESTED,
+        title="Changes requested on your tour",
+        message=f'An admin requested changes to "{tour.title}": {reason}',
+        link=f"/dashboard/tours/{tour.id}",
+    )
+    await db.commit()
+    await audit.record(
+        db, actor_id=admin.id, action="tour.request_changes", entity_type="tour", entity_id=tour.id, extra={"reason": reason}
+    )
+    return _to_admin_tour_read(tour)
+
+
+async def suspend_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID, reason: str) -> AdminTourRead:
+    tour = await _get_tour_with_relations(db, tour_id)
+    if tour.status == TourStatus.SUSPENDED:
+        raise ConflictError("Tour is already suspended")
+    tour.status = TourStatus.SUSPENDED
+    tour.rejection_reason = reason
+    await notifications_service.notify(
+        db,
+        user_id=tour.local_expert_role.partner_account.user_id,
+        type=NotificationType.LISTING_REJECTED,
+        title="Tour suspended",
+        message=f'Your tour "{tour.title}" has been suspended: {reason}',
+    )
+    await db.commit()
+    await audit.record(
+        db, actor_id=admin.id, action="tour.suspend", entity_type="tour", entity_id=tour.id, extra={"reason": reason}
+    )
+    return _to_admin_tour_read(tour)
+
+
+async def unsuspend_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID) -> AdminTourRead:
+    tour = await _get_tour_with_relations(db, tour_id)
+    if tour.status != TourStatus.SUSPENDED:
+        raise ConflictError("Tour is not suspended")
+    tour.status = TourStatus.PUBLISHED
+    tour.rejection_reason = None
+    await notifications_service.notify(
+        db,
+        user_id=tour.local_expert_role.partner_account.user_id,
+        type=NotificationType.LISTING_APPROVED,
+        title="Tour reinstated",
+        message=f'Your tour "{tour.title}" has been reinstated and is active again.',
+    )
+    await db.commit()
+    await audit.record(db, actor_id=admin.id, action="tour.unsuspend", entity_type="tour", entity_id=tour.id)
     return _to_admin_tour_read(tour)
 
 
@@ -574,21 +699,31 @@ async def list_payments(db: AsyncSession, status: PaymentStatus | None) -> list[
 
 
 def _to_admin_vehicle_read(vehicle: Vehicle) -> AdminVehicleRead:
+    docs = list(vehicle.rent_a_car_role.documents) if vehicle.rent_a_car_role and hasattr(vehicle.rent_a_car_role, "documents") else []
     return AdminVehicleRead(
         id=vehicle.id,
+        rent_a_car_role_id=vehicle.rent_a_car_role_id,
         make=vehicle.make,
         model=vehicle.model,
         year=vehicle.year,
+        vehicle_type=vehicle.vehicle_type.value if hasattr(vehicle.vehicle_type, "value") else str(vehicle.vehicle_type),
+        transmission=vehicle.transmission.value if hasattr(vehicle.transmission, "value") else str(vehicle.transmission),
+        seats=vehicle.seats or 4,
+        price_per_day=vehicle.price_per_day,
+        with_driver=bool(vehicle.with_driver),
+        description=vehicle.description,
         status=vehicle.status,
         rejection_reason=vehicle.rejection_reason,
         created_at=vehicle.created_at,
         applicant=AdminUserSummary.model_validate(vehicle.rent_a_car_role.partner_account.user),
+        vehicle_documents=docs,
     )
 
 
 async def list_vehicles(db: AsyncSession, status: VehicleStatus | None) -> list[AdminVehicleRead]:
     query = select(Vehicle).options(
-        selectinload(Vehicle.rent_a_car_role).selectinload(PartnerRole.partner_account).selectinload(PartnerAccount.user)
+        selectinload(Vehicle.rent_a_car_role).selectinload(PartnerRole.partner_account).selectinload(PartnerAccount.user),
+        selectinload(Vehicle.rent_a_car_role).selectinload(PartnerRole.documents),
     )
     if status is not None:
         query = query.where(Vehicle.status == status)
@@ -601,7 +736,8 @@ async def _get_vehicle_with_relations(db: AsyncSession, vehicle_id: uuid.UUID) -
         select(Vehicle)
         .where(Vehicle.id == vehicle_id)
         .options(
-            selectinload(Vehicle.rent_a_car_role).selectinload(PartnerRole.partner_account).selectinload(PartnerAccount.user)
+            selectinload(Vehicle.rent_a_car_role).selectinload(PartnerRole.partner_account).selectinload(PartnerAccount.user),
+            selectinload(Vehicle.rent_a_car_role).selectinload(PartnerRole.documents),
         )
     )
     vehicle = result.scalar_one_or_none()
@@ -646,4 +782,42 @@ async def reject_vehicle(db: AsyncSession, admin: User, vehicle_id: uuid.UUID, r
     await audit.record(
         db, actor_id=admin.id, action="vehicle.reject", entity_type="vehicle", entity_id=vehicle.id, extra={"reason": reason}
     )
+    return _to_admin_vehicle_read(vehicle)
+
+
+async def suspend_vehicle(db: AsyncSession, admin: User, vehicle_id: uuid.UUID, reason: str) -> AdminVehicleRead:
+    vehicle = await _get_vehicle_with_relations(db, vehicle_id)
+    if vehicle.status == VehicleStatus.SUSPENDED:
+        raise ConflictError("Vehicle is already suspended")
+    vehicle.status = VehicleStatus.SUSPENDED
+    vehicle.rejection_reason = reason
+    await notifications_service.notify(
+        db,
+        user_id=vehicle.rent_a_car_role.partner_account.user_id,
+        type=NotificationType.LISTING_REJECTED,
+        title="Vehicle suspended",
+        message=f"Your vehicle {vehicle.make} {vehicle.model} has been suspended: {reason}",
+    )
+    await db.commit()
+    await audit.record(
+        db, actor_id=admin.id, action="vehicle.suspend", entity_type="vehicle", entity_id=vehicle.id, extra={"reason": reason}
+    )
+    return _to_admin_vehicle_read(vehicle)
+
+
+async def unsuspend_vehicle(db: AsyncSession, admin: User, vehicle_id: uuid.UUID) -> AdminVehicleRead:
+    vehicle = await _get_vehicle_with_relations(db, vehicle_id)
+    if vehicle.status != VehicleStatus.SUSPENDED:
+        raise ConflictError("Vehicle is not suspended")
+    vehicle.status = VehicleStatus.PUBLISHED
+    vehicle.rejection_reason = None
+    await notifications_service.notify(
+        db,
+        user_id=vehicle.rent_a_car_role.partner_account.user_id,
+        type=NotificationType.LISTING_APPROVED,
+        title="Vehicle reinstated",
+        message=f"Your vehicle {vehicle.make} {vehicle.model} has been reinstated and is active again.",
+    )
+    await db.commit()
+    await audit.record(db, actor_id=admin.id, action="vehicle.unsuspend", entity_type="vehicle", entity_id=vehicle.id)
     return _to_admin_vehicle_read(vehicle)

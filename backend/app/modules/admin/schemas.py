@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.modules.bookings.models import BookingStatus
 from app.modules.partners.models import DocumentType
-from app.modules.partners.schemas import PartnerDocumentRead
+from app.modules.partners.schemas import PartnerDocumentRead, PartnerRoleApplicationRead
 from app.modules.payments.models import EscrowStatus, PaymentProvider, PaymentStatus
 from app.modules.rentcar.models import VehicleStatus
 from app.modules.stays.models import PropertyStatus
@@ -37,11 +37,14 @@ class AdminAccountRead(BaseModel):
     phone: str | None
     system_role: SystemRole
     admin_permission_role: AdminPermissionRole | None
+    admin_permissions: list[str] | None = None
     is_active: bool
 
 
 class SetAdminPermissionRoleRequest(BaseModel):
-    admin_permission_role: AdminPermissionRole | None
+    system_role: SystemRole | None = None
+    admin_permission_role: AdminPermissionRole | None = None
+    admin_permissions: list[str] | None = None
 
 
 class AdminPartnerRoleRead(BaseModel):
@@ -57,6 +60,8 @@ class AdminPartnerRoleRead(BaseModel):
     created_at: datetime
     documents: list[PartnerDocumentRead] = []
     applicant: AdminUserSummary
+    profile_details: dict | None = None
+    applications: list[PartnerRoleApplicationRead] = []
 
 
 class RejectRequest(BaseModel):
@@ -73,19 +78,36 @@ class AdminExpiringDocumentRead(BaseModel):
 
 
 class AdminTourRead(BaseModel):
-    """A tour as seen in the moderation queue — includes the submitting expert's identity."""
+    """A tour as seen in the moderation queue — includes full specs and expert's documents."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    local_expert_role_id: uuid.UUID
     title: str
     slug: str
     description: str | None
+    short_summary: str | None = None
     duration_days: int
+    duration_nights: int | None = None
+    base_price: Decimal
+    currency: str = "BDT"
+    tour_type: str | None = None
     status: TourStatus
     rejection_reason: str | None
     created_at: datetime
+    pickup_location: str | None = None
+    dropoff_location: str | None = None
+    pickup_time: str | None = None
+    dropoff_time: str | None = None
+    pickup_coordinates: dict | None = None
+    nearest_hospital: str | None = None
+    emergency_contact_phone: str | None = None
+    permit_requirements: str | None = None
+    first_aid_available: bool = False
+    insurance_included: bool = False
     applicant: AdminUserSummary
+    expert_documents: list[PartnerDocumentRead] = []
 
 
 class AdminPropertyRead(BaseModel):
@@ -104,19 +126,26 @@ class AdminPropertyRead(BaseModel):
 
 
 class AdminVehicleRead(BaseModel):
-    """A vehicle as seen in the moderation queue — includes the submitting
-    rent-a-car partner's identity."""
+    """A vehicle as seen in the moderation queue — includes full specs and fleet documents."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    rent_a_car_role_id: uuid.UUID
     make: str
     model: str
     year: int
+    vehicle_type: str | None = None
+    transmission: str | None = None
+    seats: int = 4
+    price_per_day: Decimal = Decimal("0")
+    with_driver: bool = False
+    description: str | None = None
     status: VehicleStatus
     rejection_reason: str | None
     created_at: datetime
     applicant: AdminUserSummary
+    vehicle_documents: list[PartnerDocumentRead] = []
 
 
 class AdminBookingRead(BaseModel):

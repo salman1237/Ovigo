@@ -18,10 +18,15 @@ import {
   Users,
   UtensilsCrossed,
 } from "lucide-react";
+import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
-import Link from "next/link";
+const RouteMap = dynamic(
+  () => import("@/components/shared/RouteMap").then((m) => m.RouteMap),
+  { ssr: false, loading: () => <div className="h-64 w-full animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-900" /> }
+);
 
 import { ApproxPrice } from "@/components/shared/ApproxPrice";
 import { FrequentlyBookedWith } from "@/components/shared/FrequentlyBookedWith";
@@ -87,7 +92,15 @@ export default function TourDetailPage() {
               </div>
               <h1 className="mt-2 text-3xl font-bold text-zinc-900 sm:text-4xl dark:text-zinc-50">{tour.title}</h1>
             </div>
-            <MessageButton contextType="tour" contextId={tour.id} label="Message this Expert" />
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href={`/experts/${tour.local_expert_role_id}`}>
+                <Button variant="secondary" size="sm">
+                  <Users className="h-4 w-4" />
+                  View Local Expert
+                </Button>
+              </Link>
+              <MessageButton contextType="tour" contextId={tour.id} label="Message Expert" />
+            </div>
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-zinc-600 dark:text-zinc-400">
@@ -266,6 +279,26 @@ export default function TourDetailPage() {
                       {tour.emergency_contact_phone}
                     </PolicyRow>
                   )}
+                  {tour.nearest_hospital && (
+                    <PolicyRow icon={<ShieldCheck className="h-4 w-4" />} label="Nearest hospital">
+                      {tour.nearest_hospital}
+                    </PolicyRow>
+                  )}
+                  {tour.women_safety_notes && (
+                    <PolicyRow icon={<ShieldCheck className="h-4 w-4" />} label="Women travelers safety">
+                      {tour.women_safety_notes}
+                    </PolicyRow>
+                  )}
+                  {tour.night_travel_policy && (
+                    <PolicyRow icon={<Clock className="h-4 w-4" />} label="Night travel policy">
+                      {tour.night_travel_policy}
+                    </PolicyRow>
+                  )}
+                  {tour.permit_requirements && (
+                    <PolicyRow icon={<Sparkles className="h-4 w-4" />} label="Permit requirements">
+                      {tour.permit_requirements}
+                    </PolicyRow>
+                  )}
                   {tour.weather_risk_note && (
                     <PolicyRow icon={<CloudRain className="h-4 w-4" />} label="Weather">
                       {tour.weather_risk_note}
@@ -275,6 +308,95 @@ export default function TourDetailPage() {
                     <PolicyRow icon={<AlertTriangle className="h-4 w-4" />} label="Activity risk">
                       {tour.activity_risk_note}
                     </PolicyRow>
+                  )}
+                </div>
+              </Section>
+            )}
+
+            {(tour.pickup_location || tour.dropoff_location) && (
+              <Section title="Pickup & Transfer Logistics" icon={<Bus className="h-4 w-4" />}>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 text-sm">
+                  {tour.pickup_location && (
+                    <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/50 p-4 dark:border-zinc-800 dark:bg-zinc-800/30">
+                      <span className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                        <MapPin className="h-4 w-4 text-primary-600" />
+                        Pickup Location
+                      </span>
+                      <p className="mt-1 text-zinc-600 dark:text-zinc-300">{tour.pickup_location}</p>
+                      {tour.pickup_time && <p className="mt-0.5 text-xs text-zinc-500">Departure: {tour.pickup_time}</p>}
+                      {tour.pickup_window && <p className="text-xs text-zinc-500">Window: {tour.pickup_window}</p>}
+                    </div>
+                  )}
+                  {tour.dropoff_location && (
+                    <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/50 p-4 dark:border-zinc-800 dark:bg-zinc-800/30">
+                      <span className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                        <MapPin className="h-4 w-4 text-primary-600" />
+                        Drop-off Location
+                      </span>
+                      <p className="mt-1 text-zinc-600 dark:text-zinc-300">{tour.dropoff_location}</p>
+                      {tour.dropoff_time && <p className="mt-0.5 text-xs text-zinc-500">Estimated Return: {tour.dropoff_time}</p>}
+                    </div>
+                  )}
+                </div>
+                {tour.home_hotel_pickup_available && (
+                  <div className="mt-3 text-xs text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300 rounded-lg p-2.5">
+                    ✓ Doorstep Hotel / Home Pickup is available for this tour
+                    {tour.home_pickup_extra_charge ? ` (+${formatMoney(tour.home_pickup_extra_charge)})` : " (included)"}.
+                  </div>
+                )}
+                <div className="mt-4">
+                  <RouteMap
+                    pickup={
+                      tour.pickup_location
+                        ? {
+                            label: tour.pickup_location,
+                            lat: (tour.pickup_coordinates as { lat?: number; lng?: number } | null)?.lat ?? 23.8103,
+                            lng: (tour.pickup_coordinates as { lat?: number; lng?: number } | null)?.lng ?? 90.4125,
+                          }
+                        : null
+                    }
+                    dropoff={
+                      tour.dropoff_location
+                        ? {
+                            label: tour.dropoff_location,
+                            lat: 21.4272,
+                            lng: 91.9702,
+                          }
+                        : null
+                    }
+                    interactive={false}
+                    height="h-64"
+                  />
+                </div>
+              </Section>
+            )}
+
+            {((tour.included_services && tour.included_services.length > 0) || (tour.excluded_services && tour.excluded_services.length > 0)) && (
+              <Section title="What's Included & Excluded" icon={<Gift className="h-4 w-4" />}>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  {tour.included_services && tour.included_services.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Included</h4>
+                      <ul className="mt-2.5 space-y-1.5 text-sm text-zinc-600 dark:text-zinc-300">
+                        {tour.included_services.map((svc, i) => (
+                          <li key={i} className="flex items-start gap-2">
+                            <span className="text-emerald-500">✓</span> {svc}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {tour.excluded_services && tour.excluded_services.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-red-600 dark:text-red-400">Excluded</h4>
+                      <ul className="mt-2.5 space-y-1.5 text-sm text-zinc-600 dark:text-zinc-300">
+                        {tour.excluded_services.map((svc, i) => (
+                          <li key={i} className="flex items-start gap-2">
+                            <span className="text-red-400">✕</span> {svc}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </div>
               </Section>

@@ -16,11 +16,13 @@ from app.modules.tours import service
 from app.modules.tours.schemas import (
     ActivityCreate,
     AddonCreate,
+    AssignGuidePayload,
     DepartureCreate,
     ItineraryDayCreate,
     MealCreate,
     TourCreate,
     TourRead,
+    TourStatusUpdate,
     TourStayCreate,
     TourSummary,
     TourUpdate,
@@ -301,3 +303,58 @@ async def get_similar_tours(tour_id: uuid.UUID, db: AsyncSession = Depends(get_d
 async def get_tour_frequently_booked_with(tour_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     tour = await service.get_tour_for_view(db, tour_id, None)
     return await recommendations.frequently_booked_with_tour(db, tour)
+
+
+@router.post("/{tour_id}/duplicate", response_model=TourRead)
+async def duplicate_tour(
+    tour_id: uuid.UUID, role: PartnerRole = Depends(require_expert), db: AsyncSession = Depends(get_db)
+):
+    return await service.duplicate_tour(db, role, tour_id)
+
+
+@router.post("/{tour_id}/close-bookings", response_model=TourRead)
+async def close_bookings(
+    tour_id: uuid.UUID, role: PartnerRole = Depends(require_expert), db: AsyncSession = Depends(get_db)
+):
+    return await service.close_bookings(db, role, tour_id)
+
+
+@router.patch("/{tour_id}/status", response_model=TourRead)
+async def update_tour_status(
+    tour_id: uuid.UUID,
+    payload: TourStatusUpdate,
+    role: PartnerRole = Depends(require_expert),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.update_tour_status(db, role, tour_id, payload.status, payload.reason)
+
+
+@router.post("/{tour_id}/departures/{dep_id}/cancel", response_model=TourRead)
+async def cancel_departure(
+    tour_id: uuid.UUID,
+    dep_id: uuid.UUID,
+    role: PartnerRole = Depends(require_expert),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.cancel_departure(db, role, tour_id, dep_id)
+
+
+@router.post("/{tour_id}/departures/{dep_id}/assign-guide", response_model=TourRead)
+async def assign_departure_guide(
+    tour_id: uuid.UUID,
+    dep_id: uuid.UUID,
+    payload: AssignGuidePayload,
+    role: PartnerRole = Depends(require_expert),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.assign_departure_guide(db, role, tour_id, dep_id, payload.guide_role_id, payload.fee_amount)
+
+
+@router.get("/{tour_id}/departures/{dep_id}/travelers")
+async def get_departure_travelers(
+    tour_id: uuid.UUID,
+    dep_id: uuid.UUID,
+    role: PartnerRole = Depends(require_expert),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_departure_travelers(db, role, tour_id, dep_id)

@@ -19,12 +19,11 @@ import { formatMoney } from "@/lib/format";
 import { VEHICLE_TYPE_LABELS, type VehicleType } from "@/types/rentcar";
 import { RIDE_REQUEST_STATUS_LABELS, type RideRequest } from "@/types/rideRequest";
 
-import type { MapLocation } from "@/components/shared/LocationMapPicker";
+import type { MapLocation } from "@/components/shared/RouteMap";
 
-// Leaflet touches `window` at import time — never load it during SSR.
-const LocationMapPicker = dynamic(
-  () => import("@/components/shared/LocationMapPicker").then((m) => m.LocationMapPicker),
-  { ssr: false, loading: () => <div className="h-56 w-full animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" /> }
+const RouteMap = dynamic(
+  () => import("@/components/shared/RouteMap").then((m) => m.RouteMap),
+  { ssr: false, loading: () => <div className="h-80 w-full animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-900" /> }
 );
 
 const STATUS_VARIANTS: Record<string, BadgeProps["variant"]> = {
@@ -156,8 +155,23 @@ function RequestForm({ onCreated }: { onCreated: () => void }) {
 
   return (
     <Card variant="elevated" className="mt-4 flex flex-col gap-4">
-      <LocationMapPicker label="Pickup location" value={pickup} onChange={setPickup} />
-      <LocationMapPicker label="Drop-off location" value={dropoff} onChange={setDropoff} />
+      <div className="space-y-1">
+        <label className="text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+          Pick & Drop Location on Single Map
+        </label>
+        <p className="text-xs text-zinc-500">
+          Click &quot;Set Pickup&quot; then click on the map, then click &quot;Set Drop-off&quot; to choose your destination. The route and distance covered will update automatically.
+        </p>
+      </div>
+
+      <RouteMap
+        pickup={pickup}
+        dropoff={dropoff}
+        onPickupChange={setPickup}
+        onDropoffChange={setDropoff}
+        interactive={true}
+        height="h-80"
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <Input type="date" label="Departure date" value={departureDate} onChange={(e) => setDepartureDate(e.target.value)} />

@@ -15,5 +15,17 @@ export interface AdminAccount {
   phone: string | null;
   system_role: "traveler" | "admin" | "super_admin";
   admin_permission_role: AdminPermissionRole | null;
+  admin_permissions?: string[] | null;
   is_active: boolean;
+}
+
+export interface PermissionItem {
+  id: string;
+  label: string;
+  description: string;
+}
+
+export interface PermissionCategory {
+  category: string;
+  permissions: PermissionItem[];
 }

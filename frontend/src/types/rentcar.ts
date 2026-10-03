@@ -1,6 +1,6 @@
 export type VehicleType = "sedan" | "suv" | "van" | "microbus" | "motorcycle" | "pickup";
 export type TransmissionType = "manual" | "automatic";
-export type VehicleStatus = "draft" | "pending_review" | "published" | "rejected";
+export type VehicleStatus = "draft" | "pending_review" | "published" | "rejected" | "suspended";
 
 export interface Driver {
   id: string;
@@ -48,4 +48,5 @@ export const VEHICLE_STATUS_LABELS: Record<VehicleStatus, string> = {
   pending_review: "Pending Review",
   published: "Published",
   rejected: "Rejected",
+  suspended: "Suspended",
 };

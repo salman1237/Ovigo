@@ -65,6 +65,19 @@ export interface AdminPartnerRole {
   created_at: string;
   documents: PartnerDocument[];
   applicant: AdminUserSummary;
+  applications?: PartnerRoleApplication[];
+  profile_details?: {
+    headline?: string | null;
+    bio?: string | null;
+    years_experience?: number | null;
+    languages?: string[] | null;
+    secondary_destinations?: string[] | null;
+    expertise_categories?: string[] | null;
+    emergency_handling_capability?: boolean | null;
+    emergency_contact_number?: string | null;
+    security_verification_status?: string | null;
+    badge_level?: string | null;
+  } | null;
 }
 
 export interface AdminExpiringDocument {

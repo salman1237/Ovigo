@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Upload, UserRound } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
@@ -118,6 +119,11 @@ function ExpertProfileForm({ profile }: { profile: LocalExpertProfile | null }) 
   const [headline, setHeadline] = useState(profile?.headline ?? "");
   const [bio, setBio] = useState(profile?.bio ?? "");
   const [yearsExperience, setYearsExperience] = useState<number | "">(profile?.years_experience ?? "");
+  const [languages, setLanguages] = useState((profile?.languages ?? []).join(", "));
+  const [secondaryDestinations, setSecondaryDestinations] = useState((profile?.secondary_destinations ?? []).join(", "));
+  const [expertiseCategories, setExpertiseCategories] = useState((profile?.expertise_categories ?? []).join(", "));
+  const [emergencyReady, setEmergencyReady] = useState(profile?.emergency_handling_capability ?? true);
+  const [emergencyPhone, setEmergencyPhone] = useState(profile?.emergency_contact_number ?? "");
   const [isPublished, setIsPublished] = useState(profile?.is_published ?? false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -130,7 +136,17 @@ function ExpertProfileForm({ profile }: { profile: LocalExpertProfile | null }) 
     try {
       await apiClient.put(
         "/api/v1/partners/profiles/expert",
-        { headline, bio, years_experience: yearsExperience || null, is_published: isPublished },
+        {
+          headline,
+          bio,
+          years_experience: yearsExperience || null,
+          languages: languages ? languages.split(",").map((s) => s.trim()).filter(Boolean) : [],
+          secondary_destinations: secondaryDestinations ? secondaryDestinations.split(",").map((s) => s.trim()).filter(Boolean) : [],
+          expertise_categories: expertiseCategories ? expertiseCategories.split(",").map((s) => s.trim()).filter(Boolean) : [],
+          emergency_handling_capability: emergencyReady,
+          emergency_contact_number: emergencyPhone || null,
+          is_published: isPublished,
+        },
         { auth: true }
       );
       refetch();
@@ -154,31 +170,78 @@ function ExpertProfileForm({ profile }: { profile: LocalExpertProfile | null }) 
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3">
-        {profile?.has_photo && (
-          <ProfilePhoto src={`/api/v1/partners/profiles/expert/${profile.partner_role_id}/photo/file`} alt="Profile photo" />
+    <div className="flex flex-col gap-3.5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          {profile?.has_photo && (
+            <ProfilePhoto src={`/api/v1/partners/profiles/expert/${profile.partner_role_id}/photo/file`} alt="Profile photo" />
+          )}
+          <PhotoUpload onUpload={uploadPhoto} />
+        </div>
+        {profile?.partner_role_id && profile.is_published && (
+          <Link
+            href={`/experts/${profile.partner_role_id}`}
+            target="_blank"
+            className="text-xs font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400"
+          >
+            View Public Profile ↗
+          </Link>
         )}
-        <PhotoUpload onUpload={uploadPhoto} />
       </div>
 
-      <Input value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="Headline (e.g. Cox's Bazar specialist)" />
-      <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Bio" rows={3} />
-      <Input
-        type="number"
-        min={0}
-        value={yearsExperience}
-        onChange={(e) => setYearsExperience(e.target.value ? Number(e.target.value) : "")}
-        placeholder="Years of experience"
-        className="w-44"
-      />
+      <Input value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="Headline (e.g. Certified Sreemangal Trekking Expert)" />
+      <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Professional Bio & Local Experience" rows={3} />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Input
+          type="number"
+          min={0}
+          value={yearsExperience}
+          onChange={(e) => setYearsExperience(e.target.value ? Number(e.target.value) : "")}
+          placeholder="Years of experience"
+        />
+        <Input
+          value={languages}
+          onChange={(e) => setLanguages(e.target.value)}
+          placeholder="Languages (e.g. Bengali, English, Sylheti)"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Input
+          value={secondaryDestinations}
+          onChange={(e) => setSecondaryDestinations(e.target.value)}
+          placeholder="Operating areas (e.g. Sreemangal, Lawachara, Ratargul)"
+        />
+        <Input
+          value={expertiseCategories}
+          onChange={(e) => setExpertiseCategories(e.target.value)}
+          placeholder="Specialties (e.g. Trekking, Bird Watching, Cultural)"
+        />
+      </div>
+
+      <div className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-3.5 dark:border-zinc-800 dark:bg-zinc-800/30">
+        <label className="flex items-center gap-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <Switch checked={emergencyReady} onChange={setEmergencyReady} label="First Aid & Emergency Certified" />
+          First Aid & Emergency Response Capability
+        </label>
+        <div className="mt-2.5">
+          <Input
+            value={emergencyPhone}
+            onChange={(e) => setEmergencyPhone(e.target.value)}
+            placeholder="Emergency contact phone (e.g. +880 1711 000000)"
+          />
+        </div>
+      </div>
+
       <label className="flex items-center gap-2.5 text-sm text-zinc-600 dark:text-zinc-400">
-        <Switch checked={isPublished} onChange={setIsPublished} label="Published (visible in search)" />
-        Published (visible in search)
+        <Switch checked={isPublished} onChange={setIsPublished} label="Published (visible in public directory and search)" />
+        Publish profile to travelers
       </label>
+
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Button onClick={save} loading={saving} className="self-start">
-        {saving ? "Saving…" : "Save"}
+        {saving ? "Saving…" : "Save Profile"}
       </Button>
     </div>
   );

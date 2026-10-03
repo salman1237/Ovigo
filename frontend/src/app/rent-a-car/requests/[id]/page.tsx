@@ -2,8 +2,14 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Car, MapPin, Users } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+
+const RouteMap = dynamic(
+  () => import("@/components/shared/RouteMap").then((m) => m.RouteMap),
+  { ssr: false, loading: () => <div className="h-64 w-full animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-900" /> }
+);
 
 import { Badge, type BadgeProps } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -108,6 +114,15 @@ export default function RideRequestDetailPage() {
         {request.vehicle_type_preference && (
           <span className="flex items-center gap-1"><Car className="h-4 w-4" /> {VEHICLE_TYPE_LABELS[request.vehicle_type_preference]}</span>
         )}
+      </div>
+
+      <div className="mt-5">
+        <RouteMap
+          pickup={{ label: request.pickup_label, lat: Number(request.pickup_lat), lng: Number(request.pickup_lng) }}
+          dropoff={{ label: request.dropoff_label, lat: Number(request.dropoff_lat), lng: Number(request.dropoff_lng) }}
+          interactive={false}
+          height="h-64"
+        />
       </div>
 
       {(request.with_driver_preference !== null || request.budget_min || request.notes) && (

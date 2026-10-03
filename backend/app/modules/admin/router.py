@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.admin_permissions import require_admin_permission
+from app.core.admin_permissions import ALL_PERMISSIONS_CATALOG, require_admin_permission
 from app.core.csv_export import rows_to_csv
 from app.core.exceptions import NotFoundError
 from app.core.permissions import require_admin, require_super_admin
@@ -124,6 +124,30 @@ async def list_admins(current_user: User = Depends(require_super_admin), db: Asy
     return await service.list_admins(db)
 
 
+@router.get("/permissions/catalog")
+async def get_permissions_catalog(
+    current_user: User = Depends(require_super_admin),
+):
+    return ALL_PERMISSIONS_CATALOG
+
+
+@router.post("/admins/{user_id}/permissions", response_model=AdminAccountRead)
+async def update_admin_permissions(
+    user_id: uuid.UUID,
+    payload: SetAdminPermissionRoleRequest,
+    current_user: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.set_admin_permission_role(
+        db,
+        current_user,
+        user_id,
+        role=payload.admin_permission_role,
+        system_role=payload.system_role,
+        admin_permissions=payload.admin_permissions,
+    )
+
+
 @router.post("/admins/{user_id}/permission-role", response_model=AdminAccountRead)
 async def set_admin_permission_role(
     user_id: uuid.UUID,
@@ -131,7 +155,14 @@ async def set_admin_permission_role(
     current_user: User = Depends(require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    return await service.set_admin_permission_role(db, current_user, user_id, payload.admin_permission_role)
+    return await service.set_admin_permission_role(
+        db,
+        current_user,
+        user_id,
+        role=payload.admin_permission_role,
+        system_role=payload.system_role,
+        admin_permissions=payload.admin_permissions,
+    )
 
 
 @router.get("/partners/documents/{document_id}/file")
@@ -206,7 +237,7 @@ async def list_audit_logs(
 @router.get("/tours", response_model=list[AdminTourRead])
 async def list_tours(
     status: TourStatus | None = None,
-    current_user: User = Depends(require_admin_permission("content.moderate")),
+    current_user: User = Depends(require_admin_permission("tours.view")),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.list_tours(db, status)
@@ -214,7 +245,7 @@ async def list_tours(
 
 @router.post("/tours/{tour_id}/approve", response_model=AdminTourRead)
 async def approve_tour(
-    tour_id: uuid.UUID, current_user: User = Depends(require_admin_permission("content.moderate")), db: AsyncSession = Depends(get_db)
+    tour_id: uuid.UUID, current_user: User = Depends(require_admin_permission("tours.approve")), db: AsyncSession = Depends(get_db)
 ):
     return await service.approve_tour(db, current_user, tour_id)
 
@@ -223,16 +254,45 @@ async def approve_tour(
 async def reject_tour(
     tour_id: uuid.UUID,
     payload: RejectRequest,
-    current_user: User = Depends(require_admin_permission("content.moderate")),
+    current_user: User = Depends(require_admin_permission("tours.approve")),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.reject_tour(db, current_user, tour_id, payload.reason)
 
 
+@router.post("/tours/{tour_id}/request-changes", response_model=AdminTourRead)
+async def request_tour_changes(
+    tour_id: uuid.UUID,
+    payload: RejectRequest,
+    current_user: User = Depends(require_admin_permission("tours.approve")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.request_tour_changes(db, current_user, tour_id, payload.reason)
+
+
+@router.post("/tours/{tour_id}/suspend", response_model=AdminTourRead)
+async def suspend_tour(
+    tour_id: uuid.UUID,
+    payload: SuspendRequest,
+    current_user: User = Depends(require_admin_permission("tours.suspend")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.suspend_tour(db, current_user, tour_id, payload.reason)
+
+
+@router.post("/tours/{tour_id}/unsuspend", response_model=AdminTourRead)
+async def unsuspend_tour(
+    tour_id: uuid.UUID,
+    current_user: User = Depends(require_admin_permission("tours.suspend")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.unsuspend_tour(db, current_user, tour_id)
+
+
 @router.get("/properties", response_model=list[AdminPropertyRead])
 async def list_properties(
     status: PropertyStatus | None = None,
-    current_user: User = Depends(require_admin_permission("content.moderate")),
+    current_user: User = Depends(require_admin_permission("properties.view")),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.list_properties(db, status)
@@ -240,7 +300,7 @@ async def list_properties(
 
 @router.post("/properties/{property_id}/approve", response_model=AdminPropertyRead)
 async def approve_property(
-    property_id: uuid.UUID, current_user: User = Depends(require_admin_permission("content.moderate")), db: AsyncSession = Depends(get_db)
+    property_id: uuid.UUID, current_user: User = Depends(require_admin_permission("properties.approve")), db: AsyncSession = Depends(get_db)
 ):
     return await service.approve_property(db, current_user, property_id)
 
@@ -249,7 +309,7 @@ async def approve_property(
 async def reject_property(
     property_id: uuid.UUID,
     payload: RejectRequest,
-    current_user: User = Depends(require_admin_permission("content.moderate")),
+    current_user: User = Depends(require_admin_permission("properties.approve")),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.reject_property(db, current_user, property_id, payload.reason)
@@ -276,7 +336,7 @@ async def list_payments(
 @router.get("/vehicles", response_model=list[AdminVehicleRead])
 async def list_vehicles(
     status: VehicleStatus | None = None,
-    current_user: User = Depends(require_admin_permission("content.moderate")),
+    current_user: User = Depends(require_admin_permission("vehicles.view")),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.list_vehicles(db, status)
@@ -284,7 +344,7 @@ async def list_vehicles(
 
 @router.post("/vehicles/{vehicle_id}/approve", response_model=AdminVehicleRead)
 async def approve_vehicle(
-    vehicle_id: uuid.UUID, current_user: User = Depends(require_admin_permission("content.moderate")), db: AsyncSession = Depends(get_db)
+    vehicle_id: uuid.UUID, current_user: User = Depends(require_admin_permission("vehicles.approve")), db: AsyncSession = Depends(get_db)
 ):
     return await service.approve_vehicle(db, current_user, vehicle_id)
 
@@ -293,10 +353,29 @@ async def approve_vehicle(
 async def reject_vehicle(
     vehicle_id: uuid.UUID,
     payload: RejectRequest,
-    current_user: User = Depends(require_admin_permission("content.moderate")),
+    current_user: User = Depends(require_admin_permission("vehicles.approve")),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.reject_vehicle(db, current_user, vehicle_id, payload.reason)
+
+
+@router.post("/vehicles/{vehicle_id}/suspend", response_model=AdminVehicleRead)
+async def suspend_vehicle(
+    vehicle_id: uuid.UUID,
+    payload: SuspendRequest,
+    current_user: User = Depends(require_admin_permission("vehicles.suspend")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.suspend_vehicle(db, current_user, vehicle_id, payload.reason)
+
+
+@router.post("/vehicles/{vehicle_id}/unsuspend", response_model=AdminVehicleRead)
+async def unsuspend_vehicle(
+    vehicle_id: uuid.UUID,
+    current_user: User = Depends(require_admin_permission("vehicles.suspend")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.unsuspend_vehicle(db, current_user, vehicle_id)
 
 
 def _csv_or_json(rows: list[BaseModel], csv: bool, filename: str):

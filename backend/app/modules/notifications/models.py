@@ -42,6 +42,8 @@ class NotificationType(str, enum.Enum):
     DOCUMENT_REJECTED = "document_rejected"
     LISTING_APPROVED = "listing_approved"
     LISTING_REJECTED = "listing_rejected"
+    LISTING_CHANGES_REQUESTED = "listing_changes_requested"
+    PROFILE_REPORTED = "profile_reported"
     NEW_REVIEW = "new_review"
     DISPUTE_OPENED = "dispute_opened"
     DISPUTE_RESOLVED = "dispute_resolved"

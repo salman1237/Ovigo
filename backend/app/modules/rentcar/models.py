@@ -47,6 +47,7 @@ class VehicleStatus(str, enum.Enum):
     PENDING_REVIEW = "pending_review"
     PUBLISHED = "published"
     REJECTED = "rejected"
+    SUSPENDED = "suspended"
 
 
 class Driver(Base):
