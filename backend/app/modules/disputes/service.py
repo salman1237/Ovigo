@@ -9,6 +9,7 @@ from app.core import audit
 from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.bookings.models import Booking, BookingItem, BookingItemStatus
 from app.modules.commissions.models import Commission, CommissionStatus
+from app.modules.commissions import service as commissions_service
 from app.modules.commissions.service import _partner_role_for_item
 from app.modules.disputes.models import Dispute, DisputeResolution, DisputeStatus
 from app.modules.disputes.schemas import DisputeCreate, DisputeResolve
@@ -73,6 +74,18 @@ async def _release_commission_hold(db: AsyncSession, booking_id: uuid.UUID, *, c
             )
 
 
+async def _sync_guide_fees(db: AsyncSession, booking_id: uuid.UUID) -> None:
+    """Guide fees on this booking's tour departures follow its disputes too: held
+    while one is open (commissions/service.py::sync_guide_fee_status). A refund
+    doesn't cancel them — the expert hired the guide, not the traveler."""
+    result = await db.execute(
+        select(BookingItem.tour_departure_id).where(
+            BookingItem.booking_id == booking_id, BookingItem.tour_departure_id.is_not(None)
+        )
+    )
+    await commissions_service.sync_guide_fee_status(db, set(result.scalars().all()))
+
+
 async def create_dispute(db: AsyncSession, user: User, payload: DisputeCreate) -> Dispute:
     result = await db.execute(select(Booking).where(Booking.id == payload.booking_id))
     booking = result.scalar_one_or_none()
@@ -93,6 +106,7 @@ async def create_dispute(db: AsyncSession, user: User, payload: DisputeCreate) -
     db.add(dispute)
     await db.flush()  # populate dispute.id (client-side default) before it's used in notification links below
     await _hold_commissions_for_booking(db, booking.id)
+    await _sync_guide_fees(db, booking.id)
 
     admins = await db.execute(select(User.id).where(User.system_role.in_([SystemRole.ADMIN, SystemRole.SUPER_ADMIN])))
     for admin_id in admins.scalars().all():
@@ -185,6 +199,7 @@ async def resolve_dispute(db: AsyncSession, admin: User, dispute_id: uuid.UUID, 
         await _release_commission_hold(db, dispute.booking_id, cancel=True)
     else:
         await _release_commission_hold(db, dispute.booking_id, cancel=False)
+    await _sync_guide_fees(db, dispute.booking_id)
 
     party_ids = await _eligible_dispute_party_ids(db, dispute.booking)
     for party_id in party_ids:

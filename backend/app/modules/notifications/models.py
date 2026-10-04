@@ -78,6 +78,7 @@ class NotificationType(str, enum.Enum):
     ACCOUNT_REACTIVATED = "account_reactivated"
     NETWORK_MEMBER_JOINED = "network_member_joined"
     NETWORK_MEMBER_ACTIVATED = "network_member_activated"
+    GUIDE_BOOKED = "guide_booked"
 
 
 class CampaignAudience(str, enum.Enum):

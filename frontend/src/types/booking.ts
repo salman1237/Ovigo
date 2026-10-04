@@ -1,5 +1,11 @@
 export type BookingStatus = "pending_payment" | "confirmed" | "checked_in" | "checked_out" | "completed" | "cancelled";
-export type BookingItemType = "tour_departure" | "room_type";
+export type BookingItemType =
+  | "tour_departure"
+  | "room_type"
+  | "custom_bid"
+  | "vehicle_rental"
+  | "ride_bid"
+  | "guide_service";
 export type BookingItemStatus = "confirmed" | "checked_in" | "checked_out" | "completed" | "cancelled";
 
 export interface BookingItem {
@@ -8,6 +14,7 @@ export interface BookingItem {
   status: BookingItemStatus;
   tour_departure_id: string | null;
   room_type_id: string | null;
+  guide_package_id?: string | null;
   check_in_date: string | null;
   check_out_date: string | null;
   quantity: number;

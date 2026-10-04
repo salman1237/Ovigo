@@ -891,6 +891,99 @@ The user asked directly whether homepage content was admin-editable; it wasn't �
 
 **Verified:** `pytest -q` 32/32 passing; migration applied to production (3 new tables, one enum reused via `postgresql.ENUM(..., create_type=False)` — the exact fix the *first* attempt needed, having tried plain `sa.Enum(..., create_type=False)` first and hit the same "type already exists" error this codebase has hit before, confirming that flag is ignored unless it's the dialect-specific class). Full function-level round trip against production before ever deploying: fetched the public homepage and confirmed the seeded defaults exactly match today's live copy and all 4 default tiles; updated a setting and confirmed it stuck; pinned a real published tour and confirmed it resolved correctly; ran a tile through create → edit → delete. All test mutations reverted to a clean state except the (intentional, permanent) 4 seeded default tiles. Frontend `lint` caught the same `Date.now()`-during-render impurity this session already knows to avoid, on the very first pass, before it ever shipped — fixed by using each object's own `updated_at` instead. `lint`/`build` both clean afterward, all ~54 routes including the two new/changed ones (`/`, `/admin/cms`). Deployed live (both apps registered and completed on the first manual trigger — no repeat of the intermittent Dokploy timeout this time), then two live Playwright passes: a scroll-through of the public homepage confirmed it renders pixel-identical to before this phase (same layout, same text, same 4 gradient tiles) despite every value now coming from the database instead of the component; a genuine end-to-end pass — logged in as admin, changed the hero headline through the real `/admin/cms` form, clicked Save, navigated to the live public homepage, and confirmed the new headline actually appeared there — then reverted it back through the same UI and confirmed via the public API that the original text was restored. This is the exact capability the user asked for, confirmed working on the live site, not just at the API level.
 
+## Phase 9 — PRD §10/§12 completion (started 2026-10-04)
+
+Plan: [PRD_10_12_IMPLEMENTATION_PLAN.md](PRD_10_12_IMPLEMENTATION_PLAN.md). It verified `PRD_AUDIT_SECTIONS_10_12.md` against the code (about half of the audit's gaps were already built) and found five bugs the audit missed (B1–B5).
+
+### Phase 9.1 — Expert referral links & network commission — Done (2026-10-04)
+- Every approved Local Expert has a personal referral link (`/dashboard/network`: link, QR, WhatsApp share, per-role links, stats, members).
+- A Guide, Host, Hotel or Rent-a-Car operator who joins through `/join/{code}` is attributed to that expert (`network_attributions`, first touch wins).
+- Once the referred role is approved, the expert earns a NETWORK commission on that partner's bookings for 12 months: 2% default, admin-adjustable per attribution.
+- Guides who join this way are placed under that expert's supervision automatically.
+- Guards:
+  - Self-referral, referring a Local Expert, reciprocal referrals and inactive links are rejected before anything is written.
+  - The network cut is capped at Ovigo's own DIRECT commission (B2).
+  - There's no cut on the expert's own bookings (B3), after expiry, or while the expert is suspended.
+- Existing linked business referrals and their NETWORK rows are backfilled into attributions.
+- Admin: `/admin/network` (revoke / reassign / rate & expiry).
+
+### Phase 9.2 — Commission engine completion — Done (2026-10-04)
+- Ride-bid bookings now generate commission (B1), with a 12% CATEGORY rule seeded.
+- `bookings.acquisition_channel` (organic / expert / advertising) records the acquiring expert or ad campaign. An ad click only counts when that campaign advertises an item in the booking.
+- `booking_items.sold_by_role_id` (backfilled) and `curated_by_tour_id`.
+- Tour-curation commission:
+  - A stay booked through a tour that includes it earns the tour's expert a CURATION cut (2% default).
+  - The network and curation cuts are jointly capped.
+  - An expert who both referred and curated is paid only the higher of the two.
+- The tour builder can link an included stay to a real Ovigo listing.
+- New acquisition-channels admin report.
+
+**Infrastructure changes in this pass:**
+- The backend container now starts with `alembic upgrade head && fastapi run`, so every deploy migrates from inside the server's network and the production database never needs a public port.
+- CI's backend job has a Postgres service, so the money-path tests run end to end.
+- `package-lock.json` regained the Linux-only `@emnapi/*` entries, so `npm ci` works in CI again.
+- The heading font (Plus Jakarta Sans) is self-hosted via `next/font/local`. Google Fonts intermittently served it as `…&skey=…` URLs that Turbopack can't resolve, which broke CI builds.
+
+**Verified:**
+- Tests: `pytest -q` passes, 52 with Postgres and 44 passed / 8 skipped without (15 new tests, mutation-checked). Both migrations pass upgrade, `alembic check`, downgrade and re-upgrade on seeded data. Frontend `lint` and a cold `build` are clean.
+- Local browser walkthroughs, no console errors:
+  - the expert's link and QR code
+  - join → register → apply with terms → admin approval → active
+  - the guide appearing under My Guides
+  - the admin page, and 390px width
+  - tour builder stay link → "View stay" → cart checkout recorded as curated, with the expert as seller
+- Deploy path: the production image was built from a clean copy and run against a database at production's revision (`e7192a38b102`). Both migrations applied, the backfill was correct, and a restart ran no migrations.
+- Production (merged as `a8d263f`; both Dokploy deploys finished):
+  - `/health` OK, and all new endpoints are in the live OpenAPI spec.
+  - An unknown referral code returns a clean 404, so the new table exists.
+  - A failed login returns a clean 401 while reading the new `users` column, so the migrations ran on deploy.
+  - The new frontend routes (`/join/[code]`, `/dashboard/network`, `/admin/network`) return 200.
+  - The self-hosted heading font is served.
+
+**Not done / left for the user:**
+- Live click-through of the expert flow on production. The sandbox browser can't load assets through its egress proxy, and an approved production expert account is needed.
+- GitGuardian incident 37853094 is a false positive (a throwaway CI database password in an early PR commit) and should be marked as such.
+- Production Postgres has **no backups configured** in Dokploy.
+- ~~Phase 9.3 needs a product decision first.~~ Decided 2026-10-04; built below.
+
+### Phase 9.3 — Guides as an earning channel, 12% everywhere — Built (2026-10-04)
+
+Client decisions and the full design: the plan, §4.
+
+- **12% on every sale in every channel.** Tours and custom bids go from 10% to 12%; guide services start at 12%. Migration `fd7230d031d9` ends the old CATEGORY rules (kept for history) and adds 12% rules effective today. PARTNER overrides still win, and existing commission rows keep their rate.
+- **Travelers book guides directly.**
+  - Guides publish an admin-reviewed profile and their own priced packages (e.g. Half day ৳800 / Full day ৳1400), editable at any time.
+  - They open days on a calendar; travelers book a package for one open day (`/guides`, `/guides/[id]`, cart).
+  - Ovigo takes 12%, and the expert who onboarded the guide earns 2% of it.
+- **Experts hire guides through Ovigo.**
+  - An assignment carries a package (fee prefilled) or a custom fee.
+  - On completion: the guide's GUIDE_FEE (fee − 12%), the expert's GUIDE_FEE_DEDUCTION (−fee, netted against their earnings), and the onboarding expert's 2% NETWORK row.
+  - Payable once the departure's tour bookings complete, held while one is disputed. A refund doesn't cancel the guide's fee.
+- **Guides work with several experts** (unique per guide–expert pair). An expert who invites a not-yet-approved guide onboarded them (GUIDE_INVITE attribution); declining the invite drops that credit.
+- **No double-booking:** a guide's day is taken by an active assignment or a live booking.
+- **Payout batches** skip partners whose payable balance is ≤ 0; their rows wait and net against later earnings.
+- **Frontend:**
+  - Guide dashboard rebuilt: earnings, experts, assignments, profile, packages, calendar, traveler bookings.
+  - Experts get a package picker when assigning.
+  - Admin profile review on `/admin/guides`.
+  - Earnings page shows guide fees and guide costs.
+  - `guide_service` added as a commission-rule item type.
+  - "Guides" added to the header, mobile menu and footer.
+
+**Verified:**
+- Tests: `pytest -q` passes, 64 with Postgres and 46 passed / 18 skipped without. 12 new tests, mutation-checked: all 14 deliberate bugs are caught.
+- Migrations:
+  - Upgrade, `alembic check`, downgrade and re-upgrade on the dev database.
+  - Seeding tested with and without a pre-existing 10% tour rule.
+- Frontend `lint` and `build` are clean.
+- Local browser walkthrough, with no console errors other than the sandbox's unreachable payment gateway:
+  - the guide accepts an invite, fills in the profile, adds two packages, opens a day and submits;
+  - the admin approves;
+  - a traveler finds the guide on `/guides`, picks Full day and the open day, and checks out from the cart (booking ৳1400, `guide_service`);
+  - the expert assigns the guide with the Full day package (fee ৳1400 prefilled);
+  - the guide page has no horizontal scroll at 390px.
+- Deploy path: an image with this code was started against a database at production's revision (`7438eef3baa7`). Both migrations ran on container start, tours went from 10% to 12%, and a restart was clean. The base layer was reused from the 9.1/9.2 rehearsal because Docker Hub rate-limited pulls; `requirements.txt` is unchanged.
+
 ## Infrastructure note — Postgres off Neon, image-serving performance fix (2026-09-22)
 
 The user reported the homepage taking 5-10 seconds to load images, and separately asked to move the database off Neon onto the user's own VPS. Investigation found both were real, and partly the same root cause: Neon is in `ap-southeast-1` (Singapore) while the Dokploy VPS is in Mumbai, plus Neon's serverless compute has cold-start behavior — every DB query paid cross-region latency on top of that. Separately, a genuine backend bug made the image slowness far worse than DB latency alone would explain.

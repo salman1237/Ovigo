@@ -47,7 +47,10 @@ async function throwApiError(response: Response): Promise<never> {
   let detail = response.statusText;
   try {
     const body = await response.json();
-    detail = body.detail ?? detail;
+    // FastAPI's request validation (422) sends a list of {msg, ...} instead of a string.
+    detail = Array.isArray(body.detail)
+      ? body.detail.map((d: { msg?: string }) => d.msg ?? "Invalid value").join("; ")
+      : (body.detail ?? detail);
   } catch {
     // response had no JSON body
   }
@@ -118,6 +121,8 @@ export const apiClient = {
     request<T>(path, { ...options, method: "POST", body: body ? JSON.stringify(body) : undefined }),
   put: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: "PUT", body: body ? JSON.stringify(body) : undefined }),
+  patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>
+    request<T>(path, { ...options, method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
   postForm: <T>(path: string, formData: FormData, options?: RequestOptions) =>
     request<T>(path, { ...options, method: "POST", body: formData }),
   delete: <T>(path: string, options?: RequestOptions) => request<T>(path, { ...options, method: "DELETE" }),

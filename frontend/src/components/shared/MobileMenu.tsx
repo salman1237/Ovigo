@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Coins,
   Compass,
+  Flag,
   Gavel,
   Handshake,
   LayoutDashboard,
@@ -48,6 +49,7 @@ const EXPLORE_LINKS: NavItem[] = [
   { href: "/tours", label: "Tours", icon: Map },
   { href: "/stays", label: "Stays", icon: Compass },
   { href: "/rent-a-car", label: "Rent a Car", icon: Car },
+  { href: "/guides", label: "Guides", icon: Flag },
   { href: "/esim", label: "eSIM", icon: Smartphone },
 ];
 

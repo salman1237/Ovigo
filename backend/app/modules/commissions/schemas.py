@@ -12,7 +12,9 @@ class CommissionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    booking_item_id: uuid.UUID
+    # Exactly one is set: a traveler's booking item, or an expert's guide assignment.
+    booking_item_id: uuid.UUID | None
+    guide_assignment_id: uuid.UUID | None = None
     source: CommissionSource
     gross_amount: Decimal
     rate: Decimal

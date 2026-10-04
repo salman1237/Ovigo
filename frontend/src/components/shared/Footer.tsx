@@ -5,6 +5,7 @@ const EXPLORE_LINKS = [
   { href: "/tours", label: "Tours" },
   { href: "/stays", label: "Stays" },
   { href: "/rent-a-car", label: "Rent a Car" },
+  { href: "/guides", label: "Guides" },
   { href: "/esim", label: "eSIM" },
 ];
 

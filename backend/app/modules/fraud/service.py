@@ -93,6 +93,16 @@ async def _owner_user_id_for_item(db: AsyncSession, item: BookingItemCreate) -> 
             .where(Vehicle.id == item.vehicle_id)
         )
         return result.scalar_one_or_none()
+    if item.item_type == BookingItemType.GUIDE_SERVICE:
+        from app.modules.guides.models import GuideServicePackage
+
+        result = await db.execute(
+            select(PartnerAccount.user_id)
+            .join(PartnerRole, PartnerRole.partner_account_id == PartnerAccount.id)
+            .join(GuideServicePackage, GuideServicePackage.guide_role_id == PartnerRole.id)
+            .where(GuideServicePackage.id == item.guide_package_id)
+        )
+        return result.scalar_one_or_none()
     return None
 
 
@@ -106,7 +116,7 @@ async def check_self_booking(db: AsyncSession, buyer_user_id: uuid.UUID, item: B
             FraudSeverity.MEDIUM,
             30,
             f"Booked their own {item.item_type.value} listing",
-            context_id=item.tour_departure_id or item.room_type_id or item.vehicle_id,
+            context_id=item.tour_departure_id or item.room_type_id or item.vehicle_id or item.guide_package_id,
         )
 
 

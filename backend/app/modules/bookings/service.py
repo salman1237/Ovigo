@@ -70,7 +70,7 @@ class Reserved(NamedTuple):
     unit_price: Decimal
     subtotal: Decimal
     owner_role_id: uuid.UUID
-    entity_type: TaggableEntityType
+    entity_type: TaggableEntityType | None  # None: not something a sponsored ad can advertise
     entity_id: uuid.UUID
 
 
@@ -194,6 +194,13 @@ async def _reserve_vehicle(db: AsyncSession, item: BookingItemCreate) -> Reserve
     return Reserved(vehicle.price_per_day, subtotal, vehicle.rent_a_car_role_id, TaggableEntityType.VEHICLE, vehicle.id)
 
 
+async def _reserve_guide_service(db: AsyncSession, item: BookingItemCreate) -> Reserved:
+    from app.modules.guides import service as guides_service  # guides imports bookings models
+
+    package = await guides_service.reserve_guide_service(db, item.guide_package_id, item.check_in_date)
+    return Reserved(package.price, package.price, package.guide_role_id, None, package.id)
+
+
 async def _curating_tour(db: AsyncSession, item: BookingItemCreate) -> Tour | None:
     """The tour a stay is being booked through, if `via_tour_id` names a publicly
     listed tour that really does include this room's property. Anything else is
@@ -274,6 +281,8 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
             curating_tour = await _curating_tour(db, item)
         elif item.item_type == BookingItemType.VEHICLE_RENTAL:
             reserved = await _reserve_vehicle(db, item)
+        elif item.item_type == BookingItemType.GUIDE_SERVICE:
+            reserved = await _reserve_guide_service(db, item)
         else:
             # CUSTOM_BID is rejected by BookingItemCreate's own validator before
             # reaching here — this branch exists only so a future new item type
@@ -310,7 +319,7 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
         total -= loyalty_discount_amount
 
     channel, acquiring_expert_role_id, ad_campaign_id = await _acquisition_for(
-        db, user, payload.ad_campaign_id, {(r.entity_type, r.entity_id) for _, r, _ in prepared}
+        db, user, payload.ad_campaign_id, {(r.entity_type, r.entity_id) for _, r, _ in prepared if r.entity_type is not None}
     )
     booking = Booking(
         user_id=user.id,
@@ -339,6 +348,7 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
                 tour_departure_id=item.tour_departure_id,
                 room_type_id=item.room_type_id,
                 vehicle_id=item.vehicle_id,
+                guide_package_id=item.guide_package_id,
                 check_in_date=item.check_in_date,
                 check_out_date=item.check_out_date,
                 quantity=item.quantity,
@@ -478,6 +488,8 @@ async def _release_and_cancel(db: AsyncSession, booking: Booking, note: str | No
                 row.available_units += item.quantity
         elif item.item_type == BookingItemType.VEHICLE_RENTAL and item.vehicle_id and item.check_in_date and item.check_out_date:
             await _release_vehicle(db, item.vehicle_id, item.check_in_date, item.check_out_date)
+        # A guide service holds its date only while the item isn't cancelled, so
+        # there's nothing to release for it.
         item.status = BookingItemStatus.CANCELLED
 
     if booking.loyalty_discount_amount and booking.loyalty_discount_amount > 0:
@@ -488,6 +500,10 @@ async def _release_and_cancel(db: AsyncSession, booking: Booking, note: str | No
 
     await _add_status_history(db, booking, BookingStatus.CANCELLED, note=note)
     booking.status = BookingStatus.CANCELLED
+    # One fewer booking still running on its departures can release their guide fees.
+    from app.modules.commissions import service as commissions_service  # avoid import cycle at module load
+
+    await commissions_service.sync_guide_fee_status(db, commissions_service.departure_ids_of(booking))
     await notifications_service.notify(
         db,
         user_id=booking.user_id,

@@ -29,11 +29,20 @@ _ALLOWED_TRANSITIONS: dict[PayoutStatus, set[PayoutStatus]] = {
 
 
 async def _payable_by_partner(db: AsyncSession) -> dict[uuid.UUID, list[Commission]]:
+    """PAYABLE commissions per partner, for partners Ovigo owes money to. A guide fee
+    an expert paid is a negative row (commissions/service.py::create_guide_fee_commissions),
+    so an expert's balance can be zero or below; their rows then stay PAYABLE and are
+    netted against their next earnings instead of producing a payout of nothing, or
+    a negative one."""
     result = await db.execute(select(Commission).where(Commission.status == CommissionStatus.PAYABLE))
     grouped: dict[uuid.UUID, list[Commission]] = defaultdict(list)
     for commission in result.scalars().all():
         grouped[commission.partner_role_id].append(commission)
-    return grouped
+    return {
+        partner_role_id: commissions
+        for partner_role_id, commissions in grouped.items()
+        if sum((c.partner_net_amount for c in commissions), Decimal("0")) > 0
+    }
 
 
 async def preview_payouts(db: AsyncSession) -> list[PayoutPreviewRow]:

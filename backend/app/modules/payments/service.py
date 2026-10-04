@@ -89,6 +89,9 @@ async def _activate_booking(db: AsyncSession, payment: Payment) -> None:
     booking.status = BookingStatus.CONFIRMED
     db.add(EscrowTransaction(booking_id=booking.id, amount=booking.total_amount))
     await commissions_service.create_commissions_for_booking(db, booking)
+    from app.modules.guides import service as guides_service  # guides imports bookings models
+
+    await guides_service.notify_guides_of_booking(db, booking)
     await notifications_service.notify(
         db,
         user_id=booking.user_id,

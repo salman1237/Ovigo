@@ -16,6 +16,8 @@ import {
   GuideCertificationLevel,
 } from "@/types/guides";
 
+import { GuideProfileReview } from "./_components/GuideProfileReview";
+
 export default function AdminGuidesPage() {
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -84,6 +86,9 @@ export default function AdminGuidesPage() {
         role entirely.
       </p>
 
+      <GuideProfileReview />
+
+      <h2 className="mt-10 text-lg font-semibold text-zinc-900 dark:text-zinc-50">Certification & restrictions</h2>
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
       {isLoading && <Spinner />}
       {isError && <p className="mt-4 text-sm text-red-600">Failed to load guides.</p>}
