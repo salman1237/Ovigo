@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.modules.users.schemas import UserRead
 
@@ -8,6 +8,9 @@ class RegisterRequest(BaseModel):
     email: EmailStr | None = None
     phone: str | None = None
     password: str
+    # An expert referral link code (/join/{code}) — optional, and an invalid one is
+    # ignored rather than failing signup (see referrals/service.py::record_signup_link).
+    referral_code: str | None = Field(default=None, max_length=32)
 
     @field_validator("password")
     @classmethod

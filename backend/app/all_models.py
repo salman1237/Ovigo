@@ -29,6 +29,7 @@ from app.modules.payments import models as _payments_models  # noqa: F401
 from app.modules.payouts import models as _payouts_models  # noqa: F401
 from app.modules.profiles import models as _profiles_models  # noqa: F401
 from app.modules.promotions import models as _promotions_models  # noqa: F401
+from app.modules.referrals import models as _referrals_models  # noqa: F401
 from app.modules.rentcar import models as _rentcar_models  # noqa: F401
 from app.modules.reviews import models as _reviews_models  # noqa: F401
 from app.modules.ride_requests import models as _ride_requests_models  # noqa: F401

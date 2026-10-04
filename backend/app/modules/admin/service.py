@@ -18,6 +18,7 @@ from app.modules.admin.schemas import (
     AdminVehicleRead,
 )
 from app.modules.bookings.models import Booking, BookingStatus
+from app.modules.fraud import service as fraud_service
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.models import NotificationType
 from app.modules.partners.models import (
@@ -27,6 +28,7 @@ from app.modules.partners.models import (
     PartnerRoleApplication,
 )
 from app.modules.payments.models import Payment, PaymentStatus
+from app.modules.referrals import service as referrals_service
 from app.modules.rentcar.models import Vehicle, VehicleStatus
 from app.modules.stays.models import Property, PropertyStatus
 from app.modules.tours.models import Tour, TourStatus
@@ -121,7 +123,11 @@ async def approve_role(db: AsyncSession, admin: User, role_id: uuid.UUID) -> Adm
         title="Partner role approved",
         message=f"Your {role.role_type.value.replace('_', ' ')} application has been approved.",
     )
+    # A role that joined through an expert's referral link starts earning that
+    # expert a network commission from today (referrals/service.py).
+    await referrals_service.activate_for_role(db, role)
     await db.commit()
+    await fraud_service.check_referral_network_volume_for_partner(db, role.id)
     await audit.record(
         db,
         actor_id=admin.id,
@@ -158,6 +164,7 @@ async def reject_role(
         title="Partner role application rejected",
         message=f"Your {role.role_type.value.replace('_', ' ')} application was rejected: {reason}",
     )
+    await referrals_service.reject_for_role(db, role)
     await db.commit()
     await audit.record(
         db,

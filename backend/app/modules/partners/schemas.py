@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.modules.partners.models import ApplicationStatus, DocumentStatus, DocumentType
 from app.modules.users.models import PartnerRoleStatus, PartnerRoleType
@@ -10,6 +10,10 @@ from app.modules.users.models import PartnerRoleStatus, PartnerRoleType
 class PartnerRoleApplyRequest(BaseModel):
     role_type: PartnerRoleType
     message: str | None = None
+    # Joining through a Local Expert's referral link (referrals/service.py). The
+    # network terms must be accepted whenever a code is sent.
+    referral_code: str | None = Field(default=None, max_length=32)
+    accept_network_terms: bool = False
 
 
 class PartnerRoleApplicationRead(BaseModel):
