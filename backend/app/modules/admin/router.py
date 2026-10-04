@@ -38,6 +38,7 @@ from app.modules.admin.schemas import (
     PlatformRevenueRow,
     RefundSummaryRow,
     ReferralOverviewRow,
+    AcquisitionChannelRow,
     RejectRequest,
     SetAdminPermissionRoleRequest,
     SuspendRequest,
@@ -414,6 +415,11 @@ async def get_dispute_overview_report(csv: bool = False, db: AsyncSession = Depe
 @router.get("/reports/referral-overview", response_model=list[ReferralOverviewRow])
 async def get_referral_overview_report(csv: bool = False, db: AsyncSession = Depends(get_db)):
     return _csv_or_json(await reports.referral_overview(db), csv, "referral-overview")
+
+
+@router.get("/reports/acquisition-channels", response_model=list[AcquisitionChannelRow])
+async def get_acquisition_channels_report(csv: bool = False, db: AsyncSession = Depends(get_db)):
+    return _csv_or_json(await reports.acquisition_channels(db), csv, "acquisition-channels")
 
 
 @router.get("/reports/partner-approval-funnel", response_model=list[PartnerApprovalFunnelRow])

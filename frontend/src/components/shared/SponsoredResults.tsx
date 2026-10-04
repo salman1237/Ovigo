@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
+import { saveAdClick } from "@/lib/ad-attribution";
 import { apiClient } from "@/lib/api-client";
 import type { AdEntityType, SponsoredResult } from "@/types/ads";
 
@@ -30,6 +31,7 @@ export function SponsoredResults({
 
   const trackClick = (campaignId: string) => {
     apiClient.post(`/api/v1/ads/campaigns/${campaignId}/click`).catch(() => {});
+    saveAdClick(campaignId);
   };
 
   return (

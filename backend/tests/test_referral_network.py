@@ -9,12 +9,9 @@ Two layers:
   replayable onto an empty database (an early enum migration adds and uses a
   value in one transaction).
 """
-import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-
-import pytest
 
 from app.modules.referrals import service as referrals_service
 from app.modules.referrals.models import AttributionStatus, NetworkAttribution
@@ -79,86 +76,16 @@ def test_local_expert_role_is_not_joinable():
 
 # --- End-to-end against a real database ---
 
-db_tests = pytest.mark.skipif(os.environ.get("OVIGO_DB_TESTS") != "1", reason="set OVIGO_DB_TESTS=1 with a Postgres DATABASE_URL")
-
-
-@pytest.fixture(scope="module")
-def _schema():
-    from sqlalchemy import create_engine
-
-    import app.all_models  # noqa: F401
-    from app.config import get_settings
-    from app.database import Base
-
-    engine = create_engine(get_settings().sync_database_url)
-    Base.metadata.create_all(engine)
-    engine.dispose()
-
-
-@pytest.fixture
-async def api(_schema):
-    from httpx import ASGITransport, AsyncClient
-
-    from app.core.rate_limit import limiter
-    from app.database import engine
-    from app.main import app
-
-    limiter.enabled = False
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield client
-    limiter.enabled = True
-    # Each test gets its own event loop; asyncpg connections are bound to the loop
-    # that opened them, so drop the pool rather than reuse it across tests.
-    await engine.dispose()
-
-
-async def _session():
-    from app.database import AsyncSessionLocal
-
-    return AsyncSessionLocal()
-
-
-def _email(tag: str) -> str:
-    return f"{tag}-{uuid.uuid4().hex[:10]}@test.ovigo"
-
-
-async def _register(api, name: str, referral_code: str | None = None) -> tuple[str, dict]:
-    payload = {"full_name": name, "email": _email(name.lower().replace(" ", "-")), "password": "password123"}
-    if referral_code:
-        payload["referral_code"] = referral_code
-    r = await api.post("/api/v1/auth/register", json=payload)
-    assert r.status_code == 201, r.text
-    body = r.json()
-    return body["access_token"], body["user"]
-
-
-def _auth(token: str) -> dict:
-    return {"Authorization": f"Bearer {token}"}
-
-
-async def _admin_token(api) -> str:
-    from app.modules.users.models import SystemRole, User
-
-    token, user = await _register(api, "Admin")
-    async with await _session() as db:
-        db_user = await db.get(User, uuid.UUID(user["id"]))
-        db_user.system_role = SystemRole.SUPER_ADMIN
-        await db.commit()
-    return token
-
-
-async def _apply(api, token: str, role_type: str, **extra):
-    return await api.post("/api/v1/partners/roles", json={"role_type": role_type, **extra}, headers=_auth(token))
-
-
-async def _approved_expert(api, admin: str, name: str = "Expert Karim") -> tuple[str, dict, str]:
-    token, user = await _register(api, name)
-    r = await _apply(api, token, "local_expert")
-    assert r.status_code == 201, r.text
-    role_id = r.json()["id"]
-    r = await api.post(f"/api/v1/admin/partners/roles/{role_id}/approve", headers=_auth(admin))
-    assert r.status_code == 200, r.text
-    return token, user, role_id
+from tests.db_helpers import (  # noqa: E402
+    admin_token as _admin_token,
+    apply as _apply,
+    approved_expert as _approved_expert,
+    auth as _auth,
+    commissions_for_item as _commissions_for_item,
+    db_tests,
+    register as _register,
+    session as _session,
+)
 
 
 async def _book_and_commission(booker_user_id: str, partner_role_id: str, subtotal: Decimal, monkeypatch):
@@ -188,16 +115,6 @@ async def _book_and_commission(booker_user_id: str, partner_role_id: str, subtot
         await commissions_service.create_commissions_for_booking(db, booking)
         await db.commit()
         return booking.items[0].id
-
-
-async def _commissions_for_item(item_id):
-    from sqlalchemy import select
-
-    from app.modules.commissions.models import Commission
-
-    async with await _session() as db:
-        rows = (await db.execute(select(Commission).where(Commission.booking_item_id == item_id))).scalars().all()
-        return {c.source.value: c for c in rows}
 
 
 @db_tests

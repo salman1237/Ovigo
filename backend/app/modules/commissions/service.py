@@ -37,8 +37,10 @@ _LEGACY_DEFAULTS: dict[BookingItemType, Decimal] = {
     BookingItemType.ROOM_TYPE: Decimal("0.12"),
     BookingItemType.CUSTOM_BID: Decimal("0.10"),
     BookingItemType.VEHICLE_RENTAL: Decimal("0.12"),
+    BookingItemType.RIDE_BID: Decimal("0.12"),
 }
 _DEFAULT_NETWORK_RATE = Decimal("0.02")
+_DEFAULT_CURATION_RATE = Decimal("0.02")
 
 
 async def _partner_role_for_item(db: AsyncSession, item: BookingItem) -> uuid.UUID | None:
@@ -65,6 +67,11 @@ async def _partner_role_for_item(db: AsyncSession, item: BookingItem) -> uuid.UU
         from app.modules.rentcar.models import Vehicle
 
         result = await db.execute(select(Vehicle.rent_a_car_role_id).where(Vehicle.id == item.vehicle_id))
+        return result.scalar_one_or_none()
+    if item.item_type == BookingItemType.RIDE_BID and item.ride_bid_id:
+        from app.modules.ride_requests.models import RideBid
+
+        result = await db.execute(select(RideBid.rent_a_car_role_id).where(RideBid.id == item.ride_bid_id))
         return result.scalar_one_or_none()
     return None
 
@@ -129,20 +136,24 @@ async def _resolve_direct_rate(
     return rule.rate, rule
 
 
-async def _resolve_network_rate(
-    db: AsyncSession, item_type: BookingItemType
+async def _resolve_scoped_rate(
+    db: AsyncSession, scope: CommissionRuleScope, item_type: BookingItemType, default: Decimal
 ) -> tuple[Decimal, CommissionRule | None]:
-    """An item-type-specific NETWORK rule beats the platform-wide one (item_type
-    NULL), which beats the hardcoded default."""
-    base = select(CommissionRule).where(
-        CommissionRule.scope == CommissionRuleScope.NETWORK, CommissionRule.is_active.is_(True)
-    )
+    """For the platform-wide scopes (NETWORK, CURATION): an item-type-specific rule
+    beats the scope-wide one (item_type NULL), which beats the hardcoded default."""
+    base = select(CommissionRule).where(CommissionRule.scope == scope, CommissionRule.is_active.is_(True))
     rule = await _most_recently_effective(db, _currently_effective(base.where(CommissionRule.item_type == item_type)))
     if rule is None:
         rule = await _most_recently_effective(db, _currently_effective(base.where(CommissionRule.item_type.is_(None))))
     if rule is None:
-        return _DEFAULT_NETWORK_RATE, None
+        return default, None
     return rule.rate, rule
+
+
+async def _resolve_network_rate(
+    db: AsyncSession, item_type: BookingItemType
+) -> tuple[Decimal, CommissionRule | None]:
+    return await _resolve_scoped_rate(db, CommissionRuleScope.NETWORK, item_type, _DEFAULT_NETWORK_RATE)
 
 
 async def _earning_attribution_for(
@@ -196,6 +207,35 @@ async def _network_cut(
         rate, rule = await _resolve_network_rate(db, item_type)
     amount = min((gross_amount * rate).quantize(Decimal("0.01")), direct_commission_amount)
     return rate, amount, rule
+
+
+async def _curation_cut(
+    db: AsyncSession,
+    item: BookingItem,
+    partner_role_id: uuid.UUID,
+    booker_user_id: uuid.UUID,
+    gross_amount: Decimal,
+) -> tuple[uuid.UUID, Decimal, Decimal, CommissionRule | None] | None:
+    """(curating expert role, rate, uncapped amount, rule) for a stay booked through
+    a tour that includes it (bookings/service.py sets `curated_by_tour_id`), or None.
+    No cut when the curating expert owns the stay themself (they already earn the
+    DIRECT commission on it), books it themself, or is no longer approved."""
+    if item.curated_by_tour_id is None:
+        return None
+    expert = (
+        await db.execute(
+            select(Tour.local_expert_role_id, PartnerRole.status, PartnerAccount.user_id)
+            .join(PartnerRole, PartnerRole.id == Tour.local_expert_role_id)
+            .join(PartnerAccount, PartnerAccount.id == PartnerRole.partner_account_id)
+            .where(Tour.id == item.curated_by_tour_id)
+        )
+    ).one_or_none()
+    if expert is None or expert.status != PartnerRoleStatus.APPROVED:
+        return None
+    if expert.local_expert_role_id == partner_role_id or expert.user_id == booker_user_id:
+        return None
+    rate, rule = await _resolve_scoped_rate(db, CommissionRuleScope.CURATION, item.item_type, _DEFAULT_CURATION_RATE)
+    return expert.local_expert_role_id, rate, (gross_amount * rate).quantize(Decimal("0.01")), rule
 
 
 async def preview_commission(db: AsyncSession, payload: CommissionPreviewRequest) -> CommissionPreviewResponse:
@@ -254,6 +294,10 @@ async def create_commissions_for_booking(db: AsyncSession, booking: Booking) -> 
             )
         )
 
+        # Extra cuts on top of the partner's own DIRECT row, all funded out of Ovigo's
+        # DIRECT commission and so jointly capped at it: a referring expert's NETWORK
+        # cut and a curating expert's CURATION cut (PRD §12.4).
+        extra: list[Commission] = []
         attribution = await _earning_attribution_for(
             db, partner_role_id, booking.created_at or datetime.now(timezone.utc), booker_user_id=booking.user_id
         )
@@ -262,7 +306,7 @@ async def create_commissions_for_booking(db: AsyncSession, booking: Booking) -> 
                 db, attribution, item.item_type, item.subtotal, commission_amount
             )
             if network_amount > 0:
-                db.add(
+                extra.append(
                     Commission(
                         booking_item_id=item.id,
                         partner_role_id=attribution.referring_expert_role_id,
@@ -278,6 +322,35 @@ async def create_commissions_for_booking(db: AsyncSession, booking: Booking) -> 
                         partner_net_amount=network_amount,
                     )
                 )
+
+        curation = await _curation_cut(db, item, partner_role_id, booking.user_id, item.subtotal)
+        if curation is not None:
+            curator_role_id, curation_rate, curation_amount, curation_rule = curation
+            same_expert = [c for c in extra if c.partner_role_id == curator_role_id]
+            if same_expert:
+                # One expert who both referred this partner and curated the stay is
+                # paid the higher of the two cuts, never both.
+                if curation_amount > same_expert[0].commission_amount:
+                    extra.remove(same_expert[0])
+                else:
+                    curation_amount = Decimal("0")
+            already = sum((c.commission_amount for c in extra), Decimal("0"))
+            curation_amount = min(curation_amount, commission_amount - already)
+            if curation_amount > 0:
+                extra.append(
+                    Commission(
+                        booking_item_id=item.id,
+                        partner_role_id=curator_role_id,
+                        source=CommissionSource.CURATION,
+                        rule_id=curation_rule.id if curation_rule else None,
+                        gross_amount=item.subtotal,
+                        rate=curation_rate,
+                        commission_amount=curation_amount,
+                        partner_net_amount=curation_amount,
+                    )
+                )
+        for row in extra:
+            db.add(row)
 
 
 async def mark_payable_for_booking(db: AsyncSession, booking: Booking) -> None:

@@ -42,6 +42,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
+import { getAdClickCampaignId } from "@/lib/ad-attribution";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { tourImageUrl } from "@/lib/media";
@@ -231,6 +232,14 @@ export default function TourDetailPage() {
                       {tour.stays.map((s) => (
                         <InclusionChip key={s.id}>
                           {s.description} · {s.nights} night{s.nights === 1 ? "" : "s"}
+                          {s.property_id && (
+                            <Link
+                              href={`/stays/${s.property_id}?via_tour=${tour.id}`}
+                              className="ml-1.5 font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                            >
+                              View stay →
+                            </Link>
+                          )}
                         </InclusionChip>
                       ))}
                     </InclusionGroup>
@@ -536,6 +545,7 @@ function BookTourSection({ tour }: { tour: Tour }) {
         {
           items: [{ item_type: "tour_departure", tour_departure_id: departureId, quantity }],
           guests: guestNames.filter((n) => n.trim()).map((full_name) => ({ full_name })),
+          ad_campaign_id: getAdClickCampaignId(),
         },
         { auth: true }
       );

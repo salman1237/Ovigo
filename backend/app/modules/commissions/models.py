@@ -46,12 +46,14 @@ class CommissionStatus(str, enum.Enum):
 class CommissionSource(str, enum.Enum):
     DIRECT = "direct"  # the partner's own earning on their booking item
     NETWORK = "network"  # a referring expert's cut of someone else's booking item
+    CURATION = "curation"  # a tour's expert's cut of a stay booked through their tour (PRD §12.4)
 
 
 class CommissionRuleScope(str, enum.Enum):
     CATEGORY = "category"  # default rate for a BookingItemType
     PARTNER = "partner"  # override for one specific partner_role_id
     NETWORK = "network"  # the referral/network cut rate (platform-wide)
+    CURATION = "curation"  # the tour-curation cut rate (platform-wide, or per item_type)
 
 
 class CommissionRule(Base):

@@ -34,6 +34,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import type { Location } from "@/types/location";
+import type { PropertySummary } from "@/types/stay";
 import {
   TOUR_TYPE_LABELS,
   type DepartureTraveler,
@@ -1104,18 +1105,35 @@ function StaysSection({ tour, run }: { tour: Tour; run: RunFn }) {
   const [nights, setNights] = useState(1);
   const [propertyType, setPropertyType] = useState("");
   const [roomCategory, setRoomCategory] = useState("");
+  // Optionally link the stay to a real Ovigo listing: travelers can then book it
+  // from the tour page, and you earn a tour-curation commission when they do.
+  const [propertyQuery, setPropertyQuery] = useState("");
+  const [linkedProperty, setLinkedProperty] = useState<PropertySummary | null>(null);
+  const { data: propertyResults } = useQuery({
+    queryKey: ["property-search", propertyQuery],
+    queryFn: () => apiClient.get<PropertySummary[]>(`/api/v1/properties?q=${encodeURIComponent(propertyQuery)}`),
+    enabled: propertyQuery.trim().length >= 2 && !linkedProperty,
+  });
 
   const add = () => {
     run(() =>
       apiClient.post(
         `/api/v1/tours/${tour.id}/stays`,
-        { description, nights, property_type: propertyType || undefined, room_category: roomCategory || undefined },
+        {
+          description,
+          nights,
+          property_type: propertyType || undefined,
+          room_category: roomCategory || undefined,
+          property_id: linkedProperty?.id,
+        },
         { auth: true }
       )
     );
     setDescription("");
     setPropertyType("");
     setRoomCategory("");
+    setLinkedProperty(null);
+    setPropertyQuery("");
   };
 
   return (
@@ -1126,6 +1144,7 @@ function StaysSection({ tour, run }: { tour: Tour; run: RunFn }) {
             {s.description} — {s.nights} night(s)
             {s.property_type && <span className="text-zinc-400"> · {s.property_type}</span>}
             {s.room_category && <span className="text-zinc-400"> · {s.room_category}</span>}
+            {s.property_id && <Badge variant="primary" className="ml-2">Bookable Ovigo stay</Badge>}
           </ItemRow>
         ))}
         {tour.stays.length === 0 && <p className="text-sm text-zinc-400">No stays added yet.</p>}
@@ -1135,6 +1154,50 @@ function StaysSection({ tour, run }: { tour: Tour; run: RunFn }) {
         <Input type="number" min={1} value={nights} onChange={(e) => setNights(Number(e.target.value))} className="w-24" />
         <Input value={propertyType} onChange={(e) => setPropertyType(e.target.value)} placeholder="Property type" className="w-32" />
         <Input value={roomCategory} onChange={(e) => setRoomCategory(e.target.value)} placeholder="Room/category" className="w-32" />
+        <div className="w-full">
+          {linkedProperty ? (
+            <p className="flex flex-wrap items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+              Linked to <span className="font-medium">{linkedProperty.name}</span>
+              <button
+                type="button"
+                onClick={() => setLinkedProperty(null)}
+                className="text-xs font-medium text-red-600 hover:text-red-700"
+              >
+                Remove link
+              </button>
+            </p>
+          ) : (
+            <>
+              <Input
+                value={propertyQuery}
+                onChange={(e) => setPropertyQuery(e.target.value)}
+                placeholder="Link an Ovigo stay (optional) — search by name"
+              />
+              {(propertyResults ?? []).length > 0 && (
+                <ul className="mt-1 flex flex-col rounded-lg border border-zinc-200 dark:border-zinc-700">
+                  {(propertyResults ?? []).slice(0, 5).map((p) => (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLinkedProperty(p);
+                          if (!description) setDescription(p.name);
+                          if (!propertyType) setPropertyType(p.property_type);
+                        }}
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                      >
+                        {p.name} <span className="text-xs capitalize text-zinc-400">· {p.property_type}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-1 text-xs text-zinc-500">
+                Travelers can book a linked stay from your tour page, and you earn a curation commission when they do.
+              </p>
+            </>
+          )}
+        </div>
         <Button size="sm" variant="secondary" onClick={add} disabled={!description}>
           <Plus className="h-4 w-4" /> Add
         </Button>

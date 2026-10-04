@@ -61,9 +61,10 @@ function EarningsCard({ title, endpoint }: { title: string; endpoint: string }) 
   // Direct sales vs. referral (network) earnings, split client-side from the same
   // commission rows (PRD §25.6) — cancelled rows count toward neither.
   const live = (data?.commissions ?? []).filter((c) => c.status !== "cancelled");
-  const sum = (source: "direct" | "network") =>
+  const sum = (source: "direct" | "network" | "curation") =>
     live.filter((c) => c.source === source).reduce((acc, c) => acc + Number(c.partner_net_amount), 0).toFixed(2);
-  const hasNetwork = live.some((c) => c.source === "network");
+  const hasNetwork = live.some((c) => c.source === "network" || c.source === "curation");
+  const hasCuration = live.some((c) => c.source === "curation");
 
   return (
     <Card>
@@ -88,6 +89,11 @@ function EarningsCard({ title, endpoint }: { title: string; endpoint: string }) 
               <span className="text-zinc-500">
                 Network referrals <span className="font-semibold text-indigo-600 dark:text-indigo-400">{formatMoney(sum("network"))}</span>
               </span>
+              {hasCuration && (
+                <span className="text-zinc-500">
+                  Tour curation <span className="font-semibold text-indigo-600 dark:text-indigo-400">{formatMoney(sum("curation"))}</span>
+                </span>
+              )}
               <Link href="/dashboard/network" className="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
                 View network →
               </Link>
@@ -98,7 +104,7 @@ function EarningsCard({ title, endpoint }: { title: string; endpoint: string }) 
               <div key={c.id} className="flex items-center justify-between text-xs text-zinc-500">
                 <span>
                   {new Date(c.created_at).toLocaleDateString()} · {(Number(c.rate) * 100).toFixed(0)}% of {formatMoney(c.gross_amount)}
-                  {c.source === "network" && <span className="ml-1 text-indigo-500">(network)</span>}
+                  {c.source !== "direct" && <span className="ml-1 text-indigo-500">({c.source})</span>}
                 </span>
                 <span
                   className={

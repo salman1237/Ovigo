@@ -31,6 +31,14 @@ code is applied. Both stack with `bundle_discount_amount` and with each other �
 bundle first, then promo, then loyalty points, each computed on the
 already-discounted running total — and neither ever touches `BookingItem.subtotal`
 for the same commission-basis-integrity reason.
+
+Attribution (PRD §12.5, Phase 9.2): `Booking.acquisition_channel` records how the
+traveler came to Ovigo — through a sponsored ad they clicked, through a Local
+Expert's referral link they registered with, or organically.
+`BookingItem.sold_by_role_id` records who sold each item — the listing's owner,
+or, for a stay booked through a tour that includes it (`curated_by_tour_id`),
+the Local Expert who curated that tour (and earns a CURATION commission for it,
+see commissions/service.py).
 """
 import enum
 import uuid
@@ -59,6 +67,12 @@ class BookingItemType(str, enum.Enum):
     CUSTOM_BID = "custom_bid"
     VEHICLE_RENTAL = "vehicle_rental"
     RIDE_BID = "ride_bid"
+
+
+class AcquisitionChannel(str, enum.Enum):
+    ORGANIC = "organic"
+    EXPERT = "expert"  # the traveler registered through a Local Expert's referral link
+    ADVERTISING = "advertising"  # booked an item from a sponsored ad the traveler clicked
 
 
 class BookingItemStatus(str, enum.Enum):
@@ -92,6 +106,16 @@ class Booking(Base):
     loyalty_discount_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0"))
     promo_discount_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0"))
     currency: Mapped[str] = mapped_column(String(3), default="BDT")
+    # Null only for bookings made before acquisition tracking existed.
+    acquisition_channel: Mapped[AcquisitionChannel | None] = mapped_column(
+        Enum(AcquisitionChannel, name="booking_acquisition_channel"), nullable=True
+    )
+    acquisition_expert_role_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("partner_roles.id", ondelete="SET NULL"), nullable=True
+    )
+    ad_campaign_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("ad_campaigns.id", ondelete="SET NULL"), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -147,6 +171,15 @@ class BookingItem(Base):
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+
+    # Who sold this item (PRD §12.5): the listing's owner, or the curating expert when
+    # booked through a tour that includes it. Null only for items predating tracking.
+    sold_by_role_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("partner_roles.id", ondelete="SET NULL"), nullable=True
+    )
+    curated_by_tour_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tours.id", ondelete="SET NULL"), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
