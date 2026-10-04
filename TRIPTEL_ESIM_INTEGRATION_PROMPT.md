@@ -6,7 +6,7 @@
 
 ## Your task
 
-Add a complete **eSIM store** to Ovigo. Travelers browse eSIM data plans by destination country, pay in BDT through Ovigo's existing SSLCommerz gateway, and receive a working eSIM (QR code + activation code + one-tap install links) inside Ovigo. Ovigo sources every eSIM from **Triptel** (`https://triptel.co`) through Triptel's **Partner Reseller API**, paying for each eSIM from Ovigo's prepaid USD reseller wallet at Triptel.
+Add a complete **eSIM store** to Ovigo. Travelers browse eSIM data plans by destination country, pay in BDT through Ovigo's existing SSLCommerz gateway, and receive a working eSIM (QR code + activation code + one-tap install links) inside Ovigo. Ovigo sources every eSIM from **Triptel** (`https://triptel.co`) through Triptel's **Partner Reseller API**, paying for each eSIM from Ovigo's prepaid EUR reseller wallet at Triptel.
 
 This is a production marketplace with real users and real money. **No existing feature may break.** Work additively, verify as you go, and stop and ask the user whenever an instruction below conflicts with what you find in the code.
 
@@ -39,15 +39,15 @@ This is a production marketplace with real users and real money. **No existing f
   If you believe anything else must change, stop and ask the user first.
 - **Database safety.** The Dockerfile does **not** run migrations. `alembic upgrade head` is run manually, and local development may point at the same Neon database as production. **Never run `alembic upgrade`, any script that writes data, or any test that touches the database without first confirming with the user which database `DATABASE_URL` points to.** Generate the migration, review it by hand, and hand the user the exact command to run.
 - **Migrations must be purely additive** (new tables, new enum types, new enum *values*). No drops, renames or changes to existing columns.
-- **Secrets:** the Triptel API key and webhook secret live only in environment variables on the backend. Never send them to the frontend, never log them, never commit them. Never expose Ovigo's USD cost, exchange rate or margin to travelers — only to admins.
+- **Secrets:** the Triptel API key and webhook secret live only in environment variables on the backend. Never send them to the frontend, never log them, never commit them. Never expose Ovigo's EUR cost, exchange rate or margin to travelers — only to admins.
 - The app must **boot and all existing pages must work even when Triptel is not configured** (no env vars set): eSIM endpoints then return `503` with `"eSIM service is not available"`, and the eSIM pages show a friendly "coming soon / unavailable" state.
 - `npm run lint` and `npm run build` must pass. `python -m pytest -q` must pass (see §6 for which tests are safe to run).
 
 ## 2. How the Triptel side works (summary — details in `TRIPTEL_PARTNER_API.md`)
 
 - Base URL `https://triptel.co/api/v1/partner`. Exchange the API key (`POST /auth/token`) for a 1-hour bearer token; renew on expiry or `401`.
-- Catalog: `GET /countries`, `GET /countries/{iso2}/products` — `retail_price` in **USD** is what Ovigo's Triptel wallet is charged.
-- `GET /me` — `wallet_balance` (USD) Ovigo can spend, `commission_balance`, `commission_rate_pct`.
+- Catalog: `GET /countries`, `GET /countries/{iso2}/products` — `retail_price` in **EUR** is what Ovigo's Triptel wallet is charged.
+- `GET /me` — `wallet_balance` (EUR) Ovigo can spend, `commission_balance`, `commission_rate_pct`.
 - `POST /orders {product_id, customer_reference}` — debits the wallet, returns the order in `PROCESSING`. **Idempotent on `customer_reference`**: retrying with the same reference and product returns the original order (`idempotent_replay: true`) and never charges twice. Use **the Ovigo eSIM order's own UUID** as `customer_reference`, always.
 - Order settles within ~10–30 s to `COMPLETED` (eSIM fields + `install_links` filled) or `FAILED` (Triptel refunds Ovigo's wallet automatically). `GET /orders/{order_id}` polls; `GET /orders?customer_reference=...` finds an order by Ovigo's reference.
 - Webhook: Triptel POSTs the order object to Ovigo when it settles, signed with `X-Webhook-Signature` = hex HMAC-SHA256 of the raw body using the webhook secret. Retries up to 3 times; can arrive more than once.
@@ -92,14 +92,14 @@ Allowed transitions (enforce in one place, in `service.py`; reject anything else
 **`EsimOrder`** (table `esim_orders`):
 - `id` UUID PK; `user_id` FK `users.id` (`ondelete="CASCADE"`, indexed); `status`.
 - Product snapshot, frozen at order time: `triptel_product_id` (str), `product_title`, `country_iso2`, `country_name`, `data_amount_gb` (Numeric), `is_unlimited` (bool), `validity_days` (int).
-- Money snapshot: `cost_usd` Numeric(10,4), `exchange_rate` Numeric(12,4) (BDT per USD), `markup_pct` Numeric(5,2), `price_bdt` Numeric(10,2), `currency` String(3) default `"BDT"`.
+- Money snapshot: `cost_eur` Numeric(10,4), `exchange_rate` Numeric(12,4) (BDT per EUR), `markup_pct` Numeric(5,2), `price_bdt` Numeric(10,2), `currency` String(3) default `"BDT"`.
 - Payment: `tran_id` String(100) unique + indexed, `val_id` nullable, `gateway_response` JSONB nullable, `paid_at` nullable.
 - Triptel: `triptel_order_id` nullable + indexed, `triptel_order_no` nullable, `triptel_status` nullable, `last_synced_at` nullable.
 - eSIM: `iccid`, `lpa_string` (Text), `qr_code_data` (Text), `smdp_address`, `matching_id`, `install_links` (JSONB), all nullable; `completed_at` nullable.
 - Failure/refund: `failure_reason` Text nullable, `refunded_at` nullable, `refunded_by_id` FK `users.id` nullable, `refund_note` Text nullable.
 - `created_at`, `updated_at`.
 
-**`EsimPricingConfig`** (table `esim_pricing_config`, a single row, created with defaults on first read): `usd_to_bdt_rate` Numeric(12,4) default `125.0000`, `markup_pct` Numeric(5,2) default `15.00`, `rounding_step_bdt` Integer default `10`, `is_enabled` Boolean default `True`, `updated_by_id` nullable FK, `updated_at`. Admins edit it (§3.7). `is_enabled = False` hides the store (the endpoints return `503`) without a redeploy.
+**`EsimPricingConfig`** (table `esim_pricing_config`, a single row, created with defaults on first read): `eur_to_bdt_rate` Numeric(12,4) default `142.0000`, `markup_pct` Numeric(5,2) default `15.00`, `rounding_step_bdt` Integer default `10`, `is_enabled` Boolean default `True`, `updated_by_id` nullable FK, `updated_at`. Admins edit it (§3.7). `is_enabled = False` hides the store (the endpoints return `503`) without a redeploy.
 
 **Notifications:** add `ESIM_READY = "esim_ready"` and `ESIM_FAILED = "esim_failed"` to `NotificationType`. Alembic autogenerate does **not** detect new values on an existing PostgreSQL enum, so write them into the migration by hand:
 
@@ -126,7 +126,7 @@ A small async client around `httpx.AsyncClient`, not the shared app client.
 ### 3.4 `pricing.py` (pure functions, unit-tested)
 
 ```
-price_bdt = ceil_to_step(cost_usd × usd_to_bdt_rate × (1 + markup_pct / 100), rounding_step_bdt)
+price_bdt = ceil_to_step(cost_eur × eur_to_bdt_rate × (1 + markup_pct / 100), rounding_step_bdt)
 ```
 
 - Use `Decimal` throughout, never `float`.
@@ -137,7 +137,7 @@ price_bdt = ceil_to_step(cost_usd × usd_to_bdt_rate × (1 + markup_pct / 100), 
 
 **Catalog (public, no login):**
 - `list_countries()` — the Triptel country list. Cache it for 1 hour with `core/cache.py`'s `cached` decorator; its key is static, which is fine here.
-- `list_products(iso2)` — the Triptel products for that country, cached for 15 minutes per ISO2. `cached` only supports a static key, so keep a small TTL dict inside the esim module rather than changing `core/cache.py`. Return each product with `id`, `title`, `data_label`, `is_unlimited`, `data_amount_gb`, `validity_days` and `price_bdt`, computed from the current `EsimPricingConfig`. **Never include `retail_price`/`cost_usd` in public responses.**
+- `list_products(iso2)` — the Triptel products for that country, cached for 15 minutes per ISO2. `cached` only supports a static key, so keep a small TTL dict inside the esim module rather than changing `core/cache.py`. Return each product with `id`, `title`, `data_label`, `is_unlimited`, `data_amount_gb`, `validity_days` and `price_bdt`, computed from the current `EsimPricingConfig`. **Never include `retail_price`/`cost_eur` in public responses.**
 
 **Create order** — `POST /api/v1/esim/orders` `{ "product_id": "...", "country_iso2": "SG" }` (logged in):
 1. Store enabled and Triptel configured, else `503`.
@@ -274,9 +274,9 @@ Use TanStack Query and `apiClient` like the existing pages. Match the existing v
   - `refund_pending`: "We couldn't issue this eSIM. Your payment of ৳X will be refunded — our team has been notified." `refunded`: the refunded date. `cancelled`: "Payment not completed".
 
 ### 5.3 Admin page — `/admin/esim`
-- **Triptel account card** from `GET /admin/esim/account`: wallet balance (USD) with a low-balance warning below $20, commission balance, webhook configured yes/no.
-- **Pricing card:** exchange rate, markup %, rounding step and enabled toggle, with a live example ("a $4.50 plan sells for ৳…"). Editable by super admins only; read-only for other admins.
-- **Orders table:** status tabs (all, `paid`, `provisioning`, `refund_pending`, `completed`, `refunded`, `cancelled`) and search. Each row shows traveler, plan, `price_bdt`, `cost_usd`, margin, Triptel order no, status and created date, plus actions: **Sync**, **Retry provisioning** (`paid` only), **Mark refunded** (`refund_pending` only, requires a note). Highlight `refund_pending` rows.
+- **Triptel account card** from `GET /admin/esim/account`: wallet balance (EUR) with a low-balance warning below €20, commission balance, webhook configured yes/no.
+- **Pricing card:** exchange rate, markup %, rounding step and enabled toggle, with a live example ("a €4.50 plan sells for ৳…"). Editable by super admins only; read-only for other admins.
+- **Orders table:** status tabs (all, `paid`, `provisioning`, `refund_pending`, `completed`, `refunded`, `cancelled`) and search. Each row shows traveler, plan, `price_bdt`, `cost_eur`, margin, Triptel order no, status and created date, plus actions: **Sync**, **Retry provisioning** (`paid` only), **Mark refunded** (`refund_pending` only, requires a note). Highlight `refund_pending` rows.
 
 ### 5.4 Navigation (additive only)
 - `Header.tsx` `PRIMARY_NAV`: add `{ href: "/esim", label: "eSIM", icon: Smartphone }`. `TRAVELER_LINKS`: add `{ href: "/esim/orders", label: "My eSIMs" }`. Mirror both in `MobileMenu.tsx`.
