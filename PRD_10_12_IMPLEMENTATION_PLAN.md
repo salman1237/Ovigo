@@ -278,18 +278,40 @@ CI currently runs `pytest` **with no database** (`.github/workflows/ci.yml`), so
 
 ---
 
-## 4. Phase 9.3: Guide fees through Ovigo + guide commission (§12.4, §13, §22) — *decision needed*
+## 4. Phase 9.3: Guides as an earning channel (§10.8–10.9, §12.4, §13, §22) — ✅ built
 
-**Today:** a guide's "earnings" are an informational `GuideAssignment.fee_amount` that the expert pays privately (`guides/models.py` docstring). No Ovigo money moves, so **there is nothing yet to take a network commission from** when a guide joins through a link. Phase 9.1 still records who referred the guide and sets up supervision, so the attribution is ready once guide money flows through Ovigo.
+**Before:** a guide's "earnings" were an informational `GuideAssignment.fee_amount` that the expert paid privately, so there was nothing to take a network commission from.
 
-**Recommended model (needs product sign-off):**
+**Client decisions (2026-10-04):**
 
-1. When an assignment with a `fee_amount` is **completed** (and verified, per PRD §13.3), create a `Commission(source=GUIDE_FEE, partner_role_id=guide)` for the fee, **deducted from the assigning expert's net** on that departure's `DIRECT` rows. Ovigo then pays the guide directly through the existing payout batches, which matches PRD §13.3 ("Earnings become eligible for payout").
-2. **Guide network commission:** if the guide was referred by expert **A** and is assigned by a *different* expert **B** (allowed by PRD §13.4), A earns a `NETWORK` cut of the guide fee. It's funded by an Ovigo platform fee on guide fees (new `CATEGORY` rule for a `GUIDE_SERVICE` item type), with the same cap as everything else.
-3. **No commission when the referrer is also the assigner.** If A refers and also assigns the guide, A would be taking a cut of a fee A is paying. That is a circular arrangement the PRD says to prevent, so nothing is created. PRD §13.1's "internal earning or revenue-share terms" between expert and guide are already expressed by the fee A sets.
-4. This also requires PRD §13.4, *multiple experts per guide*: drop `uq_guide_single_supervisor` in favor of unique `(guide_role_id, local_expert_role_id)`.
+1. Guide fees go through Ovigo (Option A), **and** travelers can book guides directly. In both cases the expert who onboarded the guide earns a 2% referral commission, split out of Ovigo's own commission.
+2. **Ovigo charges 12% on every sale in every channel**: tours, custom tours, stays, rent-a-car, rides, guides. Tours and custom bids move from 10% to 12%. Experts keep 2% of their referral network's business.
+3. A guide can work with several experts.
+4. Guide fees become payable after the tour's bookings complete, and are held while one is disputed.
+5. Guides set their own prices as packages they can change at any time (e.g. Half day ৳800, Full day ৳1400).
 
-**Alternative (smaller):** keep guide fees off-platform, and only pay network commission when a referred guide later applies for, and is approved as, a Host, Hotel or Rent-a-Car partner. Under the 9.1 rule, a new role applied for while the user's attribution is active gets attributed to the same referrer automatically. This needs no money-flow change but delivers less of what was asked.
+**What was built:**
+
+| Area | Behavior |
+|---|---|
+| 12% everywhere | Migration `fd7230d031d9` ends any running CATEGORY rule at another rate (yesterday, kept for history) and adds a 12% rule effective today for every item type, including the new `GUIDE_SERVICE`. PARTNER-scope overrides still win. `_LEGACY_DEFAULTS` is 12% for every type. Commission rows already created keep their rate. |
+| Guide profile | `guide_profiles`: headline, bio, city, languages, years. Admin-reviewed like vehicles (DRAFT → PENDING_REVIEW → PUBLISHED / REJECTED, SUSPENDED), at `/api/v1/admin/guides/profiles`. Public only while the guide role is APPROVED and it has an active package. |
+| Packages | `guide_service_packages`: name, description, hours, price, active. The guide edits prices at any time; bookings and assignments copy the price when made. Hidden, never deleted. |
+| Direct booking | `BookingItemType.GUIDE_SERVICE` with `booking_items.guide_package_id`, one date (`check_in_date`), quantity 1. The guide must have opened that day; the day must not be taken. Commission: the guide's DIRECT row (12%) plus the onboarding expert's NETWORK row (2%, from Ovigo's 12%). Not bundle-discounted. |
+| Expert hires a guide | The assignment carries a package (fee prefilled from its price) or a custom fee. When the guide completes it: `GUIDE_FEE` row for the guide (fee − 12%), `GUIDE_FEE_DEDUCTION` row for the assigning expert (−fee, netted against their earnings), and a `NETWORK` row for the onboarding expert (2% of the fee). These rows carry `commissions.guide_assignment_id` instead of a booking item (exactly one of the two is set). |
+| When fees are payable | `commissions/service.py::sync_guide_fee_status`: ON_HOLD while any paid booking on the departure has an open dispute; PAYABLE once the assignment is complete and every paid booking on the departure is completed or cancelled; else PENDING. It re-runs after the guide completes, a tour booking completes or is cancelled, and a dispute opens or resolves. A departure nobody booked releases the fee when the guide completes. |
+| Payouts | A partner whose PAYABLE total is ≤ 0 (an expert who hired more guides than they've earned) gets no payout; their rows stay PAYABLE and net against later earnings. |
+| Several experts | `guide_supervision` is unique per (guide, expert), replacing `uq_guide_single_supervisor`. `GET /api/v1/guides/my-supervisions` lists them all. |
+| Onboarding credit | Joining through an expert's link (9.1), or being invited by an expert while the guide role isn't approved yet (new `GUIDE_INVITE` attribution). First touch wins. Declining the invite drops a pending credit (or revokes an active one). |
+| No double-booking | A guide's day is taken by an active assignment (every day of the departure) or a live direct booking. Assignments may use any day the guide hasn't blocked; travelers only days the guide opened. Serialized with a row lock on the guide's role. |
+
+**Choices made where the client's answers left a gap (worth confirming):**
+
+- An expert who hires a guide they onboarded gets no 2% on that fee: no referral commission on your own purchase, the same rule as for bookings.
+- A refund after a dispute on the tour doesn't cancel the guide's fee. The expert hired the guide, not the traveler, and the guide did the work.
+- One booking per guide per date, whatever the package (no two half-days on one day).
+
+---
 
 ---
 
@@ -342,7 +364,7 @@ Real gaps on `/experts/[id]`: a **reviews list** (the reviews module exists; add
 ```
 9.1 Referral link ──┬──► 9.2 Engine completion (B1-B3, channel, curation)
                     ├──► 9.4 Business network completion (§12.1-12.3)
-                    └──► 9.3 Guide fees + guide commission (after decision)
+                    └──► 9.3 Guide fees + guide commission ✅
 9.5 Tour checkout (B4, B5) ── independent, can run in parallel with 9.2
 9.6 Approval ── after 9.5 #4 (category) is optional; otherwise independent
 9.7 Profile ── after 9.1 (shows network members)
@@ -354,8 +376,8 @@ Each phase follows the existing working rhythm in `IMPLEMENTATION_PLAN.md` §4: 
 
 ## 10. Decisions needed from the product owner
 
-1. **Default network rate and window.** The plan assumes 2% of the item subtotal for 12 months, paid out of Ovigo's commission. Confirm, or give different numbers per role (e.g. Hotel 2%, Rent-a-Car 1.5%, Guide 3%).
-2. **Guide commission model (§4).** The recommended version moves guide fees through Ovigo, with network commission only when another expert assigns the guide. The smaller alternative only pays when a guide later becomes a Host or Rent-a-Car partner.
+1. **Default network rate and window.** 2% confirmed by the client (2026-10-04), paid out of Ovigo's 12%. The 12-month window is still the plan's assumption.
+2. ~~**Guide commission model (§4).**~~ Decided 2026-10-04: guide fees through Ovigo plus direct traveler bookings, 12% everywhere, 2% to the onboarding expert. See §4.
 3. **Should Local Experts be able to refer other Local Experts?** The plan says **no** (one level only, to avoid pyramid structures). If yes, it would be a flat one-time bonus, never a recurring cut.
 4. **Commission terms text and version.** Someone needs to write the terms page the checkbox links to (legal/business content).
 5. **Deposit payments (9.5 #3).** Is split payment needed for launch, or can tours stay full payment for now?

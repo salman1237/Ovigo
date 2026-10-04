@@ -9,17 +9,29 @@ from app.core.permissions import require_admin, require_approved_role, require_r
 from app.database import get_db
 from app.modules.auth.utils import get_current_user
 from app.modules.guides import service
+from app.modules.guides.models import GuideProfileStatus
 from app.modules.guides.schemas import (
+    AdminGuideProfileRead,
     AssignmentCreate,
     AssignmentRead,
     AvailabilityRead,
     AvailabilitySet,
     GuideAdminSummary,
+    GuideBookingRead,
     GuideCertificationRead,
     GuideCertificationUpdate,
     GuideEarnings,
     GuideInviteCreate,
+    GuideOpenDates,
+    GuidePackageCreate,
+    GuidePackageRead,
+    GuidePackageUpdate,
+    GuideProfileModeration,
+    GuideProfileRead,
+    GuideProfileUpdate,
     GuideRestrictionUpdate,
+    PublicGuideDetail,
+    PublicGuideSummary,
     SupervisionRead,
     SupervisionRespond,
 )
@@ -54,6 +66,14 @@ async def get_my_supervision(
     return await service.get_my_supervision(db, role)
 
 
+@router.get("/my-supervisions", response_model=list[SupervisionRead])
+async def list_my_supervisions(
+    role: PartnerRole = Depends(require_role(PartnerRoleType.GUIDE)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.list_my_supervisions(db, role)
+
+
 @router.post("/supervisions/{supervision_id}/respond", response_model=SupervisionRead)
 async def respond_to_invite(
     supervision_id: uuid.UUID,
@@ -81,6 +101,15 @@ async def assign_guide(
     db: AsyncSession = Depends(get_db),
 ):
     return await service.assign_guide(db, role, guide_role_id, payload)
+
+
+@router.get("/{guide_role_id}/packages", response_model=list[GuidePackageRead])
+async def list_guide_packages_for_expert(
+    guide_role_id: uuid.UUID,
+    role: PartnerRole = Depends(require_approved_role(PartnerRoleType.LOCAL_EXPERT)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.list_packages_for_expert(db, role, guide_role_id)
 
 
 @router.get("/assignments/mine", response_model=list[AssignmentRead])
@@ -159,6 +188,140 @@ async def get_my_certification(
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_my_certification(db, role)
+
+
+# --- Guide services (Phase 9.3) ---
+
+
+@router.get("/profile/mine", response_model=GuideProfileRead)
+async def get_my_profile(
+    role: PartnerRole = Depends(require_role(PartnerRoleType.GUIDE)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_or_create_my_profile(db, role)
+
+
+@router.put("/profile/mine", response_model=GuideProfileRead)
+async def update_my_profile(
+    payload: GuideProfileUpdate,
+    role: PartnerRole = Depends(require_role(PartnerRoleType.GUIDE)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.update_my_profile(db, role, payload)
+
+
+@router.post("/profile/mine/submit", response_model=GuideProfileRead)
+async def submit_my_profile(
+    role: PartnerRole = Depends(require_role(PartnerRoleType.GUIDE)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.submit_my_profile(db, role)
+
+
+@router.get("/packages/mine", response_model=list[GuidePackageRead])
+async def list_my_packages(
+    role: PartnerRole = Depends(require_role(PartnerRoleType.GUIDE)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.list_my_packages(db, role)
+
+
+@router.post("/packages", response_model=GuidePackageRead, status_code=201)
+async def create_package(
+    payload: GuidePackageCreate,
+    role: PartnerRole = Depends(require_role(PartnerRoleType.GUIDE)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.create_package(db, role, payload)
+
+
+@router.patch("/packages/{package_id}", response_model=GuidePackageRead)
+async def update_package(
+    package_id: uuid.UUID,
+    payload: GuidePackageUpdate,
+    role: PartnerRole = Depends(require_role(PartnerRoleType.GUIDE)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.update_package(db, role, package_id, payload)
+
+
+@router.get("/bookings/mine", response_model=list[GuideBookingRead])
+async def list_my_bookings(
+    role: PartnerRole = Depends(require_role(PartnerRoleType.GUIDE)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.list_my_bookings(db, role)
+
+
+@router.get("/public", response_model=list[PublicGuideSummary])
+async def list_public_guides(
+    city: str | None = Query(default=None, max_length=120),
+    language: str | None = Query(default=None, max_length=40),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.list_public_guides(db, city, language)
+
+
+@router.get("/public/{guide_role_id}", response_model=PublicGuideDetail)
+async def get_public_guide(guide_role_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    return await service.get_public_guide(db, guide_role_id)
+
+
+@router.get("/public/{guide_role_id}/open-dates", response_model=GuideOpenDates)
+async def get_public_open_dates(
+    guide_role_id: uuid.UUID,
+    start: date = Query(...),
+    end: date = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    return {"dates": await service.public_open_dates(db, guide_role_id, start, end)}
+
+
+@admin_router.get("/profiles", response_model=list[AdminGuideProfileRead])
+async def admin_list_profiles(
+    status: GuideProfileStatus | None = Query(default=None),
+    current_user: User = Depends(require_admin_permission("guides.certify")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.admin_list_profiles(db, status)
+
+
+@admin_router.post("/profiles/{guide_role_id}/approve", response_model=AdminGuideProfileRead)
+async def admin_approve_profile(
+    guide_role_id: uuid.UUID,
+    current_user: User = Depends(require_admin_permission("guides.certify")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.admin_approve_profile(db, current_user, guide_role_id)
+
+
+@admin_router.post("/profiles/{guide_role_id}/reject", response_model=AdminGuideProfileRead)
+async def admin_reject_profile(
+    guide_role_id: uuid.UUID,
+    payload: GuideProfileModeration,
+    current_user: User = Depends(require_admin_permission("guides.certify")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.admin_reject_profile(db, current_user, guide_role_id, payload.reason)
+
+
+@admin_router.post("/profiles/{guide_role_id}/suspend", response_model=AdminGuideProfileRead)
+async def admin_suspend_profile(
+    guide_role_id: uuid.UUID,
+    payload: GuideProfileModeration,
+    current_user: User = Depends(require_admin_permission("guides.restrict")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.admin_suspend_profile(db, current_user, guide_role_id, payload.reason)
+
+
+@admin_router.post("/profiles/{guide_role_id}/unsuspend", response_model=AdminGuideProfileRead)
+async def admin_unsuspend_profile(
+    guide_role_id: uuid.UUID,
+    current_user: User = Depends(require_admin_permission("guides.restrict")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.admin_unsuspend_profile(db, current_user, guide_role_id)
 
 
 @admin_router.get("", response_model=list[GuideAdminSummary])

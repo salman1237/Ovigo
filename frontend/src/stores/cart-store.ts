@@ -10,7 +10,7 @@ import { persist } from "zustand/middleware";
  * fields to render the cart without refetching each listing. */
 export interface CartItem {
   key: string;
-  item_type: "tour_departure" | "room_type" | "vehicle_rental";
+  item_type: "tour_departure" | "room_type" | "vehicle_rental" | "guide_service";
   title: string;
   subtitle: string;
   unit_price: string;
@@ -22,6 +22,8 @@ export interface CartItem {
   tour_departure_id?: string;
   room_type_id?: string;
   vehicle_id?: string;
+  /** A guide's package, booked for one date (check_in_date). */
+  guide_package_id?: string;
   check_in_date?: string;
   check_out_date?: string;
   /** A stay added from a tour that includes it — credits that tour's expert. */

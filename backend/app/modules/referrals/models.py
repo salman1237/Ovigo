@@ -40,6 +40,7 @@ class AttributionSource(str, enum.Enum):
     REFERRAL_LINK = "referral_link"  # joined through the expert's referral link
     BUSINESS_REFERRAL = "business_referral"  # an approved BusinessReferral linked to this partner by an admin
     ADMIN = "admin"  # created or reassigned by an admin
+    GUIDE_INVITE = "guide_invite"  # the expert invited this guide (guides/service.py::invite_guide)
 
 
 class AttributionStatus(str, enum.Enum):

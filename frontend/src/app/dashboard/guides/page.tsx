@@ -18,8 +18,10 @@ import { formatMoney } from "@/lib/format";
 import {
   ASSIGNMENT_STATUS_LABELS,
   Assignment,
+  GuidePackage,
   SUPERVISION_STATUS_LABELS,
   Supervision,
+  packageDuration,
 } from "@/types/guides";
 import type { Tour } from "@/types/tour";
 
@@ -110,7 +112,8 @@ export default function MyGuidesPage() {
         <Users className="h-6 w-6 text-primary-600 dark:text-primary-400" /> My Guides
       </h1>
       <p className="mt-1 text-sm text-zinc-500">
-        Invite someone who already has an Ovigo account to be your supervised Guide.
+        Invite someone who already has an Ovigo account to guide your tours. Guides can work with several experts, and
+        you pay them through Ovigo. A new guide you bring onto Ovigo also earns you 2% of the business they do.
       </p>
 
       <div className="mt-6 flex flex-col gap-6">
@@ -163,7 +166,12 @@ export default function MyGuidesPage() {
                       <Badge variant={a.status === "completed" ? "success" : a.status === "cancelled" ? "danger" : "neutral"} className="capitalize">
                         {ASSIGNMENT_STATUS_LABELS[a.status]}
                       </Badge>
-                      {a.fee_amount && <span>Fee: {formatMoney(a.fee_amount)}</span>}
+                      {a.fee_amount && Number(a.fee_amount) > 0 && (
+                        <span>
+                          Fee: {formatMoney(a.fee_amount)}
+                          {a.package && ` (${a.package.name})`}
+                        </span>
+                      )}
                     </div>
                   </div>
                   {(a.status === "assigned" || a.status === "checked_in") && (
@@ -192,11 +200,22 @@ function GuideCard({
 }) {
   const [showAssign, setShowAssign] = useState(false);
   const [departureId, setDepartureId] = useState("");
+  const [packageId, setPackageId] = useState("");
   const [fee, setFee] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const canAssign = supervision.status === "accepted" && supervision.guide_role_approved;
+
+  // The guide's own packages and prices (Phase 9.3) — the fee defaults to the
+  // chosen package's current price.
+  const { data: packages } = useQuery({
+    queryKey: ["guides", supervision.guide.id, "packages"],
+    queryFn: () => apiClient.get<GuidePackage[]>(`/api/v1/guides/${supervision.guide.id}/packages`, { auth: true }),
+    enabled: canAssign && showAssign,
+    retry: false,
+  });
+  const chosen = (packages ?? []).find((p) => p.id === packageId);
 
   const assign = async () => {
     setError(null);
@@ -204,11 +223,15 @@ function GuideCard({
       setError("Pick a departure to assign this guide to.");
       return;
     }
+    if (!packageId && fee === "") {
+      setError("Pick one of the guide's packages, or enter the fee you'll pay them.");
+      return;
+    }
     setBusy(true);
     try {
       await apiClient.post(
         `/api/v1/guides/${supervision.guide.id}/assignments`,
-        { tour_departure_id: departureId, fee_amount: fee || undefined },
+        { tour_departure_id: departureId, package_id: packageId || undefined, fee_amount: fee === "" ? undefined : fee },
         { auth: true }
       );
       setShowAssign(false);
@@ -250,7 +273,26 @@ function GuideCard({
                   </option>
                 ))}
               </Select>
-              <Input type="number" value={fee} onChange={(e) => setFee(e.target.value)} placeholder="Fee you'll pay the guide (optional)" />
+              <Select value={packageId} onChange={(e) => setPackageId(e.target.value)}>
+                <option value="">Custom fee…</option>
+                {(packages ?? []).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {packageDuration(p) ? ` (${packageDuration(p)})` : ""} — {formatMoney(p.price)}
+                  </option>
+                ))}
+              </Select>
+              <Input
+                type="number"
+                min={0}
+                value={fee}
+                onChange={(e) => setFee(e.target.value)}
+                placeholder={chosen ? `Fee: ${formatMoney(chosen.price)} — or type a different amount` : "Fee you'll pay the guide"}
+              />
+              <p className="text-xs text-zinc-500">
+                You pay this through Ovigo: it&apos;s taken from your earnings once this departure&apos;s bookings are
+                complete, and the guide receives it minus Ovigo&apos;s 12% commission.
+              </p>
               {error && <p className="text-xs text-red-600">{error}</p>}
               <div className="flex gap-2">
                 <Button size="sm" onClick={assign} loading={busy}>

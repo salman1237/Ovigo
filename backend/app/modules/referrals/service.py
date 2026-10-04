@@ -488,11 +488,15 @@ async def attach_to_application(
 async def _supervise_joined_guide(db: AsyncSession, expert_role_id: uuid.UUID, guide_role_id: uuid.UUID) -> None:
     """A guide who chose this expert's link has already consented to the
     relationship, so supervision starts ACCEPTED (the guide role itself still waits
-    for admin approval). guide_supervision is unique per guide_role_id regardless of
-    status, so an old ended/declined row is re-pointed rather than duplicated; an
-    existing live supervision is left alone."""
+    for admin approval). guide_supervision is unique per (guide, expert) — a guide
+    can work with several experts — so this pair's old row, if any, is reused."""
     existing = (
-        await db.execute(select(GuideSupervision).where(GuideSupervision.guide_role_id == guide_role_id))
+        await db.execute(
+            select(GuideSupervision).where(
+                GuideSupervision.guide_role_id == guide_role_id,
+                GuideSupervision.local_expert_role_id == expert_role_id,
+            )
+        )
     ).scalar_one_or_none()
     if existing is None:
         db.add(
@@ -503,10 +507,63 @@ async def _supervise_joined_guide(db: AsyncSession, expert_role_id: uuid.UUID, g
                 responded_at=_now(),
             )
         )
-    elif existing.status in (SupervisionStatus.REJECTED, SupervisionStatus.TERMINATED):
-        existing.local_expert_role_id = expert_role_id
+    elif existing.status != SupervisionStatus.ACCEPTED:
         existing.status = SupervisionStatus.ACCEPTED
         existing.responded_at = _now()
+
+
+async def attribute_guide_invite(db: AsyncSession, expert_role: PartnerRole, guide_role: PartnerRole, guide_user: User) -> None:
+    """guides/service.py::invite_guide — an expert who invites someone onto Ovigo as
+    a guide onboarded them, so they earn the network cut on the guide's work, the
+    same as if the guide had joined through their referral link. Only while the
+    guide role isn't approved yet (an already-approved guide was onboarded before
+    this expert came along), and first touch wins. Starts PENDING; approving the
+    guide role starts its commission window (activate_for_role)."""
+    if guide_role.status == PartnerRoleStatus.APPROVED:
+        return
+    existing = (
+        await db.execute(select(NetworkAttribution.id).where(NetworkAttribution.referred_partner_role_id == guide_role.id))
+    ).scalar_one_or_none()
+    if existing is not None:
+        return
+    expert_user_id = await _user_id_for_role(db, expert_role.id)
+    if expert_user_id is None or expert_user_id == guide_user.id:
+        return
+    if await _reciprocal_exists(db, expert_user_id, guide_user.id):
+        return
+    db.add(
+        NetworkAttribution(
+            referring_expert_role_id=expert_role.id,
+            referred_user_id=guide_user.id,
+            referred_partner_role_id=guide_role.id,
+            role_type=PartnerRoleType.GUIDE,
+            source=AttributionSource.GUIDE_INVITE,
+            status=AttributionStatus.PENDING,
+        )
+    )
+
+
+async def drop_guide_invite_attribution(db: AsyncSession, expert_role_id: uuid.UUID, guide_role_id: uuid.UUID) -> None:
+    """The guide declined this expert's invite, so the expert didn't onboard them
+    after all. A PENDING attribution is removed (leaving the guide free to join
+    through someone else); one already earning is revoked instead, so the
+    commissions it paid stay traceable."""
+    attribution = (
+        await db.execute(
+            select(NetworkAttribution).where(
+                NetworkAttribution.referred_partner_role_id == guide_role_id,
+                NetworkAttribution.referring_expert_role_id == expert_role_id,
+                NetworkAttribution.source == AttributionSource.GUIDE_INVITE,
+            )
+        )
+    ).scalar_one_or_none()
+    if attribution is None:
+        return
+    if attribution.status == AttributionStatus.PENDING:
+        await db.delete(attribution)
+    elif attribution.status == AttributionStatus.ACTIVE:
+        attribution.status = AttributionStatus.REVOKED
+        attribution.revoked_reason = "The guide declined the expert's invite"
 
 
 async def activate_for_role(db: AsyncSession, role: PartnerRole) -> None:

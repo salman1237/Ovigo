@@ -27,6 +27,7 @@ export interface Assignment {
   id: string;
   status: AssignmentStatus;
   fee_amount: string | null;
+  package: { id: string; name: string } | null;
   checked_in_at: string | null;
   checked_out_at: string | null;
   created_at: string;
@@ -79,3 +80,79 @@ export const GUIDE_CERTIFICATION_LABELS: Record<GuideCertificationLevel, string>
   level_1: "Level 1",
   level_2: "Level 2",
 };
+
+// --- Guide services (Phase 9.3): public profile, priced packages, direct bookings ---
+
+export type GuideProfileStatus = "draft" | "pending_review" | "published" | "rejected" | "suspended";
+
+export interface GuideProfile {
+  guide_role_id: string;
+  headline: string | null;
+  bio: string | null;
+  city: string | null;
+  languages: string[] | null;
+  years_experience: number | null;
+  status: GuideProfileStatus;
+  rejection_reason: string | null;
+  updated_at: string;
+}
+
+export interface GuidePackage {
+  id: string;
+  name: string;
+  description: string | null;
+  duration_hours: string | null;
+  price: string;
+  is_active: boolean;
+}
+
+export interface PublicGuideSummary {
+  guide_role_id: string;
+  full_name: string;
+  headline: string | null;
+  city: string | null;
+  languages: string[];
+  years_experience: number | null;
+  certification_level: GuideCertificationLevel;
+  from_price: string;
+  package_count: number;
+}
+
+export interface PublicGuideDetail extends PublicGuideSummary {
+  bio: string | null;
+  completed_assignments: number;
+  packages: GuidePackage[];
+}
+
+export interface GuideBooking {
+  item_id: string;
+  booking_id: string;
+  service_date: string;
+  package_name: string;
+  price: string;
+  booking_status: string;
+  item_status: string;
+  traveler_name: string;
+  traveler_email: string | null;
+}
+
+export interface AdminGuideProfile {
+  guide: PersonSummary;
+  role_status: string;
+  profile: GuideProfile;
+  packages: GuidePackage[];
+}
+
+export const GUIDE_PROFILE_STATUS_LABELS: Record<GuideProfileStatus, string> = {
+  draft: "Draft",
+  pending_review: "Under review",
+  published: "Live",
+  rejected: "Changes needed",
+  suspended: "Suspended",
+};
+
+export function packageDuration(pkg: Pick<GuidePackage, "duration_hours">): string | null {
+  if (!pkg.duration_hours) return null;
+  const hours = Number(pkg.duration_hours);
+  return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} hr${hours === 1 ? "" : "s"}`;
+}

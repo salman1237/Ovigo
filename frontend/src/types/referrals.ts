@@ -2,7 +2,7 @@ import type { PartnerRoleType } from "@/types/partner";
 
 export type JoinableRoleType = Exclude<PartnerRoleType, "local_expert">;
 export type NetworkMemberStatus = "pending" | "active" | "expired" | "rejected" | "revoked";
-export type AttributionSource = "referral_link" | "business_referral" | "admin";
+export type AttributionSource = "referral_link" | "business_referral" | "admin" | "guide_invite";
 
 export const JOINABLE_ROLE_TYPES: JoinableRoleType[] = ["guide", "host", "hotel", "rent_a_car"];
 
@@ -95,4 +95,5 @@ export const SOURCE_LABELS: Record<AttributionSource, string> = {
   referral_link: "Referral link",
   business_referral: "Business referral",
   admin: "Assigned by Ovigo",
+  guide_invite: "Guide you invited",
 };

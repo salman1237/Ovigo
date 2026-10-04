@@ -9,7 +9,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
-import type { EarningsSummary, Payout, PayoutStatus } from "@/types/earnings";
+import { COMMISSION_SOURCE_LABELS, type CommissionSource, type EarningsSummary, type Payout, type PayoutStatus } from "@/types/earnings";
 
 const STATUS_BADGE: Record<PayoutStatus, { label: string; variant: "neutral" | "primary" | "success" | "warning" | "danger" }> = {
   pending: { label: "Pending", variant: "neutral" },
@@ -31,14 +31,16 @@ export default function EarningsPage() {
       <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Earnings</h1>
       <p className="mt-1 text-sm text-zinc-500">
         Commission is calculated automatically when a booking is paid, and becomes payable once the
-        booking is completed. An admin periodically runs a payout batch that pays out everything
-        currently payable.
+        booking is completed. A guide&apos;s fee for an expert&apos;s tour becomes payable once that
+        tour&apos;s bookings complete; the expert who hired the guide pays it out of their earnings.
+        An admin periodically runs a payout batch that pays out everything currently payable.
       </p>
 
       <div className="mt-6 flex flex-col gap-6">
         <EarningsCard title="As a Local Expert" endpoint="/api/v1/partners/earnings/expert" />
         <EarningsCard title="As a Host" endpoint="/api/v1/partners/earnings/host" />
         <EarningsCard title="As a Rent-a-Car partner" endpoint="/api/v1/partners/earnings/vehicles" />
+        <EarningsCard title="As a Guide" endpoint="/api/v1/partners/earnings/guide" />
       </div>
 
       <div className="mt-8">
@@ -61,10 +63,14 @@ function EarningsCard({ title, endpoint }: { title: string; endpoint: string }) 
   // Direct sales vs. referral (network) earnings, split client-side from the same
   // commission rows (PRD §25.6) — cancelled rows count toward neither.
   const live = (data?.commissions ?? []).filter((c) => c.status !== "cancelled");
-  const sum = (source: "direct" | "network" | "curation") =>
+  const sum = (source: CommissionSource) =>
     live.filter((c) => c.source === source).reduce((acc, c) => acc + Number(c.partner_net_amount), 0).toFixed(2);
   const hasNetwork = live.some((c) => c.source === "network" || c.source === "curation");
   const hasCuration = live.some((c) => c.source === "curation");
+  // Guide fees (Phase 9.3): a guide's earnings from experts' assignments, and an
+  // expert's cost of hiring guides, which Ovigo nets off what it pays them.
+  const hasGuideFees = live.some((c) => c.source === "guide_fee");
+  const hasGuideCosts = live.some((c) => c.source === "guide_fee_deduction");
 
   return (
     <Card>
@@ -81,30 +87,48 @@ function EarningsCard({ title, endpoint }: { title: string; endpoint: string }) 
             <Stat label="Paid out" value={data.total_net_paid} />
             {Number(data.total_net_on_hold) > 0 && <Stat label="On hold (dispute)" value={data.total_net_on_hold} />}
           </div>
-          {hasNetwork && (
+          {(hasNetwork || hasGuideFees || hasGuideCosts) && (
             <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-xl bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-800/50">
               <span className="text-zinc-500">
-                Direct sales <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(sum("direct"))}</span>
+                {hasGuideFees ? "Direct bookings" : "Direct sales"}{" "}
+                <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(sum("direct"))}</span>
               </span>
-              <span className="text-zinc-500">
-                Network referrals <span className="font-semibold text-indigo-600 dark:text-indigo-400">{formatMoney(sum("network"))}</span>
-              </span>
+              {hasGuideFees && (
+                <span className="text-zinc-500">
+                  Fees from experts <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatMoney(sum("guide_fee"))}</span>
+                </span>
+              )}
+              {hasNetwork && (
+                <span className="text-zinc-500">
+                  Network referrals <span className="font-semibold text-indigo-600 dark:text-indigo-400">{formatMoney(sum("network"))}</span>
+                </span>
+              )}
               {hasCuration && (
                 <span className="text-zinc-500">
                   Tour curation <span className="font-semibold text-indigo-600 dark:text-indigo-400">{formatMoney(sum("curation"))}</span>
                 </span>
               )}
-              <Link href="/dashboard/network" className="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
-                View network →
-              </Link>
+              {hasGuideCosts && (
+                <span className="text-zinc-500">
+                  Guide fees paid <span className="font-semibold text-red-600 dark:text-red-400">{formatMoney(sum("guide_fee_deduction"))}</span>
+                </span>
+              )}
+              {hasNetwork && (
+                <Link href="/dashboard/network" className="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                  View network →
+                </Link>
+              )}
             </div>
           )}
           <div className="mt-4 flex flex-col gap-1">
             {data.commissions.map((c) => (
               <div key={c.id} className="flex items-center justify-between text-xs text-zinc-500">
                 <span>
-                  {new Date(c.created_at).toLocaleDateString()} · {(Number(c.rate) * 100).toFixed(0)}% of {formatMoney(c.gross_amount)}
-                  {c.source !== "direct" && <span className="ml-1 text-indigo-500">({c.source})</span>}
+                  {new Date(c.created_at).toLocaleDateString()} ·{" "}
+                  {c.source === "guide_fee_deduction"
+                    ? `fee for a guide you hired`
+                    : `${(Number(c.rate) * 100).toFixed(0)}% of ${formatMoney(c.gross_amount)}`}
+                  {c.source !== "direct" && <span className="ml-1 text-indigo-500">({COMMISSION_SOURCE_LABELS[c.source]})</span>}
                 </span>
                 <span
                   className={

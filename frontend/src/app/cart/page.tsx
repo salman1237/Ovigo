@@ -15,10 +15,12 @@ import { apiClient, ApiError } from "@/lib/api-client";
 import { ApproxPrice } from "@/components/shared/ApproxPrice";
 import { formatMoney } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth-store";
-import { cartItemTotal, useCartStore } from "@/stores/cart-store";
+import { cartItemTotal, useCartStore, type CartItem } from "@/stores/cart-store";
 import type { Booking } from "@/types/booking";
 import type { LoyaltyAccount } from "@/types/loyalty";
 import type { PromoCodeValidateResult } from "@/types/promotions";
+
+const BUNDLE_ELIGIBLE_TYPES = new Set<CartItem["item_type"]>(["tour_departure", "room_type", "vehicle_rental"]);
 
 export default function CartPage() {
   const user = useAuthStore((s) => s.user);
@@ -32,9 +34,13 @@ export default function CartPage() {
   const [redeemPoints, setRedeemPoints] = useState(0);
 
   const total = items.reduce((sum, item) => sum + cartItemTotal(item), 0);
-  const distinctTypes = new Set(items.map((item) => item.item_type));
+  // Mirrors bookings/service.py: only tours, stays and vehicles count toward (and get)
+  // the package discount — a guide service is never bundle-discounted.
+  const bundleItems = items.filter((item) => BUNDLE_ELIGIBLE_TYPES.has(item.item_type));
+  const distinctTypes = new Set(bundleItems.map((item) => item.item_type));
   const bundleDiscountRate = distinctTypes.size >= 3 ? 0.1 : distinctTypes.size === 2 ? 0.05 : 0;
-  const afterBundle = total * (1 - bundleDiscountRate);
+  const bundleSubtotal = bundleItems.reduce((sum, item) => sum + cartItemTotal(item), 0);
+  const afterBundle = total - bundleSubtotal * bundleDiscountRate;
 
   const { data: loyaltyAccount } = useQuery({
     queryKey: ["loyalty", "me"],
@@ -77,6 +83,7 @@ export default function CartPage() {
             tour_departure_id: item.tour_departure_id,
             room_type_id: item.room_type_id,
             vehicle_id: item.vehicle_id,
+            guide_package_id: item.guide_package_id,
             check_in_date: item.check_in_date,
             check_out_date: item.check_out_date,
             quantity: item.quantity,

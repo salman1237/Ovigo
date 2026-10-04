@@ -12,6 +12,8 @@ class BookingItemCreate(BaseModel):
     tour_departure_id: uuid.UUID | None = None
     room_type_id: uuid.UUID | None = None
     vehicle_id: uuid.UUID | None = None
+    # A guide service: the guide's package, booked for one date (check_in_date).
+    guide_package_id: uuid.UUID | None = None
     check_in_date: date | None = None
     check_out_date: date | None = None
     quantity: int = 1
@@ -38,6 +40,13 @@ class BookingItemCreate(BaseModel):
                 raise ValueError("check_out_date must be after check_in_date")
             if self.quantity != 1:
                 raise ValueError("A vehicle rental item's quantity must be 1 — each Vehicle is one specific car")
+        elif self.item_type == BookingItemType.GUIDE_SERVICE:
+            if not self.guide_package_id or not self.check_in_date:
+                raise ValueError("guide_package_id and check_in_date (the service date) are required for a guide_service item")
+            if self.check_out_date is not None:
+                raise ValueError("A guide service is for one date — send check_in_date only")
+            if self.quantity != 1:
+                raise ValueError("A guide service item's quantity must be 1 — add one item per date")
         elif self.item_type == BookingItemType.CUSTOM_BID:
             # Custom-bid bookings are created server-side by bidding.service.accept_bid,
             # never through this generic endpoint — the price has to come from the
@@ -75,6 +84,7 @@ class BookingItemRead(BaseModel):
     room_type_id: uuid.UUID | None
     custom_bid_id: uuid.UUID | None
     vehicle_id: uuid.UUID | None
+    guide_package_id: uuid.UUID | None = None
     check_in_date: date | None
     check_out_date: date | None
     quantity: int

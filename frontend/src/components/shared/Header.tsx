@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Coins,
   Compass,
+  Flag,
   LayoutDashboard,
   LogOut,
   Map,
@@ -43,6 +44,7 @@ const PRIMARY_NAV = [
   { href: "/tours", label: "Tours", icon: Map },
   { href: "/stays", label: "Stays", icon: Compass },
   { href: "/rent-a-car", label: "Rent a Car", icon: Car },
+  { href: "/guides", label: "Guides", icon: Flag },
   { href: "/esim", label: "eSIM", icon: Smartphone },
 ];
 

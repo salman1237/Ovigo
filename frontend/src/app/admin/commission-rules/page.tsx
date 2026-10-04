@@ -12,7 +12,7 @@ import { formatMoney } from "@/lib/format";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { CommissionPreviewResult, CommissionRule, CommissionRuleScope } from "@/types/earnings";
 
-const ITEM_TYPES = ["tour_departure", "room_type", "custom_bid", "vehicle_rental", "ride_bid"] as const;
+const ITEM_TYPES = ["tour_departure", "room_type", "custom_bid", "vehicle_rental", "ride_bid", "guide_service"] as const;
 
 export default function CommissionRulesPage() {
   const [showForm, setShowForm] = useState(false);

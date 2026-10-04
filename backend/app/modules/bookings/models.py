@@ -67,6 +67,7 @@ class BookingItemType(str, enum.Enum):
     CUSTOM_BID = "custom_bid"
     VEHICLE_RENTAL = "vehicle_rental"
     RIDE_BID = "ride_bid"
+    GUIDE_SERVICE = "guide_service"  # a guide's package booked for one date (check_in_date)
 
 
 class AcquisitionChannel(str, enum.Enum):
@@ -163,8 +164,12 @@ class BookingItem(Base):
     vehicle_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="SET NULL"), nullable=True
     )
+    guide_package_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("guide_service_packages.id", ondelete="SET NULL"), nullable=True
+    )
     # check_in_date/check_out_date double as pickup/return dates for a vehicle
-    # rental — same date-range shape as a stay, no need for separate columns.
+    # rental — same date-range shape as a stay, no need for separate columns. A
+    # guide service uses check_in_date alone, as the service date.
     check_in_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     check_out_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 

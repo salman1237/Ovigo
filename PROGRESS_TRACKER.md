@@ -944,7 +944,45 @@ Plan: [PRD_10_12_IMPLEMENTATION_PLAN.md](PRD_10_12_IMPLEMENTATION_PLAN.md). It v
 - Live click-through of the expert flow on production. The sandbox browser can't load assets through its egress proxy, and an approved production expert account is needed.
 - GitGuardian incident 37853094 is a false positive (a throwaway CI database password in an early PR commit) and should be marked as such.
 - Production Postgres has **no backups configured** in Dokploy.
-- Phase 9.3 (guide fees through Ovigo) needs a product decision first. See the plan, §10.
+- ~~Phase 9.3 needs a product decision first.~~ Decided 2026-10-04; built below.
+
+### Phase 9.3 — Guides as an earning channel, 12% everywhere — Built (2026-10-04)
+
+Client decisions and the full design: the plan, §4.
+
+- **12% on every sale in every channel.** Tours and custom bids go from 10% to 12%; guide services start at 12%. Migration `fd7230d031d9` ends the old CATEGORY rules (kept for history) and adds 12% rules effective today. PARTNER overrides still win, and existing commission rows keep their rate.
+- **Travelers book guides directly.**
+  - Guides publish an admin-reviewed profile and their own priced packages (e.g. Half day ৳800 / Full day ৳1400), editable at any time.
+  - They open days on a calendar; travelers book a package for one open day (`/guides`, `/guides/[id]`, cart).
+  - Ovigo takes 12%, and the expert who onboarded the guide earns 2% of it.
+- **Experts hire guides through Ovigo.**
+  - An assignment carries a package (fee prefilled) or a custom fee.
+  - On completion: the guide's GUIDE_FEE (fee − 12%), the expert's GUIDE_FEE_DEDUCTION (−fee, netted against their earnings), and the onboarding expert's 2% NETWORK row.
+  - Payable once the departure's tour bookings complete, held while one is disputed. A refund doesn't cancel the guide's fee.
+- **Guides work with several experts** (unique per guide–expert pair). An expert who invites a not-yet-approved guide onboarded them (GUIDE_INVITE attribution); declining the invite drops that credit.
+- **No double-booking:** a guide's day is taken by an active assignment or a live booking.
+- **Payout batches** skip partners whose payable balance is ≤ 0; their rows wait and net against later earnings.
+- **Frontend:**
+  - Guide dashboard rebuilt: earnings, experts, assignments, profile, packages, calendar, traveler bookings.
+  - Experts get a package picker when assigning.
+  - Admin profile review on `/admin/guides`.
+  - Earnings page shows guide fees and guide costs.
+  - `guide_service` added as a commission-rule item type.
+  - "Guides" added to the header, mobile menu and footer.
+
+**Verified:**
+- Tests: `pytest -q` passes, 64 with Postgres and 46 passed / 18 skipped without. 12 new tests, mutation-checked: all 14 deliberate bugs are caught.
+- Migrations:
+  - Upgrade, `alembic check`, downgrade and re-upgrade on the dev database.
+  - Seeding tested with and without a pre-existing 10% tour rule.
+- Frontend `lint` and `build` are clean.
+- Local browser walkthrough, with no console errors other than the sandbox's unreachable payment gateway:
+  - the guide accepts an invite, fills in the profile, adds two packages, opens a day and submits;
+  - the admin approves;
+  - a traveler finds the guide on `/guides`, picks Full day and the open day, and checks out from the cart (booking ৳1400, `guide_service`);
+  - the expert assigns the guide with the Full day package (fee ৳1400 prefilled);
+  - the guide page has no horizontal scroll at 390px.
+- Deploy path: an image with this code was started against a database at production's revision (`7438eef3baa7`). Both migrations ran on container start, tours went from 10% to 12%, and a restart was clean. The base layer was reused from the 9.1/9.2 rehearsal because Docker Hub rate-limited pulls; `requirements.txt` is unchanged.
 
 ## Infrastructure note — Postgres off Neon, image-serving performance fix (2026-09-22)
 

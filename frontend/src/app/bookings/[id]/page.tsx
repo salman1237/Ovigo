@@ -323,7 +323,7 @@ function BookingItemCard({ item }: { item: BookingItem }) {
       <p className="font-medium capitalize">{item.item_type.replace("_", " ")}</p>
       <p className="text-zinc-500">
         {item.quantity} × {formatMoney(item.unit_price)} = {formatMoney(item.subtotal)}
-        {item.check_in_date && ` · ${item.check_in_date} → ${item.check_out_date}`}
+        {item.check_in_date && (item.check_out_date ? ` · ${item.check_in_date} → ${item.check_out_date}` : ` · ${item.check_in_date}`)}
       </p>
       <p className="mt-1 text-xs capitalize text-zinc-400">{item.status.replace("_", " ")}</p>
 

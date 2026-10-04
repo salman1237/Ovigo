@@ -1,5 +1,6 @@
 """Commission calculation with a configurable, priority-resolved rules engine.
-See models.py for the overall design (DIRECT vs NETWORK commission, rule scopes).
+See models.py for the overall design (DIRECT vs NETWORK commission, rule scopes,
+guide-fee rows).
 """
 import uuid
 from datetime import date, datetime, timezone
@@ -9,7 +10,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
-from app.modules.bookings.models import Booking, BookingItem, BookingItemStatus, BookingItemType
+from app.modules.bookings.models import Booking, BookingItem, BookingItemStatus, BookingItemType, BookingStatus
 from app.modules.commissions.models import Commission, CommissionRule, CommissionRuleScope, CommissionSource, CommissionStatus
 from app.modules.commissions.schemas import CommissionPreviewRequest, CommissionPreviewResponse, CommissionRuleCreate, EarningsSummary
 from app.modules.referrals import service as referrals_service
@@ -29,16 +30,11 @@ def _currently_effective(query, today: date | None = None):
         or_(CommissionRule.expiry_date.is_(None), CommissionRule.expiry_date >= today),
     )
 
-# Fallback rates used only if no matching CommissionRule row exists at all (shouldn't
-# happen once the Sprint 14-15 migration seeds a CATEGORY rule per item type — this is
-# a safety net, not the primary mechanism, unlike the flat dict it replaces).
-_LEGACY_DEFAULTS: dict[BookingItemType, Decimal] = {
-    BookingItemType.TOUR_DEPARTURE: Decimal("0.10"),
-    BookingItemType.ROOM_TYPE: Decimal("0.12"),
-    BookingItemType.CUSTOM_BID: Decimal("0.10"),
-    BookingItemType.VEHICLE_RENTAL: Decimal("0.12"),
-    BookingItemType.RIDE_BID: Decimal("0.12"),
-}
+# Fallback rates used only if no matching CommissionRule row exists at all (the Phase
+# 9.3 migration seeds a 12% CATEGORY rule per item type — this is a safety net, not
+# the primary mechanism). Ovigo charges 12% on every sale in every channel.
+_PLATFORM_RATE = Decimal("0.12")
+_LEGACY_DEFAULTS: dict[BookingItemType, Decimal] = {item_type: _PLATFORM_RATE for item_type in BookingItemType}
 _DEFAULT_NETWORK_RATE = Decimal("0.02")
 _DEFAULT_CURATION_RATE = Decimal("0.02")
 
@@ -72,6 +68,13 @@ async def _partner_role_for_item(db: AsyncSession, item: BookingItem) -> uuid.UU
         from app.modules.ride_requests.models import RideBid
 
         result = await db.execute(select(RideBid.rent_a_car_role_id).where(RideBid.id == item.ride_bid_id))
+        return result.scalar_one_or_none()
+    if item.item_type == BookingItemType.GUIDE_SERVICE and item.guide_package_id:
+        from app.modules.guides.models import GuideServicePackage
+
+        result = await db.execute(
+            select(GuideServicePackage.guide_role_id).where(GuideServicePackage.id == item.guide_package_id)
+        )
         return result.scalar_one_or_none()
     return None
 
@@ -356,7 +359,8 @@ async def create_commissions_for_booking(db: AsyncSession, booking: Booking) -> 
 async def mark_payable_for_booking(db: AsyncSession, booking: Booking) -> None:
     """Called when a booking completes (checkout) — the partner has now actually
     delivered the service, so their commission (and any linked NETWORK commission)
-    moves from PENDING to PAYABLE."""
+    moves from PENDING to PAYABLE. A completed tour booking can also release the
+    guide fees on its departure (see sync_guide_fee_status)."""
     item_ids = [item.id for item in booking.items]
     if not item_ids:
         return
@@ -366,6 +370,162 @@ async def mark_payable_for_booking(db: AsyncSession, booking: Booking) -> None:
         # the dispute resolves (disputes/service.py releases or cancels the hold).
         if commission.status == CommissionStatus.PENDING:
             commission.status = CommissionStatus.PAYABLE
+    await sync_guide_fee_status(db, departure_ids_of(booking))
+
+
+# --- Guide fees (Phase 9.3): an expert hiring a guide for a departure, paid through Ovigo ---
+
+
+def departure_ids_of(booking: Booking) -> set[uuid.UUID]:
+    return {
+        item.tour_departure_id
+        for item in booking.items
+        if item.item_type == BookingItemType.TOUR_DEPARTURE and item.tour_departure_id
+    }
+
+
+async def create_guide_fee_commissions(db: AsyncSession, assignment) -> None:
+    """Called once, when the guide completes an expert's assignment
+    (guides/service.py::complete_assignment). A fee is a guide-service sale with the
+    assigning expert as the buyer, so it's charged like one:
+    - the guide earns the fee minus Ovigo's commission (the GUIDE_SERVICE rate, 12%
+      unless an admin set an override for this guide) — a GUIDE_FEE row;
+    - the assigning expert pays the whole fee: a GUIDE_FEE_DEDUCTION row with a
+      negative net, so it comes out of what Ovigo owes that expert;
+    - the expert who onboarded the guide earns their NETWORK cut out of Ovigo's
+      commission, exactly as on a traveler's booking — except when they're the
+      assigning expert themself (no referral commission on your own purchase:
+      _earning_attribution_for treats the assigning expert as the booker).
+    Rows start PENDING; sync_guide_fee_status decides when they're payable.
+    `assignment` is a guides.models.GuideAssignment (not imported here: the guides
+    module imports this one)."""
+    fee = assignment.fee_amount
+    if fee is None or fee <= 0:
+        return
+    guide_role_id = assignment.guide_role_id
+    rate, rule = await _resolve_direct_rate(db, BookingItemType.GUIDE_SERVICE, guide_role_id)
+    commission_amount = (fee * rate).quantize(Decimal("0.01"))
+    db.add(
+        Commission(
+            guide_assignment_id=assignment.id,
+            partner_role_id=guide_role_id,
+            source=CommissionSource.GUIDE_FEE,
+            rule_id=rule.id if rule else None,
+            gross_amount=fee,
+            rate=rate,
+            commission_amount=commission_amount,
+            partner_net_amount=fee - commission_amount,
+        )
+    )
+    db.add(
+        Commission(
+            guide_assignment_id=assignment.id,
+            partner_role_id=assignment.assigned_by_role_id,
+            source=CommissionSource.GUIDE_FEE_DEDUCTION,
+            gross_amount=fee,
+            rate=Decimal("0"),
+            commission_amount=Decimal("0"),
+            partner_net_amount=-fee,
+        )
+    )
+    buyer_user_id = (
+        await db.execute(
+            select(PartnerAccount.user_id)
+            .join(PartnerRole, PartnerRole.partner_account_id == PartnerAccount.id)
+            .where(PartnerRole.id == assignment.assigned_by_role_id)
+        )
+    ).scalar_one_or_none()
+    attribution = await _earning_attribution_for(
+        db, guide_role_id, assignment.created_at or datetime.now(timezone.utc), booker_user_id=buyer_user_id
+    )
+    if attribution is not None:
+        network_rate, network_amount, network_rule = await _network_cut(
+            db, attribution, BookingItemType.GUIDE_SERVICE, fee, commission_amount
+        )
+        if network_amount > 0:
+            db.add(
+                Commission(
+                    guide_assignment_id=assignment.id,
+                    partner_role_id=attribution.referring_expert_role_id,
+                    source=CommissionSource.NETWORK,
+                    rule_id=network_rule.id if network_rule else None,
+                    attribution_id=attribution.id,
+                    gross_amount=fee,
+                    rate=network_rate,
+                    commission_amount=network_amount,
+                    partner_net_amount=network_amount,
+                )
+            )
+    await db.flush()
+
+
+async def sync_guide_fee_status(db: AsyncSession, departure_ids: set[uuid.UUID]) -> None:
+    """Puts every not-yet-paid guide-fee row on these departures into the state the
+    client's rule says (Phase 9.3 decision 4a): held while any paid booking on the
+    departure has an open dispute; otherwise payable once the guide has completed
+    the assignment and every paid booking on the departure has completed (or been
+    cancelled); otherwise pending. A departure nobody booked releases its guide fees
+    as soon as the guide completes — the expert hired them either way.
+
+    Recomputed from scratch, so it's safe to call after anything that can change
+    the answer: the guide completing, a tour booking completing or being
+    cancelled, a dispute opening or resolving. PAID and CANCELLED rows are final
+    and never touched."""
+    if not departure_ids:
+        return
+    from app.modules.disputes.models import Dispute, DisputeStatus
+
+    await db.flush()  # the session doesn't autoflush; the queries below must see the caller's changes
+    from app.modules.guides.models import AssignmentStatus, GuideAssignment
+
+    rows = (
+        await db.execute(
+            select(Commission, GuideAssignment.status, GuideAssignment.tour_departure_id)
+            .join(GuideAssignment, GuideAssignment.id == Commission.guide_assignment_id)
+            .where(
+                GuideAssignment.tour_departure_id.in_(departure_ids),
+                Commission.status.in_([CommissionStatus.PENDING, CommissionStatus.PAYABLE, CommissionStatus.ON_HOLD]),
+            )
+        )
+    ).all()
+    if not rows:
+        return
+
+    live_booking = Booking.status.notin_([BookingStatus.PENDING_PAYMENT, BookingStatus.CANCELLED])
+    disputed = set(
+        (
+            await db.execute(
+                select(BookingItem.tour_departure_id)
+                .join(Booking, Booking.id == BookingItem.booking_id)
+                .join(Dispute, Dispute.booking_id == Booking.id)
+                .where(
+                    BookingItem.tour_departure_id.in_(departure_ids),
+                    Dispute.status == DisputeStatus.OPEN,
+                    live_booking,
+                )
+            )
+        ).scalars().all()
+    )
+    in_progress = set(
+        (
+            await db.execute(
+                select(BookingItem.tour_departure_id)
+                .join(Booking, Booking.id == BookingItem.booking_id)
+                .where(
+                    BookingItem.tour_departure_id.in_(departure_ids),
+                    BookingItem.status.notin_([BookingItemStatus.COMPLETED, BookingItemStatus.CANCELLED]),
+                    live_booking,
+                )
+            )
+        ).scalars().all()
+    )
+    for commission, assignment_status, departure_id in rows:
+        if departure_id in disputed:
+            commission.status = CommissionStatus.ON_HOLD
+        elif assignment_status == AssignmentStatus.COMPLETED and departure_id not in in_progress:
+            commission.status = CommissionStatus.PAYABLE
+        else:
+            commission.status = CommissionStatus.PENDING
 
 
 async def get_earnings_for_role(db: AsyncSession, role: PartnerRole) -> EarningsSummary:
@@ -373,7 +533,11 @@ async def get_earnings_for_role(db: AsyncSession, role: PartnerRole) -> Earnings
         select(Commission).where(Commission.partner_role_id == role.id).order_by(Commission.created_at.desc())
     )
     commissions = list(result.scalars().all())
-    total_gross = sum((c.gross_amount for c in commissions), Decimal("0"))
+    # A guide fee an expert paid isn't a sale of theirs — it counts in their nets
+    # (negative), not in their gross sales.
+    total_gross = sum(
+        (c.gross_amount for c in commissions if c.source != CommissionSource.GUIDE_FEE_DEDUCTION), Decimal("0")
+    )
     total_commission = sum((c.commission_amount for c in commissions), Decimal("0"))
     total_net_pending = sum(
         (c.partner_net_amount for c in commissions if c.status == CommissionStatus.PENDING), Decimal("0")
