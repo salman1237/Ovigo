@@ -60,6 +60,8 @@ from app.modules.payouts.router import router as payouts_router
 from app.modules.profiles.router import router as profiles_router
 from app.modules.promotions.router import admin_router as promotions_admin_router
 from app.modules.promotions.router import router as promotions_router
+from app.modules.referrals.router import admin_router as referrals_admin_router
+from app.modules.referrals.router import router as referrals_router
 from app.modules.rentcar.router import drivers_router as rentcar_drivers_router
 from app.modules.rentcar.router import router as rentcar_router
 from app.modules.reviews.router import router as reviews_router
@@ -102,6 +104,10 @@ OPENAPI_TAGS = [
     {"name": "rent-a-car-bidding", "description": "A traveler's ride request (pickup/drop-off route) and the bids Rent-a-Car partners submit on it."},
     {"name": "geocoding", "description": "Free-text and reverse geocoding for the ride-request map picker, proxied through OpenStreetMap's Nominatim."},
     {"name": "business-network", "description": "Partner-to-partner referrals."},
+    {
+        "name": "referrals",
+        "description": "A Local Expert's personal referral link, and the network of partners who joined through it.",
+    },
     {"name": "partners", "description": "Applying for and managing a partner role (Local Expert, Host, Rent-a-Car, ...)."},
     {"name": "badges", "description": "Trust badge applications a partner submits for admin review."},
     {"name": "notifications", "description": "A user's own in-app notification feed."},
@@ -166,6 +172,8 @@ app.include_router(guides_router)
 app.include_router(guides_admin_router)
 app.include_router(business_network_router)
 app.include_router(business_network_admin_router)
+app.include_router(referrals_router)
+app.include_router(referrals_admin_router)
 app.include_router(locations_router)
 app.include_router(partners_router)
 app.include_router(profiles_router)

@@ -16,6 +16,7 @@ from app.modules.fraud.models import FraudFlag, FraudFlagStatus, FraudRuleType, 
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.models import NotificationType
 from app.modules.partners.models import DocumentStatus, DocumentType, PartnerDocument
+from app.modules.referrals.models import AttributionSource, AttributionStatus, NetworkAttribution
 from app.modules.rentcar.models import Vehicle, VehicleStatus
 from app.modules.stays.models import Property, RoomType
 from app.modules.tours.models import Tour, TourDeparture
@@ -263,6 +264,9 @@ REFERRAL_NETWORK_THRESHOLD = 5
 
 
 async def check_referral_network_volume(db: AsyncSession, referring_role_id: uuid.UUID) -> None:
+    """Counts both ways an expert grows their network: approved business referrals,
+    and partners activated through their referral link (referrals/models.py) — a
+    link-joined partner isn't also a BusinessReferral, so the two never double-count."""
     since = datetime.now(timezone.utc) - timedelta(days=REFERRAL_NETWORK_WINDOW_DAYS)
     result = await db.execute(
         select(func.count(BusinessReferral.id)).where(
@@ -271,7 +275,15 @@ async def check_referral_network_volume(db: AsyncSession, referring_role_id: uui
             BusinessReferral.created_at >= since,
         )
     )
-    count = result.scalar_one()
+    link_result = await db.execute(
+        select(func.count(NetworkAttribution.id)).where(
+            NetworkAttribution.referring_expert_role_id == referring_role_id,
+            NetworkAttribution.source == AttributionSource.REFERRAL_LINK,
+            NetworkAttribution.status == AttributionStatus.ACTIVE,
+            NetworkAttribution.commission_starts_at >= since,
+        )
+    )
+    count = result.scalar_one() + link_result.scalar_one()
     if count < REFERRAL_NETWORK_THRESHOLD:
         return
     user_result = await db.execute(
@@ -283,8 +295,23 @@ async def check_referral_network_volume(db: AsyncSession, referring_role_id: uui
     if user_id is not None:
         await _flag(
             db, user_id, FraudRuleType.REFERRAL_NETWORK_VOLUME, FraudSeverity.MEDIUM, 25,
-            f"{count} business referrals approved in the last {REFERRAL_NETWORK_WINDOW_DAYS} days",
+            f"{count} network referrals approved in the last {REFERRAL_NETWORK_WINDOW_DAYS} days",
         )
+
+
+async def check_referral_network_volume_for_partner(db: AsyncSession, partner_role_id: uuid.UUID) -> None:
+    """Runs the volume check for whichever expert referred this just-approved partner,
+    if any. Commits its own flag (if one is raised)."""
+    result = await db.execute(
+        select(NetworkAttribution.referring_expert_role_id).where(
+            NetworkAttribution.referred_partner_role_id == partner_role_id,
+            NetworkAttribution.status == AttributionStatus.ACTIVE,
+        )
+    )
+    referring_role_id = result.scalar_one_or_none()
+    if referring_role_id is not None:
+        await check_referral_network_volume(db, referring_role_id)
+        await db.commit()
 
 
 async def scan_expired_vehicle_documents(db: AsyncSession) -> int:

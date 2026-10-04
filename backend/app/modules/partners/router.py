@@ -29,7 +29,14 @@ async def apply_for_role(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await service.apply_for_role(db, current_user, payload.role_type, payload.message)
+    return await service.apply_for_role(
+        db,
+        current_user,
+        payload.role_type,
+        payload.message,
+        referral_code=payload.referral_code,
+        accept_network_terms=payload.accept_network_terms,
+    )
 
 
 @router.get("/roles", response_model=list[PartnerRoleRead])

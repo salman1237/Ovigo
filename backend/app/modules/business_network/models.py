@@ -3,17 +3,15 @@ acceptance criteria #14/#15): a Local Expert can add a business they know —
 either one they own/co-own, or a pure referral of someone else's — and Ovigo
 records the attribution.
 
-Scope note: this sprint covers the referral record, ownership types, and the
-admin approval workflow (satisfies AC #14 "can add a referred business" and
-AC #15 "referral attribution is stored"). It deliberately stops short of a
-working "network commission engine" — a referred business isn't necessarily a
-bookable partner on the platform at all (it might just be a trusted local
-recommendation), so there's no booking activity to calculate a referral
-commission against yet. The technical document's own Sprint 14-15
-("Advanced commission engine — category, partner-specific, referral,
-network") is where a referred business that later becomes an actual booking-
-generating partner would get connected to its referrer for commission
-purposes.
+Commission: once an admin links an approved referral to the business's actual
+partner role (`linked_partner_role_id`, set by service.py's `link_partner`), a
+`NetworkAttribution` (referrals/models.py) is written for it, and from then on
+the commission engine credits the referring expert a NETWORK cut of that
+partner's bookings for the attribution's commission window. A referral that's
+never linked (e.g. a restaurant with nothing bookable on Ovigo) earns nothing,
+since there's no booking activity to take a cut of. Partners who join through an
+expert's referral link get the same kind of attribution without a
+BusinessReferral at all.
 """
 import enum
 import uuid
@@ -56,9 +54,8 @@ class BusinessReferral(Base):
     )
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Set by an admin once the referred business itself registers as an actual Ovigo
-    # partner — only from that point on does this referral generate a real NETWORK
-    # commission (commissions/service.py) for the referring expert, since before that
-    # there's no booking activity from the referred business to take a cut of.
+    # partner — linking writes the NetworkAttribution (referrals/models.py) that the
+    # commission engine reads; before that there's no booking activity to take a cut of.
     linked_partner_role_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("partner_roles.id", ondelete="SET NULL"), nullable=True, unique=True
     )
@@ -78,9 +75,9 @@ class BusinessReferral(Base):
     # referral record itself looks legitimate.
     is_business_verified: Mapped[bool] = mapped_column(default=False)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    # Overrides the platform-wide NETWORK commission rate (commissions/service.py)
-    # for this specific referral, when a negotiated rate applies instead of the
-    # standard one.
+    # Overrides the platform-wide NETWORK commission rate for this specific referral,
+    # when a negotiated rate applies instead of the standard one. Mirrored onto the
+    # linked NetworkAttribution, which is what the commission engine actually reads.
     custom_commission_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

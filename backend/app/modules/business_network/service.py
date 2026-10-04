@@ -14,6 +14,7 @@ from app.modules.business_network.schemas import BusinessReferralCreate
 from app.modules.fraud import service as fraud_service
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.models import NotificationType
+from app.modules.referrals import service as referrals_service
 from app.modules.users.models import PartnerAccount, PartnerRole, User
 
 _EAGER = (
@@ -114,11 +115,14 @@ async def approve_referral(db: AsyncSession, admin: User, referral_id: uuid.UUID
 async def link_partner(db: AsyncSession, admin: User, referral_id: uuid.UUID, partner_role_id: uuid.UUID) -> BusinessReferral:
     """Admin action once the referred business itself signs up as an actual Ovigo
     partner — from this point on, commissions/service.py credits the referring
-    expert a NETWORK-scope cut whenever the linked partner earns a DIRECT commission."""
+    expert a NETWORK-scope cut whenever the linked partner earns a DIRECT commission,
+    via the NetworkAttribution this writes (referrals/models.py)."""
     referral = await _get_referral_or_404(db, referral_id)
     if referral.status != ReferralStatus.APPROVED:
         raise ConflictError("Only an approved referral can be linked to a partner")
     referral.linked_partner_role_id = partner_role_id
+    await db.flush()
+    await referrals_service.upsert_for_business_referral(db, referral)
     await db.commit()
     await fraud_service.check_self_referral(db, referral.referring_expert_role_id, partner_role_id, referral.id)
     await db.commit()
@@ -231,6 +235,7 @@ async def set_commission_rate(db: AsyncSession, admin: User, referral_id: uuid.U
     platform-wide NETWORK rate (commissions/service.py::_resolve_network_rate)."""
     referral = await _get_referral_or_404(db, referral_id)
     referral.custom_commission_rate = rate
+    await referrals_service.sync_business_referral_rate(db, referral)
     await db.commit()
     await audit.record(
         db,
