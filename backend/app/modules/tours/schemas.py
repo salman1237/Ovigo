@@ -460,6 +460,31 @@ class TourRead(BaseModel):
     images: list[TourImageRead] = []
 
 
+class TourExpertCard(BaseModel):
+    """Who runs this tour (PRD §10.3 "Responsible Local Expert"), for the public tour
+    page's "Your local expert" card. Built by profiles/service.py::tour_expert_card."""
+
+    partner_role_id: uuid.UUID
+    name: str
+    headline: str | None
+    photo_url: str | None
+    years_experience: int | None
+    languages: list[str]
+    primary_destination: str | None
+    profile_public: bool  # /experts/{id} is published
+    identity_verified: bool
+    member_since: datetime | None
+    rating_avg: Decimal | None
+    reviews_count: int
+    completed_bookings: int
+    response_rate_percent: int | None
+    avg_response_minutes: int | None
+
+
+class PublicTourRead(TourRead):
+    expert: TourExpertCard | None = None
+
+
 class TourSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

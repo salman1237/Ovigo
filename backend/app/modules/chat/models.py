@@ -39,6 +39,7 @@ class ChatContextType(str, enum.Enum):
     PROPERTY = "property"
     VEHICLE = "vehicle"
     BOOKING_ITEM = "booking_item"
+    EXPERT = "expert"  # a Local Expert's public profile (PRD §8.2 "Live-chat button"); context_id is their role
 
 
 class ChatThreadStatus(str, enum.Enum):

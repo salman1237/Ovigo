@@ -180,6 +180,27 @@ export interface TourImage {
   sort_order: number;
 }
 
+/** Who runs a tour — the public tour page's "Your local expert" card. Numbers are
+ * computed from real bookings, reviews and chats; null means "nothing yet". */
+export interface TourExpertCard {
+  partner_role_id: string;
+  name: string;
+  headline: string | null;
+  /** API-relative; prefix with the API origin (see lib/media.ts::apiFileUrl). */
+  photo_url: string | null;
+  years_experience: number | null;
+  languages: string[];
+  primary_destination: string | null;
+  profile_public: boolean;
+  identity_verified: boolean;
+  member_since: string | null;
+  rating_avg: string | null;
+  reviews_count: number;
+  completed_bookings: number;
+  response_rate_percent: number | null;
+  avg_response_minutes: number | null;
+}
+
 export interface Tour {
   id: string;
   local_expert_role_id: string;
@@ -262,6 +283,8 @@ export interface Tour {
   addons: Addon[];
   transport: Transport[];
   stays: TourStay[];
+  /** Only on the public GET /api/v1/tours/{id}. */
+  expert?: TourExpertCard | null;
 }
 
 export interface TourSummary {

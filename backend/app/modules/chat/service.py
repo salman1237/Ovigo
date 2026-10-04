@@ -36,7 +36,7 @@ from app.modules.notifications.models import NotificationType
 from app.modules.rentcar.models import Vehicle
 from app.modules.stays.models import Property
 from app.modules.tours.models import Tour
-from app.modules.users.models import PartnerAccount, PartnerRole, SystemRole, User
+from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleStatus, PartnerRoleType, SystemRole, User
 
 _EMAIL_RE = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9.-]+")
 _URL_RE = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
@@ -105,6 +105,21 @@ async def _resolve_context(
         if partner_role_id is None:
             raise NotFoundError("Could not resolve a partner for this booking item")
         return partner_role_id, item.booking_id, f"Booking #{str(item.booking_id)[:8]}"
+    if context_type == ChatContextType.EXPERT:
+        result = await db.execute(
+            select(PartnerRole.id, User.full_name)
+            .join(PartnerAccount, PartnerAccount.id == PartnerRole.partner_account_id)
+            .join(User, User.id == PartnerAccount.user_id)
+            .where(
+                PartnerRole.id == context_id,
+                PartnerRole.role_type == PartnerRoleType.LOCAL_EXPERT,
+                PartnerRole.status == PartnerRoleStatus.APPROVED,
+            )
+        )
+        row = result.first()
+        if row is None:
+            raise NotFoundError("Local expert not found")
+        return row[0], None, f"Chat with {row[1]}"
     raise NotFoundError("Unknown chat context")
 
 

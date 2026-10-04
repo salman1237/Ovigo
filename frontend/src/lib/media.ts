@@ -1,6 +1,13 @@
 import { API_URL } from "@/lib/constants";
 import type { DestinationSummary } from "@/types/search";
 
+/** Absolute URL for an API-relative file path the backend returns (e.g. an
+ * expert's `photo_url`), or null. Absolute URLs pass through unchanged. */
+export function apiFileUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  return /^https?:\/\//.test(path) ? path : `${API_URL}${path}`;
+}
+
 export function tourImageUrl(tourId: string, imageId: string): string {
   return `${API_URL}/api/v1/tours/${tourId}/images/${imageId}/file`;
 }

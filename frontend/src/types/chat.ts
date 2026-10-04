@@ -1,4 +1,4 @@
-export type ChatContextType = "tour" | "property" | "vehicle" | "booking_item";
+export type ChatContextType = "tour" | "property" | "vehicle" | "booking_item" | "expert";
 export type ChatThreadStatus = "open" | "closed";
 export type ChatMessageType = "text" | "attachment" | "location";
 

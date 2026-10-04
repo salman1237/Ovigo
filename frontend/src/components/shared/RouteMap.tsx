@@ -112,6 +112,8 @@ interface RouteMapProps {
   interactive?: boolean;
   className?: string;
   height?: string;
+  /** Just the map with its pin(s): no route header or pickup/drop-off legend. */
+  bare?: boolean;
 }
 
 export function RouteMap({
@@ -122,6 +124,7 @@ export function RouteMap({
   interactive = false,
   className = "",
   height = "h-80",
+  bare = false,
 }: RouteMapProps) {
   const [activePicking, setActivePicking] = useState<"pickup" | "dropoff" | null>(null);
 
@@ -147,53 +150,55 @@ export function RouteMap({
   return (
     <Card className={`overflow-hidden p-0 shadow-lg ${className}`}>
       {/* Route Metrics Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 bg-zinc-50/80 p-3.5 sm:px-4 dark:border-zinc-800 dark:bg-zinc-900/60">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-            <Navigation className="h-4 w-4 text-primary-600" />
-            <span>OpenStreetMap Route</span>
+      {!bare && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 bg-zinc-50/80 p-3.5 sm:px-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+              <Navigation className="h-4 w-4 text-primary-600" />
+              <span>OpenStreetMap Route</span>
+            </div>
+
+            {roadDistanceKm !== null ? (
+              <div className="flex items-center gap-2">
+                <Badge variant="primary" className="text-xs font-bold">
+                  Distance Covered: {roadDistanceKm} km
+                </Badge>
+                <Badge variant="accent" className="flex items-center gap-1 text-xs">
+                  <Clock className="h-3 w-3" />
+                  Est. Drive: {estimatedTime}
+                </Badge>
+              </div>
+            ) : (
+              <span className="text-xs text-zinc-400">
+                {interactive ? "Select pickup and drop-off points to calculate distance" : "Route details"}
+              </span>
+            )}
           </div>
 
-          {roadDistanceKm !== null ? (
+          {interactive && (
             <div className="flex items-center gap-2">
-              <Badge variant="primary" className="text-xs font-bold">
-                Distance Covered: {roadDistanceKm} km
-              </Badge>
-              <Badge variant="accent" className="flex items-center gap-1 text-xs">
-                <Clock className="h-3 w-3" />
-                Est. Drive: {estimatedTime}
-              </Badge>
+              <Button
+                size="sm"
+                variant={activePicking === "pickup" ? "primary" : "secondary"}
+                onClick={() => setActivePicking((c) => (c === "pickup" ? null : "pickup"))}
+                className="text-xs"
+              >
+                <span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                {activePicking === "pickup" ? "Click Map for Pickup" : "Set Pickup"}
+              </Button>
+              <Button
+                size="sm"
+                variant={activePicking === "dropoff" ? "primary" : "secondary"}
+                onClick={() => setActivePicking((c) => (c === "dropoff" ? null : "dropoff"))}
+                className="text-xs"
+              >
+                <span className="mr-1 inline-block h-2 w-2 rounded-full bg-red-500" />
+                {activePicking === "dropoff" ? "Click Map for Drop-off" : "Set Drop-off"}
+              </Button>
             </div>
-          ) : (
-            <span className="text-xs text-zinc-400">
-              {interactive ? "Select pickup and drop-off points to calculate distance" : "Route details"}
-            </span>
           )}
         </div>
-
-        {interactive && (
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant={activePicking === "pickup" ? "primary" : "secondary"}
-              onClick={() => setActivePicking((c) => (c === "pickup" ? null : "pickup"))}
-              className="text-xs"
-            >
-              <span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500" />
-              {activePicking === "pickup" ? "Click Map for Pickup" : "Set Pickup"}
-            </Button>
-            <Button
-              size="sm"
-              variant={activePicking === "dropoff" ? "primary" : "secondary"}
-              onClick={() => setActivePicking((c) => (c === "dropoff" ? null : "dropoff"))}
-              className="text-xs"
-            >
-              <span className="mr-1 inline-block h-2 w-2 rounded-full bg-red-500" />
-              {activePicking === "dropoff" ? "Click Map for Drop-off" : "Set Drop-off"}
-            </Button>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Map Surface */}
       <div className={`relative w-full ${height} bg-zinc-100 dark:bg-zinc-950`}>
@@ -270,7 +275,7 @@ export function RouteMap({
       </div>
 
       {/* Location Addresses Footer */}
-      {(pickup || dropoff) && (
+      {!bare && (pickup || dropoff) && (
         <div className="grid grid-cols-1 divide-y divide-zinc-100 border-t border-zinc-100 bg-white p-3 text-xs sm:grid-cols-2 sm:divide-x sm:divide-y-0 dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex items-start gap-2 p-1.5">
             <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">

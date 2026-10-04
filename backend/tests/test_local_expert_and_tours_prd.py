@@ -169,17 +169,25 @@ def test_public_expert_profile_schema_compliance():
         secondary_destinations=["Sreemangal", "Sunamganj"],
         expertise_categories=["Eco Tourism", "Trekking", "Wildlife", "Tea Culture"],
         security_verification_status="verified",
+        identity_verified=True,
+        member_since=None,
         emergency_handling_capability=True,
         rating_avg=Decimal("4.95"),
         reviews_count=48,
+        rating_breakdown={5: 46, 4: 2, 3: 0, 2: 0, 1: 0},
         total_tours_conducted=112,
+        completed_bookings=230,
         response_rate_percent=98,
+        avg_response_minutes=25,
         completion_rate_percent=100,
         cancellation_rate_percent=0,
-        badge_level="Top Rated Expert",
         tours=[],
     )
     assert profile.name == "Kamal Hossain"
     assert profile.rating_avg == Decimal("4.95")
+    assert profile.rating_breakdown[5] == 46
+    # A metric with nothing to measure yet is None, never a flattering default.
+    new = profile.model_copy(update={"rating_avg": None, "response_rate_percent": None})
+    assert new.rating_avg is None and new.response_rate_percent is None
     assert profile.emergency_handling_capability is True
     assert "Eco Tourism" in profile.expertise_categories

@@ -313,8 +313,6 @@ CI currently runs `pytest` **with no database** (`.github/workflows/ci.yml`), so
 
 ---
 
----
-
 ## 5. Phase 9.4: Business network completion (§12.1–12.3)
 
 | # | Item | Change |
@@ -356,6 +354,14 @@ CI currently runs `pytest` **with no database** (`.github/workflows/ci.yml`), so
 ## 8. Phase 9.7: Expert public profile (§8.2; the audit's cross-cutting items)
 
 Real gaps on `/experts/[id]`: a **reviews list** (the reviews module exists; add a `GET /reviews?expert_role_id=` query); a **chat button** (the chat module exists; start a conversation from the profile); **associated Guides** (accepted supervisions); **associated stays and transport** (`TourStay.property_id`, plus network members once 9.1 ships); per-category rating breakdown; average response time; and a certifications display. Bio, years of experience and languages **already exist**.
+
+**Built 2026-10-04 (alongside the public tour page redesign):**
+- Every track-record number is now computed (`profiles/stats.py`): rating with a 5→1 breakdown, completed bookings, tours run, completion and cancellation rates (paid bookings only), response rate and average response time from chats. Nothing to measure is `null`, shown as "—" or "New". This replaces the stored defaults, which showed every expert as a 5.0-rated, 100%-responsive expert.
+- Verification is shown as it is: "Approved by Ovigo", plus "Identity verified" only with a verified ID document.
+- Upcoming fixed departures, associated guides, stays and transport, and a reviews list across all the expert's tours (`GET /api/v1/reviews?expert_role_id=`).
+- A live-chat button (new `EXPERT` chat context), the custom-trip request link and the report dialog.
+- Every public tour page carries a "Your local expert" card (`expert` on `GET /api/v1/tours/{id}`), linking to this profile.
+- **Still open:** per-category ratings (reviews have one overall rating) and certificates (there's no document type for first-aid or training certificates yet).
 
 ---
 

@@ -113,6 +113,22 @@ async def list_for_tour(db: AsyncSession, tour_id: uuid.UUID) -> list[Review]:
     return list(result.scalars().all())
 
 
+async def list_for_expert(db: AsyncSession, expert_role_id: uuid.UUID, limit: int = 50) -> list[Review]:
+    """Reviews of everything a Local Expert ran — their tours' departures and their
+    accepted custom tours (PRD §8.2 "Traveler reviews")."""
+    from app.modules.profiles.stats import expert_items_condition
+
+    result = await db.execute(
+        select(Review)
+        .join(BookingItem, BookingItem.id == Review.booking_item_id)
+        .where(expert_items_condition(expert_role_id))
+        .options(*_EAGER)
+        .order_by(Review.created_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
 async def list_for_property(db: AsyncSession, property_id: uuid.UUID) -> list[Review]:
     result = await db.execute(
         select(Review).where(Review.property_id == property_id).options(*_EAGER).order_by(Review.created_at.desc())

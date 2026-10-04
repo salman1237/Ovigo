@@ -23,10 +23,13 @@ async def create_review(
 async def list_reviews(
     tour_id: uuid.UUID | None = None,
     property_id: uuid.UUID | None = None,
+    expert_role_id: uuid.UUID | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     if tour_id:
         return await service.list_for_tour(db, tour_id)
+    if expert_role_id:
+        return await service.list_for_expert(db, expert_role_id)
     if property_id:
         return await service.list_for_property(db, property_id)
     return []
