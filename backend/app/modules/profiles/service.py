@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,10 +10,22 @@ from app.core.exceptions import NotFoundError
 from app.modules.locations.models import Location
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.models import NotificationType
+from app.modules.guides.models import GuideProfile, GuideProfileStatus, GuideSupervision, SupervisionStatus
+from app.modules.profiles import stats
 from app.modules.profiles.models import HostProfile, LocalExpertProfile
-from app.modules.profiles.schemas import HostProfileUpsert, LocalExpertProfileUpsert, PublicLocalExpertProfile
-from app.modules.tours.models import Tour, TourStatus
-from app.modules.tours.schemas import TourSummary
+from app.modules.profiles.schemas import (
+    ExpertAssociatedGuide,
+    ExpertAssociatedProperty,
+    ExpertTransportService,
+    ExpertUpcomingDeparture,
+    HostProfileUpsert,
+    LocalExpertProfileUpsert,
+    PublicLocalExpertProfile,
+)
+from app.modules.stays.models import Property, PropertyStatus
+from app.modules.tours.models import Tour, TourDeparture, TourStay, TourTransport
+from app.modules.tours.schemas import TourExpertCard, TourSummary
+from app.modules.tours.service import PUBLIC_TOUR_STATUSES
 from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleStatus, PartnerRoleType, SystemRole, User
 
 
@@ -130,11 +143,14 @@ async def get_host_photo(db: AsyncSession, role_id: uuid.UUID) -> tuple[str, str
     return row[0], row[1] or "application/octet-stream"
 
 
-async def get_public_expert_profile(db: AsyncSession, role_id: uuid.UUID) -> PublicLocalExpertProfile:
+def _expert_photo_path(role_id: uuid.UUID, profile: LocalExpertProfile | None) -> str | None:
+    """API-relative path; the frontend prefixes the API origin."""
+    return f"/api/v1/partners/profiles/expert/{role_id}/photo/file" if profile and profile.has_photo else None
+
+
+async def _approved_expert_role(db: AsyncSession, role_id: uuid.UUID) -> PartnerRole | None:
     result = await db.execute(
         select(PartnerRole)
-        .join(PartnerAccount, PartnerRole.partner_account_id == PartnerAccount.id)
-        .join(User, PartnerAccount.user_id == User.id)
         .where(
             PartnerRole.id == role_id,
             PartnerRole.role_type == PartnerRoleType.LOCAL_EXPERT,
@@ -142,62 +158,172 @@ async def get_public_expert_profile(db: AsyncSession, role_id: uuid.UUID) -> Pub
         )
         .options(selectinload(PartnerRole.partner_account).selectinload(PartnerAccount.user))
     )
-    role = result.scalar_one_or_none()
+    return result.scalar_one_or_none()
+
+
+async def _location_name(db: AsyncSession, location_id: uuid.UUID | None) -> str | None:
+    if location_id is None:
+        return None
+    return (await db.execute(select(Location.name).where(Location.id == location_id))).scalar_one_or_none()
+
+
+async def tour_expert_card(db: AsyncSession, role_id: uuid.UUID) -> TourExpertCard | None:
+    """The "Your local expert" card on a public tour page — shown whether or not the
+    expert has published their full profile (`profile_public` says whether to link it)."""
+    role = await _approved_expert_role(db, role_id)
+    if role is None:
+        return None
+    profile = (
+        await db.execute(select(LocalExpertProfile).where(LocalExpertProfile.partner_role_id == role.id))
+    ).scalar_one_or_none()
+    track = await stats.expert_stats(db, role.id)
+    return TourExpertCard(
+        partner_role_id=role.id,
+        name=role.partner_account.user.full_name,
+        headline=profile.headline if profile else None,
+        photo_url=_expert_photo_path(role.id, profile),
+        years_experience=profile.years_experience if profile else None,
+        languages=(profile.languages or []) if profile else [],
+        primary_destination=await _location_name(db, profile.primary_destination_id if profile else None),
+        profile_public=bool(profile and profile.is_published),
+        identity_verified=await stats.identity_verified(db, role.id),
+        member_since=role.approved_at,
+        rating_avg=track.rating_avg,
+        reviews_count=track.reviews_count,
+        completed_bookings=track.completed_bookings,
+        response_rate_percent=track.response_rate_percent,
+        avg_response_minutes=track.avg_response_minutes,
+    )
+
+
+async def _upcoming_departures(db: AsyncSession, role_id: uuid.UUID, limit: int = 6) -> list[ExpertUpcomingDeparture]:
+    rows = await db.execute(
+        select(TourDeparture, Tour.title, Tour.base_price)
+        .join(Tour, Tour.id == TourDeparture.tour_id)
+        .where(
+            Tour.local_expert_role_id == role_id,
+            Tour.status.in_(PUBLIC_TOUR_STATUSES),
+            TourDeparture.departure_date >= date.today(),
+            TourDeparture.available_seats > 0,
+            TourDeparture.status.notin_(["cancelled", "completed"]),
+        )
+        .order_by(TourDeparture.departure_date)
+        .limit(limit)
+    )
+    return [
+        ExpertUpcomingDeparture(
+            departure_id=dep.id,
+            tour_id=dep.tour_id,
+            tour_title=title,
+            departure_date=dep.departure_date,
+            return_date=dep.return_date,
+            available_seats=dep.available_seats,
+            price=dep.price_override or base_price,
+        )
+        for dep, title, base_price in rows.all()
+    ]
+
+
+async def _associated_guides(db: AsyncSession, role_id: uuid.UUID) -> list[ExpertAssociatedGuide]:
+    rows = await db.execute(
+        select(GuideSupervision.guide_role_id, User.full_name, GuideProfile.status)
+        .join(PartnerRole, PartnerRole.id == GuideSupervision.guide_role_id)
+        .join(PartnerAccount, PartnerAccount.id == PartnerRole.partner_account_id)
+        .join(User, User.id == PartnerAccount.user_id)
+        .outerjoin(GuideProfile, GuideProfile.guide_role_id == GuideSupervision.guide_role_id)
+        .where(
+            GuideSupervision.local_expert_role_id == role_id,
+            GuideSupervision.status == SupervisionStatus.ACCEPTED,
+            PartnerRole.status == PartnerRoleStatus.APPROVED,
+        )
+        .order_by(User.full_name)
+        .limit(12)
+    )
+    return [
+        ExpertAssociatedGuide(guide_role_id=gid, name=name, has_public_profile=status == GuideProfileStatus.PUBLISHED)
+        for gid, name, status in rows.all()
+    ]
+
+
+async def _associated_properties(db: AsyncSession, role_id: uuid.UUID) -> list[ExpertAssociatedProperty]:
+    rows = await db.execute(
+        select(Property.id, Property.name, Property.property_type)
+        .join(TourStay, TourStay.property_id == Property.id)
+        .join(Tour, Tour.id == TourStay.tour_id)
+        .where(
+            Tour.local_expert_role_id == role_id,
+            Tour.status.in_(PUBLIC_TOUR_STATUSES),
+            Property.status == PropertyStatus.PUBLISHED,
+        )
+        .distinct()
+        .limit(12)
+    )
+    return [
+        ExpertAssociatedProperty(property_id=pid, name=name, property_type=ptype.value) for pid, name, ptype in rows.all()
+    ]
+
+
+async def _transport_services(db: AsyncSession, role_id: uuid.UUID) -> list[ExpertTransportService]:
+    rows = await db.execute(
+        select(TourTransport.mode, TourTransport.provider_name, TourTransport.vehicle_type)
+        .join(Tour, Tour.id == TourTransport.tour_id)
+        .where(Tour.local_expert_role_id == role_id, Tour.status.in_(PUBLIC_TOUR_STATUSES))
+        .distinct()
+        .limit(8)
+    )
+    return [ExpertTransportService(mode=m, provider_name=p, vehicle_type=v) for m, p, v in rows.all()]
+
+
+async def get_public_expert_profile(db: AsyncSession, role_id: uuid.UUID) -> PublicLocalExpertProfile:
+    role = await _approved_expert_role(db, role_id)
     if role is None:
         raise NotFoundError("Local expert not found")
-
-    user = role.partner_account.user
-
-    p_res = await db.execute(select(LocalExpertProfile).where(LocalExpertProfile.partner_role_id == role.id))
-    profile = p_res.scalar_one_or_none()
+    profile = (
+        await db.execute(select(LocalExpertProfile).where(LocalExpertProfile.partner_role_id == role.id))
+    ).scalar_one_or_none()
     if profile is None or not profile.is_published:
         raise NotFoundError("Local expert profile is not published")
 
     t_res = await db.execute(
         select(Tour)
-        .where(
-            Tour.local_expert_role_id == role.id,
-            Tour.status.in_([
-                TourStatus.PUBLISHED,
-                TourStatus.BOOKING_OPEN,
-                TourStatus.ALMOST_FULL,
-                TourStatus.SCHEDULED,
-            ]),
-        )
+        .where(Tour.local_expert_role_id == role.id, Tour.status.in_(PUBLIC_TOUR_STATUSES))
         .options(selectinload(Tour.images))
         .order_by(Tour.created_at.desc())
     )
     tours = [TourSummary.model_validate(t) for t in t_res.scalars().all()]
-
-    primary_dest_name = None
-    if profile.primary_destination_id:
-        loc_res = await db.execute(select(Location.name).where(Location.id == profile.primary_destination_id))
-        primary_dest_name = loc_res.scalar_one_or_none()
-
-    photo_url = f"/api/v1/partners/profiles/expert/{role.id}/photo/file" if profile.has_photo else None
+    track = await stats.expert_stats(db, role.id)
+    verified = await stats.identity_verified(db, role.id)
 
     return PublicLocalExpertProfile(
         partner_role_id=role.id,
-        name=user.full_name,
+        name=role.partner_account.user.full_name,
         headline=profile.headline,
         bio=profile.bio,
         years_experience=profile.years_experience,
         languages=profile.languages or [],
         has_photo=profile.has_photo,
-        photo_url=photo_url,
-        primary_destination=primary_dest_name,
+        photo_url=_expert_photo_path(role.id, profile),
+        primary_destination=await _location_name(db, profile.primary_destination_id),
         secondary_destinations=profile.secondary_destinations or [],
         expertise_categories=profile.expertise_categories or [],
-        security_verification_status=profile.security_verification_status,
+        security_verification_status="verified" if verified else "pending",
+        identity_verified=verified,
+        member_since=role.approved_at,
         emergency_handling_capability=profile.emergency_handling_capability,
-        rating_avg=profile.rating_avg,
-        reviews_count=profile.reviews_count,
-        total_tours_conducted=profile.total_tours_conducted,
-        response_rate_percent=profile.response_rate_percent,
-        completion_rate_percent=profile.completion_rate_percent,
-        cancellation_rate_percent=profile.cancellation_rate_percent,
-        badge_level=profile.badge_level,
+        rating_avg=track.rating_avg,
+        reviews_count=track.reviews_count,
+        rating_breakdown=track.rating_breakdown,
+        total_tours_conducted=track.successful_tours,
+        completed_bookings=track.completed_bookings,
+        response_rate_percent=track.response_rate_percent,
+        avg_response_minutes=track.avg_response_minutes,
+        completion_rate_percent=track.completion_rate_percent,
+        cancellation_rate_percent=track.cancellation_rate_percent,
         tours=tours,
+        upcoming_departures=await _upcoming_departures(db, role.id),
+        guides=await _associated_guides(db, role.id),
+        properties=await _associated_properties(db, role.id),
+        transport=await _transport_services(db, role.id),
     )
 
 
@@ -221,6 +347,6 @@ async def report_expert_profile(db: AsyncSession, reporter: User, role_id: uuid.
             type=NotificationType.PROFILE_REPORTED,
             title="Local Expert profile reported",
             message=f"{reporter.full_name} reported a Local Expert profile: {reason}",
-            link=f"/admin/partners",
+            link="/admin/partners",
         )
     await db.commit()

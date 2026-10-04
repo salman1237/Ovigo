@@ -111,3 +111,12 @@ h3 {
 * {
   scrollbar-color: var(--color-primary-300) transparent;
 }
+
+/* Horizontally scrolling chip rows (section navs, tab bars) without a visible
+   scrollbar; still scrollable by touch, trackpad and keyboard. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

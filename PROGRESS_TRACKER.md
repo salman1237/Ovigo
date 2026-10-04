@@ -991,6 +991,52 @@ Client decisions and the full design: the plan, §4.
   - Frontend: `/guides`, `/guides/[id]`, `/dashboard/guide`, `/dashboard/guides`, `/admin/guides`, `/cart` and `/dashboard/earnings` return 200; an unknown route returns 404; the "Guides" link is in the page.
   - Not checked live: the 12% rule rows themselves (admin-only), and a click-through with real accounts.
 
+### Public tour page and expert profile redesign — Built (2026-10-04)
+
+The user asked for the public tour page to show everything a Local Expert enters, in a modern, travel-style layout, with a way to see the expert's PRD §8.2 public profile.
+
+**Audit, with a fully filled-in tour:** the old page showed less than half of what experts enter. Missing were:
+- the short summary, nights, traveler types and destinations;
+- itinerary highlights, entry fees, access and safety notes;
+- departure times, return dates and booking deadlines;
+- meal menus and dietary tags, and activity details;
+- stay names and room details, and transport details;
+- six of the ten policies, half the safety fields, and the extra pricing rules.
+
+It also had bugs:
+- "Upcoming departures" listed past dates.
+- The map fell back to Dhaka for the pickup and always pinned the drop-off at Cox's Bazar ("108 km"), even for a same-place pickup and drop-off.
+- Signed-out visitors saw no price or dates.
+- Paragraph breaks were lost.
+- "What's included" appeared twice.
+
+**Tour page (`/tours/[id]`):** rebuilt as focused section components (`tours/[id]/_components/`):
+- a photo mosaic with a full-screen viewer;
+- a key-facts strip and a sticky section nav with scroll-spy;
+- a "Your local expert" card;
+- an itinerary timeline that nests each day's activities, meals and notes, and shows real dates for the selected departure;
+- cards for stays, food, activities and transport;
+- the meeting point, with a pin-only map and a Google Maps link, shown only when the expert set coordinates;
+- safety, prices, optional extras, and policies in an accordion;
+- reviews with a rating breakdown;
+- a booking card listing departures as cards (dates, times, seats, deadline, price), visible signed out too.
+
+Sections with no data don't render. Shared primitives live in `components/shared/DetailSection.tsx`; generic date and number helpers in `lib/format.ts`. `formatMoney` now groups digits and drops ".00" (৳1,30,000).
+
+**Expert profile (`/experts/[id]`):** real computed track record, verification as it actually is, upcoming departures, tours, guides, stays and transport, expert-wide reviews, chat, custom-trip request and report. See the plan, §8.
+
+**Honesty fixes:**
+- Checkout charges the per-person price for every traveler, so the page says so, and tells travelers to message the expert for child, infant or group rates (B5, Phase 9.5).
+- Add-ons are listed as extras to arrange with the expert.
+
+**Verified:**
+- `pytest -q` passes: 69 with Postgres, and 46 passed / 23 skipped without. 5 new tests cover stats, the card, the reviews filter and chat; all 8 deliberate bugs are caught.
+- Frontend `lint`, `tsc` and `build` are clean.
+- Browser screenshots at 1280px and 390px, light and dark, with no horizontal scroll and no console errors (apart from map tiles, blocked by the sandbox's network). Checked:
+  - signed-in booking with 2 travelers;
+  - itinerary dates following the chosen departure;
+  - "Message" on the profile opening an expert chat.
+
 ## Infrastructure note — Postgres off Neon, image-serving performance fix (2026-09-22)
 
 The user reported the homepage taking 5-10 seconds to load images, and separately asked to move the database off Neon onto the user's own VPS. Investigation found both were real, and partly the same root cause: Neon is in `ap-southeast-1` (Singapore) while the Dokploy VPS is in Mumbai, plus Neon's serverless compute has cold-start behavior — every DB query paid cross-region latency on top of that. Separately, a genuine backend bug made the image slowness far worse than DB latency alone would explain.

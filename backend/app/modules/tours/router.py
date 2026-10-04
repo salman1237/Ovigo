@@ -14,6 +14,7 @@ from app.modules.locations.models import TaggableEntityType
 from app.modules.locations.schemas import LocationTagRead, LocationTagSet
 from app.modules.tours import service
 from app.modules.tours.schemas import (
+    PublicTourRead,
     ActivityCreate,
     AddonCreate,
     AssignGuidePayload,
@@ -70,11 +71,16 @@ async def list_my_tours(role: PartnerRole = Depends(require_expert), db: AsyncSe
     return await service.list_my_tours(db, role)
 
 
-@router.get("/{tour_id}", response_model=TourRead)
+@router.get("/{tour_id}", response_model=PublicTourRead)
 async def get_tour(
     tour_id: uuid.UUID, viewer_role: PartnerRole | None = Depends(_viewer_role), db: AsyncSession = Depends(get_db)
 ):
-    return await service.get_tour_for_view(db, tour_id, viewer_role)
+    from app.modules.profiles import service as profiles_service  # profiles imports tours
+
+    tour = await service.get_tour_for_view(db, tour_id, viewer_role)
+    read = PublicTourRead.model_validate(tour)
+    read.expert = await profiles_service.tour_expert_card(db, tour.local_expert_role_id)
+    return read
 
 
 @router.put("/{tour_id}", response_model=TourRead)

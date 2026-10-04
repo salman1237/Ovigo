@@ -1,10 +1,11 @@
 "use client";
 
 import { MessageCircle } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { Button, type ButtonProps } from "@/components/ui/Button";
+import { Button, buttonVariants, type ButtonProps } from "@/components/ui/Button";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
 import type { ChatContextType, ChatThread } from "@/types/chat";
@@ -15,19 +16,37 @@ export function MessageButton({
   label = "Message",
   variant = "secondary",
   size = "sm",
+  signInFallback = false,
+  block = false,
 }: {
   contextType: ChatContextType;
   contextId: string;
   label?: string;
   variant?: ButtonProps["variant"];
   size?: ButtonProps["size"];
+  /** Signed out: show a "sign in to message" link back to this page, instead of nothing. */
+  signInFallback?: boolean;
+  /** Stretch to the container's width. */
+  block?: boolean;
 }) {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
+  const pathname = usePathname();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!user) return null;
+  if (!user) {
+    if (!signInFallback) return null;
+    return (
+      <Link
+        href={`/account/login?next=${encodeURIComponent(pathname)}`}
+        className={buttonVariants({ variant, size, className: block ? "w-full" : undefined })}
+      >
+        <MessageCircle className="h-4 w-4" />
+        {label}
+      </Link>
+    );
+  }
 
   const openThread = async () => {
     setBusy(true);
@@ -46,8 +65,8 @@ export function MessageButton({
   };
 
   return (
-    <div className="inline-flex flex-col items-start gap-1">
-      <Button onClick={openThread} loading={busy} variant={variant} size={size}>
+    <div className={block ? "flex w-full flex-col gap-1" : "inline-flex flex-col items-start gap-1"}>
+      <Button onClick={openThread} loading={busy} variant={variant} size={size} className={block ? "w-full" : undefined}>
         <MessageCircle className="h-4 w-4" />
         {busy ? "Opening…" : label}
       </Button>

@@ -1,654 +1,158 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { motion } from "framer-motion";
-import {
-  AlertTriangle,
-  Bus,
-  CalendarDays,
-  Clock,
-  CloudRain,
-  Gift,
-  Hotel,
-  ListTree,
-  MapPin,
-  Phone,
-  ShieldCheck,
-  Sparkles,
-  Users,
-  UtensilsCrossed,
-} from "lucide-react";
-import dynamic from "next/dynamic";
+import { Star } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
-const RouteMap = dynamic(
-  () => import("@/components/shared/RouteMap").then((m) => m.RouteMap),
-  { ssr: false, loading: () => <div className="h-64 w-full animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-900" /> }
-);
-
-import { ApproxPrice } from "@/components/shared/ApproxPrice";
 import { FrequentlyBookedWith } from "@/components/shared/FrequentlyBookedWith";
-import { MessageButton } from "@/components/shared/MessageButton";
-import { PhotoGallery } from "@/components/shared/PhotoGallery";
 import { ReviewsList } from "@/components/shared/ReviewsList";
 import { SimilarTours } from "@/components/shared/SimilarTours";
-import { TrustBadges } from "@/components/shared/TrustBadges";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
-import { ErrorState } from "@/components/ui/ErrorState";
-import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
-import { Spinner } from "@/components/ui/Spinner";
-import { getAdClickCampaignId } from "@/lib/ad-attribution";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { apiClient, ApiError } from "@/lib/api-client";
-import { formatMoney } from "@/lib/format";
-import { tourImageUrl } from "@/lib/media";
-import { useAuthStore } from "@/stores/auth-store";
-import { useCartStore } from "@/stores/cart-store";
-import type { Booking } from "@/types/booking";
-import { TOUR_TYPE_LABELS, type Tour } from "@/types/tour";
+import type { Tour } from "@/types/tour";
+
+import { BookingCard, MobileBookBar } from "./_components/BookingCard";
+import { ExpertCard } from "./_components/ExpertCard";
+import { ActivitiesSection, FoodSection, StaysSection, TransportSection } from "./_components/ExperienceSections";
+import { ItinerarySection } from "./_components/ItinerarySection";
+import { hasSafetyInfo, MeetingPointSection, SafetySection } from "./_components/LogisticsSections";
+import { DetailSection } from "@/components/shared/DetailSection";
+import { SectionNav, type NavItem } from "./_components/SectionNav";
+import { ExtrasSection, IncludedSection, policyEntries, PoliciesSection, PricingSection } from "./_components/TermsSections";
+import { KeyFacts, OverviewSection, TourTitle } from "./_components/TourHeader";
+import { TourGallery } from "./_components/TourGallery";
+import { todayIso } from "@/lib/format";
+import { departureAvailability, lowestUpcomingPrice, upcomingDepartures } from "./_components/tour-utils";
+
+function nowMs(): number {
+  return Date.now();
+}
 
 export default function TourDetailPage() {
   const { id } = useParams<{ id: string }>();
-
   const { data: tour, isLoading, error } = useQuery({
     queryKey: ["public-tour", id],
     queryFn: () => apiClient.get<Tour>(`/api/v1/tours/${id}`),
     retry: false,
   });
 
-  if (isLoading) {
+  if (isLoading) return <TourSkeleton />;
+  if (error || !tour) {
+    const missing = error instanceof ApiError && error.status === 404;
     return (
-      <div className="flex flex-1 items-center justify-center py-24">
-        <Spinner />
+      <div className="mx-auto flex w-full max-w-xl flex-1 flex-col items-center px-6 py-24 text-center">
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">{missing ? "This tour isn't available" : "Couldn't load this tour"}</h1>
+        <p className="mt-2 text-sm text-zinc-500">
+          {missing ? "It may have been unpublished or the link is wrong." : "Please try again in a moment."}
+        </p>
+        <Link href="/tours" className="mt-6 text-sm font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400">
+          Browse all tours →
+        </Link>
       </div>
     );
   }
-  if (error || !tour) return <ErrorState message="Tour not found." />;
+  return <TourDetail tour={tour} />;
+}
 
-  const hasInclusions =
-    tour.meals.length > 0 || tour.activities.length > 0 || tour.transport.length > 0 || tour.stays.length > 0;
-  const hasPolicies =
-    tour.cancellation_policy ||
-    tour.refund_policy ||
-    tour.child_policy ||
-    tour.emergency_contact_phone ||
-    tour.weather_risk_note ||
-    tour.activity_risk_note;
+function TourDetail({ tour }: { tour: Tour }) {
+  const departures = useMemo(() => upcomingDepartures(tour, todayIso()), [tour]);
+  const firstBookable = departures.find((d) => ["open", "few_left"].includes(departureAvailability(d, todayIso(), nowMs())));
+  const [selectedId, setSelectedId] = useState<string | null>(firstBookable?.id ?? null);
+  const selected = departures.find((d) => d.id === selectedId) ?? null;
+
+  const has = {
+    itinerary: tour.itinerary.length > 0,
+    included: (tour.included_services?.length ?? 0) + (tour.excluded_services?.length ?? 0) > 0,
+    stays: tour.stays.length > 0,
+    food: tour.meals.length > 0,
+    activities: tour.activities.length > 0,
+    transport: tour.transport.length > 0,
+    meeting: Boolean(tour.pickup_location || tour.dropoff_location),
+    safety: hasSafetyInfo(tour),
+    extras: tour.addons.length > 0,
+    policies: policyEntries(tour).length > 0,
+  };
+  const nav: NavItem[] = [
+    { id: "overview", label: "Overview" },
+    ...(has.itinerary ? [{ id: "itinerary", label: "Itinerary" }] : []),
+    ...(has.included ? [{ id: "included", label: "Included" }] : []),
+    ...(has.stays ? [{ id: "stays", label: "Stays" }] : []),
+    ...(has.food ? [{ id: "food", label: "Food" }] : []),
+    ...(has.activities ? [{ id: "activities", label: "Activities" }] : []),
+    ...(has.transport ? [{ id: "transport", label: "Transport" }] : []),
+    ...(has.meeting ? [{ id: "meeting", label: "Meeting point" }] : []),
+    ...(has.safety ? [{ id: "safety", label: "Safety" }] : []),
+    { id: "pricing", label: "Prices" },
+    ...(has.policies ? [{ id: "policies", label: "Policies" }] : []),
+    { id: "reviews", label: "Reviews" },
+  ];
 
   return (
     <div className="relative">
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-gradient-to-b from-primary-50 to-transparent dark:from-primary-950/30" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-96 bg-gradient-to-b from-primary-50/80 via-white to-transparent dark:from-primary-950/30 dark:via-zinc-950" />
+      <div className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 sm:px-6 lg:pb-16">
+        <TourTitle tour={tour} />
+        <div className="mt-5">
+          <TourGallery tourId={tour.id} title={tour.title} images={tour.images} />
+        </div>
+        <div className="mt-5">
+          <KeyFacts tour={tour} nextDeparture={departures[0] ?? null} />
+        </div>
 
-      <div className="mx-auto w-full max-w-6xl flex-1 px-6 pb-24 pt-10 lg:pb-12">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                {tour.tour_type && <Badge variant="accent">{TOUR_TYPE_LABELS[tour.tour_type]}</Badge>}
-                <TrustBadges entityType="tour" entityId={tour.id} />
-              </div>
-              <h1 className="mt-2 text-3xl font-bold text-zinc-900 sm:text-4xl dark:text-zinc-50">{tour.title}</h1>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Link href={`/experts/${tour.local_expert_role_id}`}>
-                <Button variant="secondary" size="sm">
-                  <Users className="h-4 w-4" />
-                  View Local Expert
-                </Button>
-              </Link>
-              <MessageButton contextType="tour" contextId={tour.id} label="Message Expert" />
-            </div>
-          </div>
+        <div className="mt-6">
+          <SectionNav items={nav} />
+        </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-zinc-600 dark:text-zinc-400">
-            <span className="flex items-center gap-1.5">
-              <Clock className="h-4 w-4 text-primary-600 dark:text-primary-400" />
-              {tour.duration_days} day{tour.duration_days === 1 ? "" : "s"}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Users className="h-4 w-4 text-primary-600 dark:text-primary-400" />
-              Up to {tour.max_group_size} people
-            </span>
-            <span className="flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-zinc-50">
-              from {formatMoney(tour.base_price)} <ApproxPrice amountBDT={tour.base_price} />
-            </span>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.05 }}
-          className="overflow-hidden rounded-3xl shadow-elevated"
-        >
-          <PhotoGallery images={tour.images} urlFor={(img) => tourImageUrl(tour.id, img.id)} alt={tour.title} />
-        </motion.div>
-
-        <div className="mt-8 flex flex-col gap-10 lg:flex-row">
-          <div className="min-w-0 flex-1 space-y-6">
-            {tour.description && (
-              <Section>
-                <p className="text-[15px] leading-relaxed text-zinc-700 dark:text-zinc-300">{tour.description}</p>
-              </Section>
+        <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="min-w-0 space-y-12">
+            <OverviewSection tour={tour} />
+            {tour.expert && (
+              <section id="expert" aria-label="Your local expert" className="scroll-mt-32">
+                <ExpertCard expert={tour.expert} tourId={tour.id} />
+              </section>
             )}
-
-            {tour.itinerary.length > 0 && (
-              <Section title="Itinerary" icon={<ListTree className="h-4 w-4" />}>
-                <ol className="flex flex-col">
-                  {tour.itinerary.map((day, i) => (
-                    <li key={day.id} className="relative flex gap-4 pb-6 last:pb-0">
-                      {i < tour.itinerary.length - 1 && (
-                        <span className="absolute left-4 top-9 h-[calc(100%-2rem)] w-px bg-zinc-200 dark:bg-zinc-800" />
-                      )}
-                      <span className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-600 to-indigo-600 text-xs font-semibold text-white shadow-md shadow-primary-600/20">
-                        {day.day_number}
-                      </span>
-                      <div className="min-w-0 flex-1 pt-0.5">
-                        <p className="font-medium text-zinc-900 dark:text-zinc-50">{day.title}</p>
-                        <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-zinc-500">
-                          {day.location_name && (
-                            <span className="flex items-center gap-1">
-                              <MapPin className="h-3 w-3" /> {day.location_name}
-                            </span>
-                          )}
-                          {(day.arrival_time || day.departure_time) && (
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" /> {day.arrival_time ?? "—"} to {day.departure_time ?? "—"}
-                            </span>
-                          )}
-                        </p>
-                        {day.description && <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400">{day.description}</p>}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </Section>
-            )}
-
-            {tour.departures.length > 0 && (
-              <Section title="Upcoming departures" icon={<CalendarDays className="h-4 w-4" />}>
-                <div className="flex flex-wrap gap-2.5">
-                  {tour.departures.map((d) => {
-                    const low = d.available_seats > 0 && d.available_seats <= 3;
-                    const full = d.available_seats < 1;
-                    return (
-                      <div
-                        key={d.id}
-                        className={`rounded-xl border px-4 py-2.5 text-sm ${
-                          full
-                            ? "border-zinc-200 bg-zinc-50 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/40"
-                            : "border-primary-200 bg-primary-50 text-zinc-900 dark:border-primary-900 dark:bg-primary-950/30 dark:text-zinc-50"
-                        }`}
-                      >
-                        <p className="font-medium">{d.departure_date}</p>
-                        <p className={`mt-0.5 text-xs ${full ? "text-zinc-400" : low ? "font-medium text-accent-600 dark:text-accent-400" : "text-zinc-500"}`}>
-                          {full ? "Fully booked" : `${d.available_seats} seat${d.available_seats === 1 ? "" : "s"} left`}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Section>
-            )}
-
-            {hasInclusions && (
-              <Section title="What's included" icon={<Sparkles className="h-4 w-4" />}>
-                <div className="grid gap-6 sm:grid-cols-2">
-                  {tour.meals.length > 0 && (
-                    <InclusionGroup icon={<UtensilsCrossed className="h-4 w-4" />} title="Meals">
-                      {tour.meals.map((m) => (
-                        <InclusionChip key={m.id}>{m.meal_type}</InclusionChip>
-                      ))}
-                    </InclusionGroup>
-                  )}
-                  {tour.activities.length > 0 && (
-                    <InclusionGroup icon={<Sparkles className="h-4 w-4" />} title="Activities">
-                      {tour.activities.map((a) => (
-                        <InclusionChip key={a.id}>
-                          {a.name}
-                          {a.difficulty && <span className="text-zinc-400"> · {a.difficulty}</span>}
-                          {a.duration_hours && <span className="text-zinc-400"> · {a.duration_hours}h</span>}
-                        </InclusionChip>
-                      ))}
-                    </InclusionGroup>
-                  )}
-                  {tour.transport.length > 0 && (
-                    <InclusionGroup icon={<Bus className="h-4 w-4" />} title="Transport">
-                      {tour.transport.map((t) => (
-                        <InclusionChip key={t.id}>
-                          {t.mode}
-                          {t.vehicle_type && <span className="text-zinc-400"> · {t.vehicle_type}</span>}
-                          {t.has_ac && <span className="text-zinc-400"> · AC</span>}
-                        </InclusionChip>
-                      ))}
-                    </InclusionGroup>
-                  )}
-                  {tour.stays.length > 0 && (
-                    <InclusionGroup icon={<Hotel className="h-4 w-4" />} title="Accommodation">
-                      {tour.stays.map((s) => (
-                        <InclusionChip key={s.id}>
-                          {s.description} · {s.nights} night{s.nights === 1 ? "" : "s"}
-                          {s.property_id && (
-                            <Link
-                              href={`/stays/${s.property_id}?via_tour=${tour.id}`}
-                              className="ml-1.5 font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
-                            >
-                              View stay →
-                            </Link>
-                          )}
-                        </InclusionChip>
-                      ))}
-                    </InclusionGroup>
-                  )}
-                </div>
-                {tour.addons.length > 0 && (
-                  <div className="mt-6 border-t border-zinc-100 pt-5 dark:border-zinc-800">
-                    <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
-                      <Gift className="h-3.5 w-3.5" /> Optional add-ons
-                    </p>
-                    <div className="mt-2.5 flex flex-wrap gap-2">
-                      {tour.addons.map((a) => (
-                        <span
-                          key={a.id}
-                          className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-                        >
-                          {a.name} <span className="text-primary-600 dark:text-primary-400">+{formatMoney(a.price)}</span>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </Section>
-            )}
-
-            {hasPolicies && (
-              <Section title="Policies & safety" icon={<ShieldCheck className="h-4 w-4" />}>
-                <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
-                  {tour.cancellation_policy && (
-                    <PolicyRow icon={<CalendarDays className="h-4 w-4" />} label="Cancellation">
-                      {tour.cancellation_policy}
-                    </PolicyRow>
-                  )}
-                  {tour.refund_policy && (
-                    <PolicyRow icon={<ShieldCheck className="h-4 w-4" />} label="Refund">
-                      {tour.refund_policy}
-                    </PolicyRow>
-                  )}
-                  {tour.child_policy && (
-                    <PolicyRow icon={<Users className="h-4 w-4" />} label="Children">
-                      {tour.child_policy}
-                    </PolicyRow>
-                  )}
-                  {tour.emergency_contact_phone && (
-                    <PolicyRow icon={<Phone className="h-4 w-4" />} label="Emergency contact">
-                      {tour.emergency_contact_phone}
-                    </PolicyRow>
-                  )}
-                  {tour.nearest_hospital && (
-                    <PolicyRow icon={<ShieldCheck className="h-4 w-4" />} label="Nearest hospital">
-                      {tour.nearest_hospital}
-                    </PolicyRow>
-                  )}
-                  {tour.women_safety_notes && (
-                    <PolicyRow icon={<ShieldCheck className="h-4 w-4" />} label="Women travelers safety">
-                      {tour.women_safety_notes}
-                    </PolicyRow>
-                  )}
-                  {tour.night_travel_policy && (
-                    <PolicyRow icon={<Clock className="h-4 w-4" />} label="Night travel policy">
-                      {tour.night_travel_policy}
-                    </PolicyRow>
-                  )}
-                  {tour.permit_requirements && (
-                    <PolicyRow icon={<Sparkles className="h-4 w-4" />} label="Permit requirements">
-                      {tour.permit_requirements}
-                    </PolicyRow>
-                  )}
-                  {tour.weather_risk_note && (
-                    <PolicyRow icon={<CloudRain className="h-4 w-4" />} label="Weather">
-                      {tour.weather_risk_note}
-                    </PolicyRow>
-                  )}
-                  {tour.activity_risk_note && (
-                    <PolicyRow icon={<AlertTriangle className="h-4 w-4" />} label="Activity risk">
-                      {tour.activity_risk_note}
-                    </PolicyRow>
-                  )}
-                </div>
-              </Section>
-            )}
-
-            {(tour.pickup_location || tour.dropoff_location) && (
-              <Section title="Pickup & Transfer Logistics" icon={<Bus className="h-4 w-4" />}>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 text-sm">
-                  {tour.pickup_location && (
-                    <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/50 p-4 dark:border-zinc-800 dark:bg-zinc-800/30">
-                      <span className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
-                        <MapPin className="h-4 w-4 text-primary-600" />
-                        Pickup Location
-                      </span>
-                      <p className="mt-1 text-zinc-600 dark:text-zinc-300">{tour.pickup_location}</p>
-                      {tour.pickup_time && <p className="mt-0.5 text-xs text-zinc-500">Departure: {tour.pickup_time}</p>}
-                      {tour.pickup_window && <p className="text-xs text-zinc-500">Window: {tour.pickup_window}</p>}
-                    </div>
-                  )}
-                  {tour.dropoff_location && (
-                    <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/50 p-4 dark:border-zinc-800 dark:bg-zinc-800/30">
-                      <span className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
-                        <MapPin className="h-4 w-4 text-primary-600" />
-                        Drop-off Location
-                      </span>
-                      <p className="mt-1 text-zinc-600 dark:text-zinc-300">{tour.dropoff_location}</p>
-                      {tour.dropoff_time && <p className="mt-0.5 text-xs text-zinc-500">Estimated Return: {tour.dropoff_time}</p>}
-                    </div>
-                  )}
-                </div>
-                {tour.home_hotel_pickup_available && (
-                  <div className="mt-3 text-xs text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300 rounded-lg p-2.5">
-                    ✓ Doorstep Hotel / Home Pickup is available for this tour
-                    {tour.home_pickup_extra_charge ? ` (+${formatMoney(tour.home_pickup_extra_charge)})` : " (included)"}.
-                  </div>
-                )}
-                <div className="mt-4">
-                  <RouteMap
-                    pickup={
-                      tour.pickup_location
-                        ? {
-                            label: tour.pickup_location,
-                            lat: (tour.pickup_coordinates as { lat?: number; lng?: number } | null)?.lat ?? 23.8103,
-                            lng: (tour.pickup_coordinates as { lat?: number; lng?: number } | null)?.lng ?? 90.4125,
-                          }
-                        : null
-                    }
-                    dropoff={
-                      tour.dropoff_location
-                        ? {
-                            label: tour.dropoff_location,
-                            lat: 21.4272,
-                            lng: 91.9702,
-                          }
-                        : null
-                    }
-                    interactive={false}
-                    height="h-64"
-                  />
-                </div>
-              </Section>
-            )}
-
-            {((tour.included_services && tour.included_services.length > 0) || (tour.excluded_services && tour.excluded_services.length > 0)) && (
-              <Section title="What's Included & Excluded" icon={<Gift className="h-4 w-4" />}>
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                  {tour.included_services && tour.included_services.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Included</h4>
-                      <ul className="mt-2.5 space-y-1.5 text-sm text-zinc-600 dark:text-zinc-300">
-                        {tour.included_services.map((svc, i) => (
-                          <li key={i} className="flex items-start gap-2">
-                            <span className="text-emerald-500">✓</span> {svc}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {tour.excluded_services && tour.excluded_services.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-red-600 dark:text-red-400">Excluded</h4>
-                      <ul className="mt-2.5 space-y-1.5 text-sm text-zinc-600 dark:text-zinc-300">
-                        {tour.excluded_services.map((svc, i) => (
-                          <li key={i} className="flex items-start gap-2">
-                            <span className="text-red-400">✕</span> {svc}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </Section>
-            )}
-
-            <Section title="Reviews">
+            {has.itinerary && <ItinerarySection tour={tour} departure={selected} />}
+            {has.included && <IncludedSection tour={tour} />}
+            {has.stays && <StaysSection tour={tour} />}
+            {has.food && <FoodSection tour={tour} />}
+            {has.activities && <ActivitiesSection tour={tour} />}
+            {has.transport && <TransportSection tour={tour} />}
+            {has.meeting && <MeetingPointSection tour={tour} />}
+            {has.safety && <SafetySection tour={tour} />}
+            <PricingSection tour={tour} />
+            {has.extras && <ExtrasSection tour={tour} />}
+            {has.policies && <PoliciesSection tour={tour} />}
+            <DetailSection id="reviews" title="Traveler reviews" icon={<Star />}>
               <ReviewsList tourId={tour.id} />
-            </Section>
-
+            </DetailSection>
             <FrequentlyBookedWith endpoint={`/api/v1/tours/${tour.id}/frequently-booked-with`} />
             <SimilarTours tourId={tour.id} />
           </div>
 
-          {tour.departures.length > 0 && (
-            <div className="lg:w-80 lg:shrink-0">
-              <div id="book-section" className="scroll-mt-24 lg:sticky lg:top-20">
-                <BookTourSection tour={tour} />
-              </div>
-            </div>
-          )}
+          <aside id="book" className="scroll-mt-32 lg:sticky lg:top-32 lg:self-start">
+            <BookingCard tour={tour} departures={departures} selected={selected} onSelect={setSelectedId} />
+          </aside>
         </div>
+      </div>
+      {departures.length > 0 && <MobileBookBar price={lowestUpcomingPrice(tour, departures)} />}
+    </div>
+  );
+}
 
-        {tour.departures.length > 0 && (
-          <MobileBookBar priceLabel={formatMoney(tour.base_price)} priceSuffix="/ person" />
-        )}
+function TourSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-6xl px-4 pt-6 sm:px-6">
+      <Skeleton className="h-4 w-40" />
+      <Skeleton className="mt-4 h-9 w-2/3" />
+      <Skeleton className="mt-3 h-5 w-1/2" />
+      <Skeleton className="mt-5 h-[260px] rounded-3xl sm:h-[380px] lg:h-[440px]" />
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-16 rounded-2xl" />
+        ))}
       </div>
     </div>
-  );
-}
-
-function Section({ title, icon, children }: { title?: string; icon?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
-      <Card variant="elevated">
-        {title && (
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-            {icon && <span className="text-primary-600 dark:text-primary-400">{icon}</span>}
-            {title}
-          </h2>
-        )}
-        <div className={title ? "mt-4" : undefined}>{children}</div>
-      </Card>
-    </motion.div>
-  );
-}
-
-function InclusionGroup({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400">
-        {icon} {title}
-      </p>
-      <ul className="mt-2 flex flex-col gap-1.5">{children}</ul>
-    </div>
-  );
-}
-
-function InclusionChip({ children }: { children: React.ReactNode }) {
-  return <li className="text-sm capitalize text-zinc-700 dark:text-zinc-300">{children}</li>;
-}
-
-function PolicyRow({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex gap-2.5 text-sm">
-      <span className="mt-0.5 shrink-0 text-primary-600 dark:text-primary-400">{icon}</span>
-      <p className="text-zinc-600 dark:text-zinc-400">
-        <span className="font-medium text-zinc-900 dark:text-zinc-50">{label}: </span>
-        {children}
-      </p>
-    </div>
-  );
-}
-
-/** Mobile-only fixed CTA bar — on small screens the booking card sits at the
- * bottom of a long page, so this keeps price + a way to book always reachable
- * without requiring a full scroll. Scrolls to the real booking section (which
- * still does the actual booking) rather than duplicating its logic. */
-function MobileBookBar({ priceLabel, priceSuffix }: { priceLabel: string; priceSuffix: string }) {
-  return (
-    <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-3 border-t border-zinc-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-sm lg:hidden dark:border-zinc-800 dark:bg-zinc-950/95">
-      <p className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
-        {priceLabel} <span className="text-xs font-normal text-zinc-500">{priceSuffix}</span>
-      </p>
-      <Button
-        size="md"
-        onClick={() => document.getElementById("book-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-      >
-        Book now
-      </Button>
-    </div>
-  );
-}
-
-function BookTourSection({ tour }: { tour: Tour }) {
-  const user = useAuthStore((s) => s.user);
-  const addToCart = useCartStore((s) => s.addItem);
-  const [departureId, setDepartureId] = useState(tour.departures[0]?.id ?? "");
-  const [quantity, setQuantity] = useState(1);
-  const [guestNames, setGuestNames] = useState<string[]>([""]);
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [addedToCart, setAddedToCart] = useState(false);
-
-  const departure = tour.departures.find((d) => d.id === departureId);
-  const price = departure?.price_override ?? tour.base_price;
-  const total = (Number(price) * quantity).toFixed(2);
-
-  const addTourToCart = () => {
-    if (!departure) return;
-    addToCart({
-      key: `tour-${departureId}-${Date.now()}`,
-      item_type: "tour_departure",
-      title: tour.title,
-      subtitle: `Departs ${departure.departure_date} · ${quantity} traveler(s)`,
-      unit_price: price,
-      quantity,
-      tour_departure_id: departureId,
-    });
-    setAddedToCart(true);
-  };
-
-  const setGuestCount = (n: number) => {
-    setQuantity(n);
-    setGuestNames((prev) => {
-      const next = [...prev];
-      while (next.length < n) next.push("");
-      return next.slice(0, n);
-    });
-  };
-
-  const book = async () => {
-    setError(null);
-    setSubmitting(true);
-    try {
-      const booking = await apiClient.post<Booking>(
-        "/api/v1/bookings",
-        {
-          items: [{ item_type: "tour_departure", tour_departure_id: departureId, quantity }],
-          guests: guestNames.filter((n) => n.trim()).map((full_name) => ({ full_name })),
-          ad_campaign_id: getAdClickCampaignId(),
-        },
-        { auth: true }
-      );
-      const payment = await apiClient.post<{ gateway_page_url: string }>(
-        "/api/v1/payments/initiate",
-        { booking_id: booking.id },
-        { auth: true }
-      );
-      window.location.href = payment.gateway_page_url;
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to start booking");
-      setSubmitting(false);
-    }
-  };
-
-  if (!user) {
-    return (
-      <Card variant="elevated">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          <Link href="/account/login" className="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
-            Sign in
-          </Link>{" "}
-          to book this tour.
-        </p>
-      </Card>
-    );
-  }
-
-  return (
-    <Card variant="elevated">
-      <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-        {formatMoney(price)} <span className="text-sm font-normal text-zinc-500">/ person</span>
-      </p>
-      <p className="text-xs text-zinc-400">
-        <ApproxPrice amountBDT={price} />
-      </p>
-      {(tour.child_price || tour.infant_price || tour.tax_rate || tour.service_charge_rate || tour.deposit_percentage) && (
-        <ul className="mt-3 flex flex-col gap-1 rounded-xl bg-zinc-50 p-3 text-xs text-zinc-500 dark:bg-zinc-900/40">
-          {tour.child_price && <li>Child: {formatMoney(tour.child_price)}</li>}
-          {tour.infant_price && <li>Infant: {formatMoney(tour.infant_price)}</li>}
-          {tour.tax_rate && <li>+{(Number(tour.tax_rate) * 100).toFixed(0)}% tax</li>}
-          {tour.service_charge_rate && <li>+{(Number(tour.service_charge_rate) * 100).toFixed(0)}% service charge</li>}
-          {tour.deposit_percentage && (
-            <li>
-              {(Number(tour.deposit_percentage) * 100).toFixed(0)}% deposit
-              {tour.payment_deadline_days ? `, balance due ${tour.payment_deadline_days} days before departure` : ""}
-            </li>
-          )}
-        </ul>
-      )}
-      <div className="mt-5 flex flex-col gap-3">
-        <Select label="Departure date" value={departureId} onChange={(e) => setDepartureId(e.target.value)}>
-          {tour.departures.map((d) => (
-            <option key={d.id} value={d.id} disabled={d.available_seats < 1}>
-              {d.departure_date} — {d.available_seats} seat(s) left
-            </option>
-          ))}
-        </Select>
-        <Input
-          type="number"
-          label="Number of travelers"
-          min={1}
-          max={departure?.available_seats ?? 1}
-          value={quantity}
-          onChange={(e) => setGuestCount(Number(e.target.value))}
-        />
-        <div className="flex flex-col gap-2">
-          {guestNames.map((name, i) => (
-            <Input
-              key={i}
-              value={name}
-              onChange={(e) => setGuestNames((prev) => prev.map((n, idx) => (idx === i ? e.target.value : n)))}
-              placeholder={`Traveler ${i + 1} full name`}
-            />
-          ))}
-        </div>
-        <div className="flex items-center justify-between border-t border-zinc-100 pt-3 text-sm dark:border-zinc-800">
-          <span className="text-zinc-500">Total</span>
-          <span className="text-lg font-bold text-zinc-900 dark:text-zinc-50">{formatMoney(total)}</span>
-        </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <Button
-          onClick={book}
-          loading={submitting}
-          disabled={!departureId || (departure?.available_seats ?? 0) < quantity}
-          className="w-full"
-        >
-          {submitting ? "Redirecting to payment…" : "Book & Pay"}
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={addTourToCart}
-          disabled={!departureId || (departure?.available_seats ?? 0) < quantity}
-          className="w-full"
-        >
-          Add to cart
-        </Button>
-        {addedToCart && (
-          <Link href="/cart" className="text-center text-sm text-primary-600 underline dark:text-primary-400">
-            Added — combine with a stay in your cart →
-          </Link>
-        )}
-      </div>
-    </Card>
   );
 }
