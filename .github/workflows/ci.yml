@@ -13,6 +13,24 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # A throwaway Postgres for the tests that exercise money paths end-to-end
+    # (OVIGO_DB_TESTS — e.g. tests/test_referral_network.py). Schema comes from the
+    # models, not migrations; see that file's docstring for why.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # Throwaway database that only exists for this job: trust auth, so
+          # there's no credential to configure (or for secret scanners to flag).
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: ovigo_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,8 +43,11 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
         env:
-          DATABASE_URL: "postgresql+asyncpg://user:pass@localhost/db"
-          SYNC_DATABASE_URL: "postgresql://user:pass@localhost/db"
+          DATABASE_URL: "postgresql+asyncpg://postgres@localhost:5432/ovigo_test"
+          SYNC_DATABASE_URL: "postgresql://postgres@localhost:5432/ovigo_test"
+          DB_SSL_REQUIRED: "false"
+          OVIGO_DB_TESTS: "1"
+          ENVIRONMENT: "test"
           JWT_SECRET_KEY: "ci-test-secret"
 
   frontend:

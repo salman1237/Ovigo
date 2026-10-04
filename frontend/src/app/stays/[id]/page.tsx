@@ -22,8 +22,8 @@ import {
   Waves,
   Wifi,
 } from "lucide-react";
-import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
 import Link from "next/link";
 
@@ -40,6 +40,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
+import { getAdClickCampaignId } from "@/lib/ad-attribution";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { propertyImageUrl } from "@/lib/media";
@@ -206,7 +207,9 @@ export default function StayDetailPage() {
           {property.room_types.length > 0 && (
             <div className="lg:w-80 lg:shrink-0">
               <div id="book-section" className="scroll-mt-24 lg:sticky lg:top-20">
-                <BookStaySection property={property} />
+                <Suspense fallback={<Spinner />}>
+                  <BookStaySection property={property} />
+                </Suspense>
               </div>
             </div>
           )}
@@ -270,6 +273,8 @@ function MobileBookBar({ priceLabel, priceSuffix }: { priceLabel: string; priceS
 
 function BookStaySection({ property }: { property: Property }) {
   const user = useAuthStore((s) => s.user);
+  // Arrived from a tour that includes this stay (/tours/{id} → "Book this stay").
+  const viaTourId = useSearchParams().get("via_tour") ?? undefined;
   const addToCart = useCartStore((s) => s.addItem);
   const [roomTypeId, setRoomTypeId] = useState(property.room_types[0]?.id ?? "");
   const [checkIn, setCheckIn] = useState("");
@@ -297,6 +302,7 @@ function BookStaySection({ property }: { property: Property }) {
       room_type_id: roomTypeId,
       check_in_date: checkIn,
       check_out_date: checkOut,
+      via_tour_id: viaTourId,
     });
     setAddedToCart(true);
   };
@@ -308,8 +314,18 @@ function BookStaySection({ property }: { property: Property }) {
       const booking = await apiClient.post<Booking>(
         "/api/v1/bookings",
         {
-          items: [{ item_type: "room_type", room_type_id: roomTypeId, check_in_date: checkIn, check_out_date: checkOut, quantity }],
+          items: [
+            {
+              item_type: "room_type",
+              room_type_id: roomTypeId,
+              check_in_date: checkIn,
+              check_out_date: checkOut,
+              quantity,
+              via_tour_id: viaTourId,
+            },
+          ],
           guests: guestNames.filter((n) => n.trim()).map((full_name) => ({ full_name })),
+          ad_campaign_id: getAdClickCampaignId(),
         },
         { auth: true }
       );

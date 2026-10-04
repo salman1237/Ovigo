@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Footer } from "@/components/shared/Footer";
@@ -16,12 +17,17 @@ const geistMono = Geist_Mono({
 });
 
 // Heading-only display face (Phase 6 redesign) — bold geometric sans in the same
-// family as the Gilroy face competitors use, free via Google Fonts. Body copy
-// stays on Geist Sans; only h1-h3 (see globals.css) pick this up.
-const plusJakarta = Plus_Jakarta_Sans({
+// family as the Gilroy face competitors use. Body copy stays on Geist Sans; only
+// h1-h3 (see globals.css) pick this up. Self-hosted (the variable-weight Latin
+// file, OFL — see fonts/PlusJakartaSans-OFL.txt) rather than via next/font/google:
+// Google serves this family to some build hosts as /l/font?kit=…&skey=… URLs,
+// and Turbopack's font loader can't resolve a URL containing "&", which failed
+// every CI build.
+const plusJakarta = localFont({
+  src: "./fonts/PlusJakartaSans-latin-variable.woff2",
   variable: "--font-heading",
-  subsets: ["latin"],
-  weight: ["600", "700", "800"],
+  weight: "200 800",
+  display: "swap",
 });
 
 export const metadata: Metadata = {

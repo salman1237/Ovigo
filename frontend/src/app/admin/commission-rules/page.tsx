@@ -12,7 +12,7 @@ import { formatMoney } from "@/lib/format";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { CommissionPreviewResult, CommissionRule, CommissionRuleScope } from "@/types/earnings";
 
-const ITEM_TYPES = ["tour_departure", "room_type", "custom_bid", "vehicle_rental"] as const;
+const ITEM_TYPES = ["tour_departure", "room_type", "custom_bid", "vehicle_rental", "ride_bid"] as const;
 
 export default function CommissionRulesPage() {
   const [showForm, setShowForm] = useState(false);
@@ -46,8 +46,10 @@ export default function CommissionRulesPage() {
       </div>
       <p className="mt-1 text-sm text-zinc-500">
         A PARTNER-scope rule for a specific partner overrides the CATEGORY default for that item type.
-        There is one platform-wide NETWORK rule applied to referring experts. A rule with an effective/expiry
-        date only applies within that window — useful for scheduling a rate change or a time-boxed promo rate.
+        NETWORK rules set the referring expert&apos;s cut and CURATION rules the cut for an expert whose tour a stay
+        was booked through — either can apply to all item types or to one, and both are capped at Ovigo&apos;s own
+        commission on the booking. A rule with an effective/expiry date only applies within that window — useful
+        for scheduling a rate change or a time-boxed promo rate.
       </p>
 
       {showPreview && <PreviewTool />}
@@ -117,7 +119,8 @@ function RuleForm({ onCreated }: { onCreated: () => void }) {
         "/api/v1/admin/commission-rules",
         {
           scope,
-          item_type: scope === "network" ? undefined : itemType,
+          // Network/curation rules may be scope-wide (no item type) or item-type specific.
+          item_type: (scope === "network" || scope === "curation") && itemType === "all" ? undefined : itemType,
           partner_role_id: scope === "partner" ? partnerRoleId : undefined,
           rate: (Number(rate) / 100).toString(),
           effective_date: effectiveDate || undefined,
@@ -136,20 +139,28 @@ function RuleForm({ onCreated }: { onCreated: () => void }) {
   return (
     <Card className="mt-4 flex flex-col gap-3">
       <div className="flex gap-4 text-xs">
-        {(["category", "partner", "network"] as CommissionRuleScope[]).map((s) => (
+        {(["category", "partner", "network", "curation"] as CommissionRuleScope[]).map((s) => (
           <label key={s} className="flex items-center gap-1.5 capitalize">
-            <input type="radio" checked={scope === s} onChange={() => setScope(s)} />
+            <input
+              type="radio"
+              checked={scope === s}
+              onChange={() => {
+                setScope(s);
+                const scopeWide = s === "network" || s === "curation";
+                if (scopeWide && itemType !== "all") setItemType("all");
+                if (!scopeWide && itemType === "all") setItemType("tour_departure");
+              }}
+            />
             {s}
           </label>
         ))}
       </div>
-      {scope !== "network" && (
-        <Select value={itemType} onChange={(e) => setItemType(e.target.value)} className="w-auto">
-          {ITEM_TYPES.map((t) => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </Select>
-      )}
+      <Select value={itemType} onChange={(e) => setItemType(e.target.value)} className="w-auto">
+        {(scope === "network" || scope === "curation") && <option value="all">All item types</option>}
+        {ITEM_TYPES.map((t) => (
+          <option key={t} value={t}>{t}</option>
+        ))}
+      </Select>
       {scope === "partner" && (
         <Input value={partnerRoleId} onChange={(e) => setPartnerRoleId(e.target.value)} placeholder="Partner role ID" />
       )}

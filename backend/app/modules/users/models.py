@@ -93,6 +93,13 @@ class User(TimestampMixin, Base):
     otp_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
     otp_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # The expert referral link this user registered through, if any (referrals/models.py).
+    # Kept so a partner-role application made later (not in the same visit) still
+    # credits the expert who brought them to Ovigo — first touch wins.
+    signup_referral_link_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("expert_referral_links.id", ondelete="SET NULL"), nullable=True
+    )
+
     partner_account: Mapped["PartnerAccount | None"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )

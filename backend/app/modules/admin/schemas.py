@@ -242,6 +242,13 @@ class ReferralOverviewRow(BaseModel):
     referral_count: int
 
 
+class AcquisitionChannelRow(BaseModel):
+    channel: str  # organic / expert / advertising / unknown (booked before tracking)
+    acquired_by: str | None  # the referring expert's or the ad campaign's name
+    booking_count: int
+    revenue: Decimal
+
+
 class PartnerApprovalFunnelRow(BaseModel):
     role_type: PartnerRoleType
     status: PartnerRoleStatus

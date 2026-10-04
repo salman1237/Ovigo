@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
+import { getAdClickCampaignId } from "@/lib/ad-attribution";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { ApproxPrice } from "@/components/shared/ApproxPrice";
 import { formatMoney } from "@/lib/format";
@@ -79,10 +80,12 @@ export default function CartPage() {
             check_in_date: item.check_in_date,
             check_out_date: item.check_out_date,
             quantity: item.quantity,
+            via_tour_id: item.via_tour_id,
           })),
           guests: guestNames.filter((n) => n.trim()).map((full_name) => ({ full_name })),
           redeem_points: redeemPoints,
           promo_code: promoValidation?.is_valid ? promoCode.trim().toUpperCase() : undefined,
+          ad_campaign_id: getAdClickCampaignId(),
         },
         { auth: true }
       );

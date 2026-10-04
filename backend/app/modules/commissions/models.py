@@ -6,15 +6,16 @@ CATEGORY-scoped rule (the default rate for a booking-item type), which is
 itself just a DB row now instead of a Python constant.
 
 "Referral"/"network" commission (the doc lists both under "advanced commission
-engine") is modeled as one concept here: when a booking item's partner was
-introduced to Ovigo through an *approved* `BusinessReferral` that has since
-been linked to their actual `PartnerRole` (business_network/models.py's
-`linked_partner_role_id`), the referring Local Expert earns an additional cut
-— a second Commission row on the same booking item, `source=NETWORK`, at the
-platform-wide NETWORK-scope rate. This is additive to (not a replacement of)
-the partner's own DIRECT commission, which is why `booking_item_id` is no
-longer unique on this table — a single booking item can now generate two
-Commission rows (one DIRECT, one NETWORK) instead of exactly one.
+engine") is modeled as one concept here: when a booking item's partner has an
+ACTIVE `NetworkAttribution` (referrals/models.py) — because they joined through
+a Local Expert's referral link, or because an admin linked an approved
+`BusinessReferral` to their partner role — and the booking falls inside that
+attribution's commission window, the referring Local Expert earns an additional
+cut: a second Commission row on the same booking item, `source=NETWORK`,
+carrying `attribution_id`. It's additive to the partner's own DIRECT commission
+and funded out of Ovigo's share of it (capped at that DIRECT commission), which
+is why `booking_item_id` isn't unique on this table — a single booking item can
+generate two Commission rows (one DIRECT, one NETWORK) instead of exactly one.
 
 Payout batching lives in the separate `payouts` module (matching the technical
 document's own `/api/v1/payouts` base path) — this module only tracks a
@@ -45,12 +46,14 @@ class CommissionStatus(str, enum.Enum):
 class CommissionSource(str, enum.Enum):
     DIRECT = "direct"  # the partner's own earning on their booking item
     NETWORK = "network"  # a referring expert's cut of someone else's booking item
+    CURATION = "curation"  # a tour's expert's cut of a stay booked through their tour (PRD §12.4)
 
 
 class CommissionRuleScope(str, enum.Enum):
     CATEGORY = "category"  # default rate for a BookingItemType
     PARTNER = "partner"  # override for one specific partner_role_id
     NETWORK = "network"  # the referral/network cut rate (platform-wide)
+    CURATION = "curation"  # the tour-curation cut rate (platform-wide, or per item_type)
 
 
 class CommissionRule(Base):
@@ -98,6 +101,11 @@ class Commission(Base):
     )
     rule_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("commission_rules.id", ondelete="SET NULL"), nullable=True
+    )
+    # Set on every NETWORK row: the referrals/models.py NetworkAttribution that earned
+    # it, so a referral payout can always be traced back to who referred whom.
+    attribution_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("network_attributions.id", ondelete="SET NULL"), nullable=True, index=True
     )
     gross_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     rate: Mapped[Decimal] = mapped_column(Numeric(5, 4))  # e.g. 0.1000 = 10%

@@ -2,9 +2,10 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
-import { Upload } from "lucide-react";
+import { Upload, UserPlus } from "lucide-react";
 
 import { LocationPicker } from "@/components/shared/LocationPicker";
 import { Badge, type BadgeProps } from "@/components/ui/Badge";
@@ -16,6 +17,7 @@ import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
 import { Textarea } from "@/components/ui/Textarea";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { clearReferralCode, useStoredReferralCode } from "@/lib/referral";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Location } from "@/types/location";
 import {
@@ -27,6 +29,7 @@ import {
   PartnerRoleType,
   ROLE_LABELS,
 } from "@/types/partner";
+import { JOINABLE_ROLE_TYPES, type JoinableRoleType, type PublicReferralLink } from "@/types/referrals";
 
 const ALL_ROLE_TYPES: PartnerRoleType[] = ["local_expert", "host", "guide", "hotel", "rent_a_car"];
 const ALL_DOCUMENT_TYPES: DocumentType[] = ["id_card", "trade_license", "property_deed", "vehicle_registration", "other"];
@@ -48,12 +51,49 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function PartnerOnboardingPage() {
+  return (
+    <Suspense fallback={<Spinner />}>
+      <PartnerOnboardingContent />
+    </Suspense>
+  );
+}
+
+function isJoinable(rt: PartnerRoleType): rt is JoinableRoleType {
+  return (JOINABLE_ROLE_TYPES as PartnerRoleType[]).includes(rt);
+}
+
+function PartnerOnboardingContent() {
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
-  const [applyRoleType, setApplyRoleType] = useState<PartnerRoleType>("local_expert");
+  const searchParams = useSearchParams();
+  const presetRole = searchParams.get("role") as PartnerRoleType | null;
+  const [applyRoleType, setApplyRoleType] = useState<PartnerRoleType>(
+    presetRole && ALL_ROLE_TYPES.includes(presetRole) ? presetRole : "local_expert"
+  );
   const [applyMessage, setApplyMessage] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Which expert's network this application joins, if any: the code remembered from
+  // /join/{code} first, else the link this account registered through (server-side,
+  // survives a cleared browser).
+  const storedCode = useStoredReferralCode();
+  const { data: storedInvite, isError: storedInvalid } = useQuery({
+    queryKey: ["referral-link", storedCode],
+    queryFn: () => apiClient.get<PublicReferralLink>(`/api/v1/referrals/links/${encodeURIComponent(storedCode!)}`),
+    enabled: !!storedCode,
+    retry: false,
+    staleTime: Infinity,
+  });
+  const { data: accountInvite } = useQuery({
+    queryKey: ["referral-invite", user?.id],
+    queryFn: () => apiClient.get<PublicReferralLink | null>("/api/v1/referrals/invite", { auth: true }),
+    enabled: !!user && (!storedCode || storedInvalid),
+    retry: false,
+  });
+  const invite = storedInvite ?? accountInvite ?? null;
+  const joiningNetwork = !!invite && isJoinable(applyRoleType);
 
   const { data: roles, isLoading, isError } = useQuery({
     queryKey: ["my-partner-roles"],
@@ -72,12 +112,19 @@ export default function PartnerOnboardingPage() {
     try {
       await apiClient.post(
         "/api/v1/partners/roles",
-        { role_type: applyRoleType, message: applyMessage || undefined },
+        {
+          role_type: applyRoleType,
+          message: applyMessage || undefined,
+          referral_code: joiningNetwork ? invite?.code : undefined,
+          accept_network_terms: joiningNetwork ? acceptTerms : undefined,
+        },
         { auth: true }
       );
       setApplyMessage("");
+      if (joiningNetwork) clearReferralCode();
       refetchRoles();
     } catch (err) {
+      if (err instanceof ApiError && err.message.includes("no longer active")) clearReferralCode();
       setError(err instanceof ApiError ? err.message : "Something went wrong");
     } finally {
       setSubmitting(false);
@@ -105,6 +152,21 @@ export default function PartnerOnboardingPage() {
         reviewed by our team before it goes live.
       </p>
 
+      {invite && (
+        <div className="mt-6 flex items-start gap-3 rounded-2xl border border-primary-200 bg-primary-50 p-4 text-sm text-primary-900 dark:border-primary-900 dark:bg-primary-950/40 dark:text-primary-100">
+          <UserPlus className="mt-0.5 h-5 w-5 shrink-0 text-primary-600 dark:text-primary-400" />
+          <div>
+            <p>
+              You&apos;re joining <span className="font-semibold">{invite.expert_name}</span>&apos;s network.
+            </p>
+            <p className="mt-0.5 text-xs text-primary-800/80 dark:text-primary-200/80">
+              Applies to Guide, Host, Hotel / Resort and Rent-a-Car applications. A Local Expert application is
+              independent of any network.
+            </p>
+          </div>
+        </div>
+      )}
+
       <Card as="form" onSubmit={handleApply} className="mt-6 flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Apply for a new role</h2>
         <Select value={applyRoleType} onChange={(e) => setApplyRoleType(e.target.value as PartnerRoleType)}>
@@ -121,8 +183,30 @@ export default function PartnerOnboardingPage() {
           placeholder="Tell us a bit about yourself (optional)"
           rows={3}
         />
+        {joiningNetwork && invite && (
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
+            <p className="font-medium text-zinc-700 dark:text-zinc-300">Network terms</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+              <li>
+                {invite.expert_name} is recorded as the Local Expert who brought you to Ovigo, and earns a referral
+                commission on your completed bookings for 12 months after your approval.
+              </li>
+              <li>That commission is paid by Ovigo out of its own fee — your earnings are not reduced.</li>
+              <li>This can&apos;t be changed to a different expert later, except by Ovigo support.</li>
+            </ul>
+            <label className="mt-2 flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                checked={acceptTerms}
+                onChange={(e) => setAcceptTerms(e.target.checked)}
+                className="h-4 w-4 accent-primary-600"
+              />
+              I accept the network terms
+            </label>
+          </div>
+        )}
         {error && <p className="text-sm text-red-600">{error}</p>}
-        <Button type="submit" loading={submitting} className="self-start">
+        <Button type="submit" loading={submitting} disabled={joiningNetwork && !acceptTerms} className="self-start">
           {submitting ? "Submitting…" : "Submit application"}
         </Button>
       </Card>

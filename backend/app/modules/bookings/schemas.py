@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from app.modules.bookings.models import BookingItemStatus, BookingItemType, BookingStatus
+from app.modules.bookings.models import AcquisitionChannel, BookingItemStatus, BookingItemType, BookingStatus
 
 
 class BookingItemCreate(BaseModel):
@@ -15,9 +15,14 @@ class BookingItemCreate(BaseModel):
     check_in_date: date | None = None
     check_out_date: date | None = None
     quantity: int = 1
+    # Booking a stay that a tour includes (TourStay.property_id), through that tour —
+    # credits the tour's Local Expert a tour-curation commission (PRD §12.4).
+    via_tour_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def check_fields_for_type(self) -> "BookingItemCreate":
+        if self.via_tour_id is not None and self.item_type != BookingItemType.ROOM_TYPE:
+            raise ValueError("via_tour_id only applies to a room_type item")
         if self.item_type == BookingItemType.TOUR_DEPARTURE:
             if not self.tour_departure_id:
                 raise ValueError("tour_departure_id is required for a tour_departure item")
@@ -55,6 +60,9 @@ class BookingCreate(BaseModel):
     guests: list[GuestCreate] = []
     redeem_points: int = 0
     promo_code: str | None = None
+    # The sponsored-ad campaign the traveler clicked through, if any — only honored
+    # when that campaign actually advertises one of this booking's items.
+    ad_campaign_id: uuid.UUID | None = None
 
 
 class BookingItemRead(BaseModel):
@@ -73,6 +81,7 @@ class BookingItemRead(BaseModel):
     unit_price: Decimal
     subtotal: Decimal
     assigned_room_id: uuid.UUID | None
+    curated_by_tour_id: uuid.UUID | None = None
 
 
 class GuestRead(BaseModel):
@@ -114,6 +123,7 @@ class BookingRead(BaseModel):
     loyalty_discount_amount: Decimal
     promo_discount_amount: Decimal
     currency: str
+    acquisition_channel: AcquisitionChannel | None = None
     created_at: datetime
     items: list[BookingItemRead] = []
     guests: list[GuestRead] = []

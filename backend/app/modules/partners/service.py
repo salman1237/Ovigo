@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.partners.models import DocumentType, PartnerDocument, PartnerRoleApplication
+from app.modules.referrals import service as referrals_service
 from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleStatus, PartnerRoleType, User
 
 MAX_DOCUMENT_SIZE_BYTES = 5 * 1024 * 1024  # 5MB — see partners/models.py docstring on storage choice
@@ -24,8 +25,18 @@ async def get_or_create_partner_account(db: AsyncSession, user: User) -> Partner
 
 
 async def apply_for_role(
-    db: AsyncSession, user: User, role_type: PartnerRoleType, message: str | None
+    db: AsyncSession,
+    user: User,
+    role_type: PartnerRoleType,
+    message: str | None,
+    referral_code: str | None = None,
+    accept_network_terms: bool = False,
 ) -> PartnerRole:
+    # Resolve the referral link first, so a code that can't apply is rejected before
+    # anything (partner account, role row) gets written.
+    referral_link, terms_accepted = await referrals_service.validate_for_application(
+        db, user, role_type, referral_code, accept_network_terms
+    )
     account = await get_or_create_partner_account(db, user)
 
     result = await db.execute(
@@ -52,6 +63,7 @@ async def apply_for_role(
 
     application = PartnerRoleApplication(partner_role_id=role.id, message=message)
     db.add(application)
+    await referrals_service.attach_to_application(db, user, role, referral_link, terms_accepted)
     await db.commit()
     return await get_own_role_or_404(db, user, role.id)
 

@@ -12,6 +12,7 @@ from app.core.security import (
     verify_password,
 )
 from app.modules.auth.schemas import RegisterRequest
+from app.modules.referrals import service as referrals_service
 from app.modules.users.models import User
 
 OTP_TTL_MINUTES = 10
@@ -35,6 +36,9 @@ async def register_user(db: AsyncSession, payload: RegisterRequest) -> User:
         password_hash=hash_password(payload.password),
     )
     db.add(user)
+    if payload.referral_code:
+        await db.flush()
+        await referrals_service.record_signup_link(db, user, payload.referral_code)
     await db.commit()
     await db.refresh(user)
     return user

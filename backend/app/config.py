@@ -110,6 +110,13 @@ class Settings(BaseSettings):
     def vapid_configured(self) -> bool:
         return bool(self.vapid_private_key and self.vapid_public_key and self.vapid_claim_email)
 
+    # Expert referral network (referrals/models.py): how long a referred partner keeps
+    # earning their referring expert a NETWORK commission after being approved, and
+    # how long after registering through a link a later partner application still
+    # counts as having come through it.
+    network_attribution_months: int = 12
+    network_terms_version: str = "2026-10"
+
 
 @lru_cache
 def get_settings() -> Settings:

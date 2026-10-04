@@ -60,6 +60,7 @@ const PARTNER_LINKS: { href: string; label: string; roles: PartnerRoleType[] }[]
   { href: "/dashboard/bids", label: "Bid Requests", roles: ["local_expert"] },
   { href: "/dashboard/guides", label: "My Guides", roles: ["local_expert"] },
   { href: "/dashboard/guide", label: "Guide Dashboard", roles: ["guide"] },
+  { href: "/dashboard/network", label: "My Network", roles: ["local_expert"] },
   { href: "/dashboard/business-network", label: "Business Network", roles: ["local_expert"] },
   { href: "/dashboard/ads", label: "Ad Campaigns", roles: ["local_expert", "host", "hotel", "rent_a_car"] },
   { href: "/dashboard/earnings", label: "Earnings", roles: ["local_expert", "host", "hotel", "guide"] },

@@ -16,6 +16,7 @@ import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
+import { getAdClickCampaignId } from "@/lib/ad-attribution";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { VEHICLE_TYPE_ICONS } from "@/lib/vehicleIcons";
@@ -190,7 +191,11 @@ function BookVehicleSection({ vehicle }: { vehicle: Vehicle }) {
     try {
       const booking = await apiClient.post<Booking>(
         "/api/v1/bookings",
-        { items: [{ item_type: "vehicle_rental", vehicle_id: vehicle.id, check_in_date: pickup, check_out_date: returnDate, quantity: 1 }], guests: [] },
+        {
+          items: [{ item_type: "vehicle_rental", vehicle_id: vehicle.id, check_in_date: pickup, check_out_date: returnDate, quantity: 1 }],
+          guests: [],
+          ad_campaign_id: getAdClickCampaignId(),
+        },
         { auth: true }
       );
       const payment = await apiClient.post<{ gateway_page_url: string }>(

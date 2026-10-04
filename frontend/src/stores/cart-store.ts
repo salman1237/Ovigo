@@ -24,6 +24,8 @@ export interface CartItem {
   vehicle_id?: string;
   check_in_date?: string;
   check_out_date?: string;
+  /** A stay added from a tour that includes it — credits that tour's expert. */
+  via_tour_id?: string;
 }
 
 export function cartItemTotal(item: CartItem): number {

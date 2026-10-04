@@ -13,6 +13,7 @@ manually cancel a stuck booking to release its hold.
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
+from typing import NamedTuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +22,7 @@ from sqlalchemy.orm import selectinload
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.security import hash_password
 from app.modules.bookings.models import (
+    AcquisitionChannel,
     Booking,
     BookingGuest,
     BookingItem,
@@ -35,10 +37,14 @@ from app.modules.loyalty import service as loyalty_service
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.models import NotificationType
 from app.modules.promotions import service as promotions_service
+from app.modules.ads.models import AdCampaign, AdCampaignStatus
+from app.modules.locations.models import TaggableEntityType
+from app.modules.referrals.models import ExpertReferralLink
 from app.modules.rentcar.models import Vehicle, VehicleAvailability, VehicleStatus
 from app.modules.stays import service as stays_service
 from app.modules.stays.models import AvailabilityCalendar, HousekeepingStatus, Property, PropertyStatus, Room, RoomType
-from app.modules.tours.models import Tour, TourDeparture, TourStatus
+from app.modules.tours.models import Tour, TourDeparture, TourStatus, TourStay
+from app.modules.tours.service import PUBLIC_TOUR_STATUSES
 from app.modules.users.models import SystemRole, User
 
 _EAGER = (
@@ -56,7 +62,19 @@ BUNDLE_ELIGIBLE_TYPES = {BookingItemType.TOUR_DEPARTURE, BookingItemType.ROOM_TY
 BUNDLE_DISCOUNT_RATES: dict[int, Decimal] = {2: Decimal("0.05"), 3: Decimal("0.10")}
 
 
-async def _reserve_tour_departure(db: AsyncSession, item: BookingItemCreate) -> tuple[Decimal, Decimal]:
+class Reserved(NamedTuple):
+    """What reserving one item yields: its price, who owns the listing (the default
+    seller, PRD §12.5), and which advertisable entity it is — so a sponsored-ad click
+    can be matched to it (`_acquisition_for`)."""
+
+    unit_price: Decimal
+    subtotal: Decimal
+    owner_role_id: uuid.UUID
+    entity_type: TaggableEntityType
+    entity_id: uuid.UUID
+
+
+async def _reserve_tour_departure(db: AsyncSession, item: BookingItemCreate) -> Reserved:
     result = await db.execute(
         select(TourDeparture).where(TourDeparture.id == item.tour_departure_id).with_for_update()
     )
@@ -73,7 +91,7 @@ async def _reserve_tour_departure(db: AsyncSession, item: BookingItemCreate) -> 
 
     departure.available_seats -= item.quantity
     unit_price = departure.price_override or tour.base_price
-    return unit_price, unit_price * item.quantity
+    return Reserved(unit_price, unit_price * item.quantity, tour.local_expert_role_id, TaggableEntityType.TOUR, tour.id)
 
 
 async def _release_tour_departure(db: AsyncSession, departure_id: uuid.UUID, quantity: int) -> None:
@@ -87,7 +105,7 @@ def _date_range(start: date, end: date) -> list[date]:
     return [start + timedelta(days=i) for i in range((end - start).days)]
 
 
-async def _reserve_room(db: AsyncSession, item: BookingItemCreate) -> tuple[Decimal, Decimal]:
+async def _reserve_room(db: AsyncSession, item: BookingItemCreate) -> Reserved:
     room_result = await db.execute(select(RoomType).where(RoomType.id == item.room_type_id))
     room = room_result.scalar_one_or_none()
     if room is None:
@@ -128,7 +146,7 @@ async def _reserve_room(db: AsyncSession, item: BookingItemCreate) -> tuple[Deci
         subtotal += nightly_rate * item.quantity
         row.available_units -= item.quantity
 
-    return room.base_price, subtotal
+    return Reserved(room.base_price, subtotal, prop.host_role_id, TaggableEntityType.PROPERTY, prop.id)
 
 
 async def _room_tax_and_service_charge(db: AsyncSession, room_type_id: uuid.UUID, subtotal: Decimal) -> Decimal:
@@ -149,7 +167,7 @@ async def _room_tax_and_service_charge(db: AsyncSession, room_type_id: uuid.UUID
     return (subtotal * rate / Decimal("100")).quantize(Decimal("0.01"))
 
 
-async def _reserve_vehicle(db: AsyncSession, item: BookingItemCreate) -> tuple[Decimal, Decimal]:
+async def _reserve_vehicle(db: AsyncSession, item: BookingItemCreate) -> Reserved:
     vehicle_result = await db.execute(select(Vehicle).where(Vehicle.id == item.vehicle_id).with_for_update())
     vehicle = vehicle_result.scalar_one_or_none()
     if vehicle is None or vehicle.status != VehicleStatus.PUBLISHED:
@@ -173,7 +191,57 @@ async def _reserve_vehicle(db: AsyncSession, item: BookingItemCreate) -> tuple[D
         row.is_available = False
 
     subtotal = vehicle.price_per_day * len(days)
-    return vehicle.price_per_day, subtotal
+    return Reserved(vehicle.price_per_day, subtotal, vehicle.rent_a_car_role_id, TaggableEntityType.VEHICLE, vehicle.id)
+
+
+async def _curating_tour(db: AsyncSession, item: BookingItemCreate) -> Tour | None:
+    """The tour a stay is being booked through, if `via_tour_id` names a publicly
+    listed tour that really does include this room's property. Anything else is
+    ignored rather than failing the booking — e.g. the expert removed the stay from
+    the tour after the traveler put it in their cart."""
+    if item.via_tour_id is None:
+        return None
+    tour = (await db.execute(select(Tour).where(Tour.id == item.via_tour_id))).scalar_one_or_none()
+    if tour is None or tour.status not in PUBLIC_TOUR_STATUSES:
+        return None
+    linked = await db.execute(
+        select(TourStay.id)
+        .join(RoomType, RoomType.property_id == TourStay.property_id)
+        .where(TourStay.tour_id == tour.id, RoomType.id == item.room_type_id)
+        .limit(1)
+    )
+    return tour if linked.scalar_one_or_none() is not None else None
+
+
+async def _acquisition_for(
+    db: AsyncSession,
+    user: User,
+    ad_campaign_id: uuid.UUID | None = None,
+    entities: set[tuple[TaggableEntityType, uuid.UUID]] | None = None,
+) -> tuple[AcquisitionChannel, uuid.UUID | None, uuid.UUID | None]:
+    """(channel, acquiring expert role, ad campaign) — PRD §12.5 "whether the
+    customer was acquired organically, through an Expert or through advertising".
+    An ad click only counts when that campaign actually advertises one of the
+    booked items (a client can't attribute a booking to an arbitrary campaign);
+    otherwise a traveler who registered through an expert's referral link is that
+    expert's; otherwise organic."""
+    if ad_campaign_id is not None and entities:
+        campaign = (await db.execute(select(AdCampaign).where(AdCampaign.id == ad_campaign_id))).scalar_one_or_none()
+        if (
+            campaign is not None
+            and campaign.status in (AdCampaignStatus.ACTIVE, AdCampaignStatus.PAUSED, AdCampaignStatus.COMPLETED)
+            and (campaign.entity_type, campaign.entity_id) in entities
+        ):
+            return AcquisitionChannel.ADVERTISING, None, campaign.id
+    if user.signup_referral_link_id is not None:
+        expert_role_id = (
+            await db.execute(
+                select(ExpertReferralLink.expert_role_id).where(ExpertReferralLink.id == user.signup_referral_link_id)
+            )
+        ).scalar_one_or_none()
+        if expert_role_id is not None:
+            return AcquisitionChannel.EXPERT, expert_role_id, None
+    return AcquisitionChannel.ORGANIC, None, None
 
 
 async def _release_vehicle(db: AsyncSession, vehicle_id: uuid.UUID, check_in: date, check_out: date) -> None:
@@ -194,27 +262,29 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
     total = Decimal("0")
     tax_service_total = Decimal("0")
     bundle_eligible_subtotal = Decimal("0")
-    prepared: list[tuple[BookingItemCreate, Decimal, Decimal]] = []
+    prepared: list[tuple[BookingItemCreate, Reserved, Tour | None]] = []
     for item in payload.items:
         tax_service = Decimal("0")
+        curating_tour = None
         if item.item_type == BookingItemType.TOUR_DEPARTURE:
-            unit_price, subtotal = await _reserve_tour_departure(db, item)
+            reserved = await _reserve_tour_departure(db, item)
         elif item.item_type == BookingItemType.ROOM_TYPE:
-            unit_price, subtotal = await _reserve_room(db, item)
-            tax_service = await _room_tax_and_service_charge(db, item.room_type_id, subtotal)
+            reserved = await _reserve_room(db, item)
+            tax_service = await _room_tax_and_service_charge(db, item.room_type_id, reserved.subtotal)
+            curating_tour = await _curating_tour(db, item)
         elif item.item_type == BookingItemType.VEHICLE_RENTAL:
-            unit_price, subtotal = await _reserve_vehicle(db, item)
+            reserved = await _reserve_vehicle(db, item)
         else:
             # CUSTOM_BID is rejected by BookingItemCreate's own validator before
             # reaching here — this branch exists only so a future new item type
             # fails loudly instead of silently mis-dispatching.
             raise ConflictError(f"Cannot create a booking item of type {item.item_type.value} directly")
         await fraud_service.check_self_booking(db, user.id, item)
-        prepared.append((item, unit_price, subtotal))
-        total += subtotal + tax_service
+        prepared.append((item, reserved, curating_tour))
+        total += reserved.subtotal + tax_service
         tax_service_total += tax_service
         if item.item_type in BUNDLE_ELIGIBLE_TYPES:
-            bundle_eligible_subtotal += subtotal
+            bundle_eligible_subtotal += reserved.subtotal
 
     distinct_bundle_types = {item.item_type for item in payload.items} & BUNDLE_ELIGIBLE_TYPES
     bundle_discount_rate = BUNDLE_DISCOUNT_RATES.get(len(distinct_bundle_types), Decimal("0"))
@@ -239,6 +309,9 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
         loyalty_discount_amount = await loyalty_service.preview_redemption(db, user, payload.redeem_points, total)
         total -= loyalty_discount_amount
 
+    channel, acquiring_expert_role_id, ad_campaign_id = await _acquisition_for(
+        db, user, payload.ad_campaign_id, {(r.entity_type, r.entity_id) for _, r, _ in prepared}
+    )
     booking = Booking(
         user_id=user.id,
         total_amount=total,
@@ -246,6 +319,9 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
         bundle_discount_amount=bundle_discount_amount,
         promo_discount_amount=promo_discount_amount,
         loyalty_discount_amount=loyalty_discount_amount,
+        acquisition_channel=channel,
+        acquisition_expert_role_id=acquiring_expert_role_id,
+        ad_campaign_id=ad_campaign_id,
     )
     db.add(booking)
     await db.flush()
@@ -255,7 +331,7 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
     if payload.redeem_points > 0:
         await loyalty_service.apply_redemption(db, user, booking.id, payload.redeem_points)
 
-    for item, unit_price, subtotal in prepared:
+    for item, reserved, curating_tour in prepared:
         db.add(
             BookingItem(
                 booking_id=booking.id,
@@ -266,8 +342,11 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
                 check_in_date=item.check_in_date,
                 check_out_date=item.check_out_date,
                 quantity=item.quantity,
-                unit_price=unit_price,
-                subtotal=subtotal,
+                unit_price=reserved.unit_price,
+                subtotal=reserved.subtotal,
+                # Booked through a tour that includes it, the curating expert sold it.
+                sold_by_role_id=curating_tour.local_expert_role_id if curating_tour else reserved.owner_role_id,
+                curated_by_tour_id=curating_tour.id if curating_tour else None,
             )
         )
     for guest in payload.guests:
@@ -291,7 +370,14 @@ async def create_booking_from_bid(
     bid isn't drawn from a fixed departure or room pool, it's a one-off
     arrangement the expert already committed to when they placed the bid.
     """
-    booking = Booking(user_id=user.id, total_amount=price)
+    from app.modules.bidding.models import TourBid
+
+    channel, acquiring_expert_role_id, _ = await _acquisition_for(db, user)
+    seller = (await db.execute(select(TourBid.local_expert_role_id).where(TourBid.id == bid_id))).scalar_one_or_none()
+    booking = Booking(
+        user_id=user.id, total_amount=price,
+        acquisition_channel=channel, acquisition_expert_role_id=acquiring_expert_role_id,
+    )
     db.add(booking)
     await db.flush()
 
@@ -300,6 +386,7 @@ async def create_booking_from_bid(
             booking_id=booking.id,
             item_type=BookingItemType.CUSTOM_BID,
             custom_bid_id=bid_id,
+            sold_by_role_id=seller,
             quantity=1,
             unit_price=price,
             subtotal=price,
@@ -318,7 +405,14 @@ async def create_booking_from_ride_bid(
     function, not a shared one, since the two bid tables have their own FK
     columns on BookingItem and this avoids a bookings <-> ride_requests import
     cycle the same way the tour-bid version avoids one with bidding)."""
-    booking = Booking(user_id=user.id, total_amount=price)
+    from app.modules.ride_requests.models import RideBid
+
+    channel, acquiring_expert_role_id, _ = await _acquisition_for(db, user)
+    seller = (await db.execute(select(RideBid.rent_a_car_role_id).where(RideBid.id == bid_id))).scalar_one_or_none()
+    booking = Booking(
+        user_id=user.id, total_amount=price,
+        acquisition_channel=channel, acquisition_expert_role_id=acquiring_expert_role_id,
+    )
     db.add(booking)
     await db.flush()
 
@@ -327,6 +421,7 @@ async def create_booking_from_ride_bid(
             booking_id=booking.id,
             item_type=BookingItemType.RIDE_BID,
             ride_bid_id=bid_id,
+            sold_by_role_id=seller,
             quantity=1,
             unit_price=price,
             subtotal=price,
@@ -573,7 +668,7 @@ async def create_front_desk_booking(db: AsyncSession, property_id: uuid.UUID, pa
 
     total = Decimal("0")
     tax_service_total = Decimal("0")
-    prepared: list[tuple[BookingItemCreate, Decimal, Decimal]] = []
+    prepared: list[tuple[BookingItemCreate, Reserved]] = []
     for item in payload.items:
         if item.item_type != BookingItemType.ROOM_TYPE:
             raise ConflictError("Front-desk bookings can only include room_type items")
@@ -582,19 +677,21 @@ async def create_front_desk_booking(db: AsyncSession, property_id: uuid.UUID, pa
         )
         if room_check.scalar_one_or_none() is None:
             raise NotFoundError("Room type not found on this property")
-        unit_price, subtotal = await _reserve_room(db, item)
-        tax_service = await _room_tax_and_service_charge(db, item.room_type_id, subtotal)
-        prepared.append((item, unit_price, subtotal))
-        total += subtotal + tax_service
+        reserved = await _reserve_room(db, item)
+        tax_service = await _room_tax_and_service_charge(db, item.room_type_id, reserved.subtotal)
+        prepared.append((item, reserved))
+        total += reserved.subtotal + tax_service
         tax_service_total += tax_service
 
+    # A walk-in found the property themselves — organic by definition.
     booking = Booking(
-        user_id=user.id, status=BookingStatus.CONFIRMED, total_amount=total, tax_service_amount=tax_service_total
+        user_id=user.id, status=BookingStatus.CONFIRMED, total_amount=total, tax_service_amount=tax_service_total,
+        acquisition_channel=AcquisitionChannel.ORGANIC,
     )
     db.add(booking)
     await db.flush()
 
-    for item, unit_price, subtotal in prepared:
+    for item, reserved in prepared:
         db.add(
             BookingItem(
                 booking_id=booking.id,
@@ -603,8 +700,9 @@ async def create_front_desk_booking(db: AsyncSession, property_id: uuid.UUID, pa
                 check_in_date=item.check_in_date,
                 check_out_date=item.check_out_date,
                 quantity=item.quantity,
-                unit_price=unit_price,
-                subtotal=subtotal,
+                unit_price=reserved.unit_price,
+                subtotal=reserved.subtotal,
+                sold_by_role_id=reserved.owner_role_id,
             )
         )
     db.add(

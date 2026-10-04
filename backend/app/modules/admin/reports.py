@@ -22,9 +22,11 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import aliased
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.admin.schemas import (
+    AcquisitionChannelRow,
     AdPerformanceRow,
     BookingsSummaryRow,
     CustomBidConversionRow,
@@ -42,7 +44,7 @@ from app.modules.admin.schemas import (
 )
 from app.modules.ads.models import AdCampaign
 from app.modules.bidding.models import BidStatus, CustomTourRequest, TourBid
-from app.modules.bookings.models import Booking, BookingItem, BookingItemStatus, BookingItemType
+from app.modules.bookings.models import Booking, BookingItem, BookingItemStatus, BookingItemType, BookingStatus
 from app.modules.business_network.models import BusinessReferral
 from app.modules.commissions.models import Commission
 from app.modules.disputes.models import Dispute
@@ -158,6 +160,45 @@ async def referral_overview(db: AsyncSession) -> list[ReferralOverviewRow]:
     return [
         ReferralOverviewRow(status=status.value, ownership_type=ownership_type.value, referral_count=count)
         for status, ownership_type, count in result.all()
+    ]
+
+
+async def acquisition_channels(db: AsyncSession) -> list[AcquisitionChannelRow]:
+    """PRD §12.5: how paying travelers were acquired — organically, through a Local
+    Expert's referral link, or through a sponsored ad — with the expert or campaign
+    behind each non-organic row. Paid bookings only (anything past PENDING_PAYMENT,
+    excluding cancellations)."""
+    paid = [BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN, BookingStatus.CHECKED_OUT, BookingStatus.COMPLETED]
+    expert_role, expert_account, expert_user = aliased(PartnerRole), aliased(PartnerAccount), aliased(User)
+    ad_role, ad_account, ad_user = aliased(PartnerRole), aliased(PartnerAccount), aliased(User)
+    result = await db.execute(
+        select(
+            Booking.acquisition_channel,
+            expert_user.full_name,
+            ad_user.full_name,
+            func.count(Booking.id),
+            func.coalesce(func.sum(Booking.total_amount), 0),
+        )
+        .outerjoin(expert_role, expert_role.id == Booking.acquisition_expert_role_id)
+        .outerjoin(expert_account, expert_account.id == expert_role.partner_account_id)
+        .outerjoin(expert_user, expert_user.id == expert_account.user_id)
+        .outerjoin(AdCampaign, AdCampaign.id == Booking.ad_campaign_id)
+        .outerjoin(ad_role, ad_role.id == AdCampaign.partner_role_id)
+        .outerjoin(ad_account, ad_account.id == ad_role.partner_account_id)
+        .outerjoin(ad_user, ad_user.id == ad_account.user_id)
+        .where(Booking.status.in_(paid))
+        .group_by(Booking.acquisition_channel, expert_user.full_name, ad_user.full_name)
+        .order_by(func.count(Booking.id).desc())
+    )
+    return [
+        AcquisitionChannelRow(
+            channel=channel.value if channel else "unknown",
+            # The referring expert, or — for an ad — the advertising partner.
+            acquired_by=expert_name or (f"Ad by {advertiser}" if advertiser else None),
+            booking_count=count,
+            revenue=Decimal(revenue).quantize(Decimal("0.01")),
+        )
+        for channel, expert_name, advertiser, count, revenue in result.all()
     ]
 
 

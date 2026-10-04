@@ -1,5 +1,5 @@
 export type CommissionStatus = "pending" | "payable" | "paid" | "on_hold" | "cancelled";
-export type CommissionSource = "direct" | "network";
+export type CommissionSource = "direct" | "network" | "curation";
 
 export interface Commission {
   id: string;
@@ -23,12 +23,12 @@ export interface EarningsSummary {
   commissions: Commission[];
 }
 
-export type CommissionRuleScope = "category" | "partner" | "network";
+export type CommissionRuleScope = "category" | "partner" | "network" | "curation";
 
 export interface CommissionRule {
   id: string;
   scope: CommissionRuleScope;
-  item_type: "tour_departure" | "room_type" | "custom_bid" | "vehicle_rental" | null;
+  item_type: "tour_departure" | "room_type" | "custom_bid" | "vehicle_rental" | "ride_bid" | null;
   partner_role_id: string | null;
   rate: string;
   is_active: boolean;

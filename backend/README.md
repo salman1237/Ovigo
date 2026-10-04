@@ -47,6 +47,13 @@ environment variables on the Dokploy application itself — do not commit real s
 `.env`. See `PROGRESS_TRACKER.md`'s "Infrastructure note" section for the full migration
 history and why.
 
+**Migrations run automatically on deploy.** The container's start command is
+`alembic upgrade head && fastapi run ...` (see `Dockerfile`), so every deploy applies
+pending migrations from inside the server's own network before serving, and the database
+never needs a public port. If a migration fails, the container doesn't start, and the
+error is in the Dokploy deploy log. Make every migration safe to run against live data,
+since it runs during the deploy itself.
+
 FastAPI Cloud (`fastapi deploy`) is also still wired up but currently idle — kept as a
 fallback, not actively used for production traffic.
 

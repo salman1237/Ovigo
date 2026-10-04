@@ -17,6 +17,7 @@ const REPORTS = [
   { key: "fraud-overview", label: "Fraud Overview" },
   { key: "dispute-overview", label: "Dispute Overview" },
   { key: "referral-overview", label: "Referral Overview" },
+  { key: "acquisition-channels", label: "Acquisition Channels" },
   { key: "partner-approval-funnel", label: "Partner Approval Funnel" },
   { key: "payout-summary", label: "Payout Summary" },
   { key: "refund-summary", label: "Refund Summary" },
