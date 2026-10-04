@@ -213,9 +213,10 @@ async def test_host_joins_through_link_and_expert_earns_network_commission(api, 
     assert set(link["role_urls"]) == {"guide", "host", "hotel", "rent_a_car"}
     assert (await api.get("/api/v1/referrals/me", headers=_auth(expert_token))).json()["code"] == link["code"]
 
-    # Public landing info + visit counter.
-    r = await api.get(f"/api/v1/referrals/links/{link['code'].lower()}")
+    # Public landing info; only the landing page itself counts a visit.
+    r = await api.get(f"/api/v1/referrals/links/{link['code'].lower()}?count_visit=true")
     assert r.status_code == 200 and r.json()["expert_name"] == "Expert Karim"
+    await api.get(f"/api/v1/referrals/links/{link['code']}")
     assert (await api.get("/api/v1/referrals/links/ZZZZZZZZ")).status_code == 404
 
     # Prospect registers through the link; the invite survives without the code.
@@ -261,7 +262,7 @@ async def test_host_joins_through_link_and_expert_earns_network_commission(api, 
     member = (await api.get("/api/v1/referrals/me/members", headers=_auth(expert_token))).json()[0]
     assert Decimal(member["earnings_pending"]) == Decimal("200.00")
     stats = (await api.get("/api/v1/referrals/me", headers=_auth(expert_token))).json()["stats"]
-    assert stats["active"] == 1 and stats["signups"] == 1 and stats["visits"] >= 1
+    assert stats["active"] == 1 and stats["signups"] == 1 and stats["visits"] == 1
 
     # The expert booking their own referral earns no network cut.
     item_id = await _book_and_commission(expert_user["id"], host_role_id, Decimal("10000.00"), monkeypatch)

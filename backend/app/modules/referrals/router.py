@@ -62,9 +62,10 @@ async def get_my_invite(current_user: User = Depends(get_current_user), db: Asyn
 
 @router.get("/links/{code}", response_model=PublicReferralLinkRead)
 @limiter.limit("60/minute")
-async def get_public_link(request: Request, code: str, db: AsyncSession = Depends(get_db)):
-    """Public: who owns this referral link, for the /join/{code} landing page."""
-    return await service.get_public_link(db, code)
+async def get_public_link(request: Request, code: str, count_visit: bool = False, db: AsyncSession = Depends(get_db)):
+    """Public: who owns this referral link. `count_visit=true` only from the /join/{code}
+    landing page itself, so later lookups (register, apply) don't inflate the count."""
+    return await service.get_public_link(db, code, count_visit)
 
 
 @admin_router.get("", response_model=list[AdminAttributionRead])

@@ -42,6 +42,8 @@ CODE_LENGTH = 8
 JOINABLE_ROLE_TYPES = (PartnerRoleType.GUIDE, PartnerRoleType.HOST, PartnerRoleType.HOTEL, PartnerRoleType.RENT_A_CAR)
 
 EXPIRING_SOON_DAYS = 30
+ZERO = Decimal("0.00")
+CENT = Decimal("0.01")
 
 _ATTRIBUTION_EAGER = (
     selectinload(NetworkAttribution.referring_expert_role)
@@ -187,7 +189,12 @@ async def _earnings_by_attribution(
         .group_by(Commission.attribution_id)
     )
     return {
-        row[0]: {"pending": Decimal(row[1]), "payable": Decimal(row[2]), "paid": Decimal(row[3]), "completed": int(row[4])}
+        row[0]: {
+            "pending": Decimal(row[1]).quantize(CENT),
+            "payable": Decimal(row[2]).quantize(CENT),
+            "paid": Decimal(row[3]).quantize(CENT),
+            "completed": int(row[4]),
+        }
         for row in result.all()
     }
 
@@ -223,9 +230,9 @@ async def get_my_link(db: AsyncSession, expert_role: PartnerRole) -> ReferralLin
         active=counts["active"],
         expired=counts["expired"],
         expiring_soon=expiring_soon,
-        network_earnings_pending=sum((e["pending"] for e in earnings.values()), Decimal("0")),
-        network_earnings_payable=sum((e["payable"] for e in earnings.values()), Decimal("0")),
-        network_earnings_paid=sum((e["paid"] for e in earnings.values()), Decimal("0")),
+        network_earnings_pending=sum((e["pending"] for e in earnings.values()), ZERO),
+        network_earnings_payable=sum((e["payable"] for e in earnings.values()), ZERO),
+        network_earnings_paid=sum((e["paid"] for e in earnings.values()), ZERO),
     )
     return ReferralLinkRead(
         code=link.code,
@@ -274,9 +281,9 @@ async def list_my_members(
                 custom_commission_rate=a.custom_commission_rate,
                 joined_at=a.created_at,
                 completed_bookings=int(e.get("completed", 0)),
-                earnings_pending=e.get("pending", Decimal("0")),
-                earnings_payable=e.get("payable", Decimal("0")),
-                earnings_paid=e.get("paid", Decimal("0")),
+                earnings_pending=e.get("pending", ZERO),
+                earnings_payable=e.get("payable", ZERO),
+                earnings_paid=e.get("paid", ZERO),
             )
         )
     return members
@@ -335,18 +342,19 @@ async def _public_info(db: AsyncSession, link: ExpertReferralLink) -> PublicRefe
     )
 
 
-async def get_public_link(db: AsyncSession, code: str) -> PublicReferralLinkRead:
+async def get_public_link(db: AsyncSession, code: str, count_visit: bool = False) -> PublicReferralLinkRead:
     link = await resolve_active_link(db, code)
     if link is None:
         raise NotFoundError("This referral link is no longer active")
-    # Best-effort counter (same aggregate-counter approach as ads impressions/clicks) —
-    # an atomic UPDATE so concurrent visits don't lose increments.
-    await db.execute(
-        update(ExpertReferralLink)
-        .where(ExpertReferralLink.id == link.id)
-        .values(visit_count=ExpertReferralLink.visit_count + 1)
-    )
-    await db.commit()
+    if count_visit:
+        # Best-effort counter (same aggregate-counter approach as ads impressions/clicks) —
+        # an atomic UPDATE so concurrent visits don't lose increments.
+        await db.execute(
+            update(ExpertReferralLink)
+            .where(ExpertReferralLink.id == link.id)
+            .values(visit_count=ExpertReferralLink.visit_count + 1)
+        )
+        await db.commit()
     return await _public_info(db, link)
 
 
@@ -637,7 +645,7 @@ def _to_admin_read(a: NetworkAttribution, total: Decimal) -> AdminAttributionRea
 async def _admin_read(db: AsyncSession, attribution_id: uuid.UUID) -> AdminAttributionRead:
     a = await _get_attribution_or_404(db, attribution_id)
     e = (await _earnings_by_attribution(db, [a.id])).get(a.id, {})
-    total = e.get("pending", Decimal("0")) + e.get("payable", Decimal("0")) + e.get("paid", Decimal("0"))
+    total = e.get("pending", ZERO) + e.get("payable", ZERO) + e.get("paid", ZERO)
     return _to_admin_read(a, total)
 
 
@@ -659,7 +667,7 @@ async def admin_list(
         if status is not None and effective_status(a) != status:
             continue
         e = earnings.get(a.id, {})
-        total = e.get("pending", Decimal("0")) + e.get("payable", Decimal("0")) + e.get("paid", Decimal("0"))
+        total = e.get("pending", ZERO) + e.get("payable", ZERO) + e.get("paid", ZERO)
         rows.append(_to_admin_read(a, total))
     return rows
 

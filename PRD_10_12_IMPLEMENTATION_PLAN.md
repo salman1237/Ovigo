@@ -143,10 +143,10 @@ sequenceDiagram
 | `referred_user_id` | FK `users.id` CASCADE | |
 | `referred_partner_role_id` | FK `partner_roles.id` CASCADE, **unique** | Enforces first-touch-wins in the database |
 | `role_type` | `partner_role_type` enum | Denormalized for dashboard filters |
-| `source` | new enum `network_attribution_source`: `REFERRAL_LINK`, `BUSINESS_REFERRAL`, `GUIDE_INVITE`, `ADMIN` | How the attribution was created. Reportable under PRD §12.5. |
+| `source` | new enum `network_attribution_source`: `REFERRAL_LINK`, `BUSINESS_REFERRAL`, `ADMIN` | How the attribution was created. Reportable under PRD §12.5. (Email-invited guides, the older flow, aren't attributed: they already had an account before the invite, so the expert didn't bring them to Ovigo.) |
 | `referral_link_id` | FK, nullable | Set when `source = REFERRAL_LINK` |
 | `business_referral_id` | FK `business_referrals.id`, nullable | Set when `source = BUSINESS_REFERRAL` |
-| `status` | new enum `network_attribution_status`: `PENDING`, `ACTIVE`, `REJECTED`, `REVOKED`, `EXPIRED` | |
+| `status` | new enum `network_attribution_status`: `PENDING`, `ACTIVE`, `REJECTED`, `REVOKED` | `expired` isn't stored. The API reports an `ACTIVE` row past its expiry as `expired`. |
 | `custom_commission_rate` | numeric(5,4), nullable | Per-attribution override, capped per §2.6 |
 | `commission_starts_at` / `commission_expires_at` | timestamptz, nullable | Set on approval |
 | `terms_accepted_at` / `terms_version` | timestamptz / varchar(20) | The referred partner accepting the commission terms (PRD §12.3) |
@@ -169,7 +169,8 @@ New module `app/modules/referrals/` (`models.py`, `schemas.py`, `service.py`, `r
 | `GET /api/v1/referrals/me` | approved Local Expert | Returns (and creates on first call) the expert's active link: `code`, `url`, a URL per role (`?role=guide` etc.), and stats (`visits`, `signups`, `pending`, `active`, `expired`, `network_earnings_total`) |
 | `POST /api/v1/referrals/me/regenerate` | approved Local Expert | Deactivates the old code and issues a new one. Existing attributions are unaffected. |
 | `GET /api/v1/referrals/me/members` | approved Local Expert | Paginated attributions, each with member name, role, status, start/expiry, completed booking count and network earnings (pending/payable/paid). Filter by `status` and `role_type`. |
-| `GET /api/v1/referrals/links/{code}` | public, rate-limited (`app/core/rate_limit.py`) | Display info for the landing page: expert display name, photo, headline, primary destination, verified badge, allowed role types. **No contact details.** Returns 404 for inactive codes and suspended experts. |
+| `GET /api/v1/referrals/links/{code}` | public, rate-limited (`app/core/rate_limit.py`) | Display info for the landing page: expert display name, photo, headline, primary destination, verified badge, allowed role types. **No contact details.** Returns 404 for inactive codes and suspended experts. `?count_visit=true` (sent only by `/join/{code}`) adds to the visit counter. |
+| `GET /api/v1/referrals/invite` | user | The link this account registered through, if it still applies. Lets the application page show the invite even after the browser lost the stored code. |
 | `POST /api/v1/auth/register` *(changed)* | public | New optional `referral_code`. If it's valid, set `users.signup_referral_link_id`. If it's invalid, **ignore it silently** so a typo doesn't block signup. |
 | `POST /api/v1/partners/roles` *(changed)* | user | New optional `referral_code` and `accept_commission_terms: bool`. Creates the `PENDING` attribution (rules in §2.6). |
 | `GET /api/v1/admin/network-attributions` | admin `referrals.manage` | List with filters for expert, status, role and source |

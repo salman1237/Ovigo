@@ -1,11 +1,12 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Sparkles } from "lucide-react";
+import { Sparkles, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -14,7 +15,9 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { clearReferralCode, saveReferralCode, useStoredReferralCode } from "@/lib/referral";
 import { useAuthStore } from "@/stores/auth-store";
+import type { PublicReferralLink } from "@/types/referrals";
 import type { TokenPair } from "@/types/user";
 
 const registerSchema = z
@@ -45,6 +48,25 @@ function RegisterContent() {
   const setSession = useAuthStore((s) => s.setSession);
   const [serverError, setServerError] = useState<string | null>(null);
 
+  // An expert referral code, from ?ref= or one remembered from /join/{code}.
+  const refFromUrl = searchParams.get("ref");
+  const storedCode = useStoredReferralCode();
+  const referralCode = refFromUrl || storedCode;
+  useEffect(() => {
+    if (refFromUrl) saveReferralCode(refFromUrl);
+  }, [refFromUrl]);
+
+  const { data: invite, isError: inviteInvalid } = useQuery({
+    queryKey: ["referral-link", referralCode],
+    queryFn: () => apiClient.get<PublicReferralLink>(`/api/v1/referrals/links/${encodeURIComponent(referralCode!)}`),
+    enabled: !!referralCode,
+    retry: false,
+    staleTime: Infinity,
+  });
+  useEffect(() => {
+    if (inviteInvalid) clearReferralCode();
+  }, [inviteInvalid]);
+
   const {
     register,
     handleSubmit,
@@ -54,7 +76,12 @@ function RegisterContent() {
   const onSubmit = async (data: RegisterForm) => {
     setServerError(null);
     try {
-      const payload = { ...data, email: data.email || undefined, phone: data.phone || undefined };
+      const payload = {
+        ...data,
+        email: data.email || undefined,
+        phone: data.phone || undefined,
+        referral_code: invite?.code,
+      };
       const tokens = await apiClient.post<TokenPair>("/api/v1/auth/register", payload);
       setSession(tokens);
       router.push(searchParams.get("next") || "/");
@@ -84,6 +111,14 @@ function RegisterContent() {
             </span>
             <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Create your account</h1>
             <p className="mt-1 text-sm text-zinc-500">Join Ovigo as a traveler.</p>
+            {invite && (
+              <p className="mt-3 flex items-start gap-2 rounded-xl bg-primary-50 px-3 py-2 text-sm text-primary-800 dark:bg-primary-950/50 dark:text-primary-200">
+                <UserPlus className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  Invited by <span className="font-semibold">{invite.expert_name}</span>
+                </span>
+              </p>
+            )}
 
             <form onSubmit={handleSubmit(onSubmit)} className="mt-6 flex flex-col gap-4">
               <Input label="Full name" {...register("full_name")} type="text" error={errors.full_name?.message} />
