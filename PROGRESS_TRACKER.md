@@ -1036,6 +1036,11 @@ Sections with no data don't render. Shared primitives live in `components/shared
   - signed-in booking with 2 travelers;
   - itinerary dates following the chosen departure;
   - "Message" on the profile opening an expert chat.
+- Production (merged as `4651f66`; both Dokploy deploys finished):
+  - The new reviews filter, the tour `expert` field and the `expert` chat context are all in the live API spec.
+  - All 17 published tours return 200 with an expert card; their 5 experts' public profiles all return 200.
+  - A live expert's profile shows real, computed numbers (rating 5.00 from 2 reviews, 2 completed bookings, 75% response rate, ID not yet verified) where it used to show stored placeholders.
+  - The new tour and expert pages return 200. Starting a chat while signed out returns 401, and an unknown tour 404.
 
 ## Infrastructure note — Postgres off Neon, image-serving performance fix (2026-09-22)
 
