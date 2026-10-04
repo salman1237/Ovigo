@@ -983,6 +983,13 @@ Client decisions and the full design: the plan, §4.
   - the expert assigns the guide with the Full day package (fee ৳1400 prefilled);
   - the guide page has no horizontal scroll at 390px.
 - Deploy path: an image with this code was started against a database at production's revision (`7438eef3baa7`). Both migrations ran on container start, tours went from 10% to 12%, and a restart was clean. The base layer was reused from the 9.1/9.2 rehearsal because Docker Hub rate-limited pulls; `requirements.txt` is unchanged.
+- Production (merged as `7901b93`; both Dokploy deploys finished):
+  - `/health` OK, and all 13 new endpoints are in the live OpenAPI spec.
+  - `GET /api/v1/guides/public` returns 200 `[]`, so the new guide tables exist and the queries run. Unknown guides and their open dates return clean 404s.
+  - Auth-only endpoints return 401, and the existing tours, stays and vehicles lists return 200.
+  - The container only serves after `alembic upgrade head` succeeds, so new code answering means both migrations applied.
+  - Frontend: `/guides`, `/guides/[id]`, `/dashboard/guide`, `/dashboard/guides`, `/admin/guides`, `/cart` and `/dashboard/earnings` return 200; an unknown route returns 404; the "Guides" link is in the page.
+  - Not checked live: the 12% rule rows themselves (admin-only), and a click-through with real accounts.
 
 ## Infrastructure note — Postgres off Neon, image-serving performance fix (2026-09-22)
 
