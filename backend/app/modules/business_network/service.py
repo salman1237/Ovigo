@@ -271,7 +271,6 @@ async def list_network_bookings(db: AsyncSession, expert_role: PartnerRole) -> l
             Booking.id.label("booking_id"),
             Booking.created_at.label("booking_date"),
             BookingItem.item_type,
-            BookingItem.description,
             PartnerRole.id.label("partner_role_id"),
             PartnerAccount.id.label("partner_account_id"),
         )
@@ -305,7 +304,7 @@ async def list_network_bookings(db: AsyncSession, expert_role: PartnerRole) -> l
         {
             "booking_id": r.booking_id,
             "partner_name": name_map.get(r.partner_account_id, "Partner"),
-            "item_description": r.description or r.item_type,
+            "item_description": r.item_type.value if hasattr(r.item_type, "value") else str(r.item_type),
             "booking_date": r.booking_date,
             "commission_amount": r.commission_amount,
             "commission_rate": r.rate,
