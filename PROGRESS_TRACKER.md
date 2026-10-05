@@ -1042,6 +1042,19 @@ Sections with no data don't render. Shared primitives live in `components/shared
   - A live expert's profile shows real, computed numbers (rating 5.00 from 2 reviews, 2 completed bookings, 75% response rate, ID not yet verified) where it used to show stored placeholders.
   - The new tour and expert pages return 200. Starting a chat while signed out returns 401, and an unknown tour 404.
 
+### Phase 9.5 — Tiered checkout pricing & bookable statuses — Done (2026-10-05)
+
+See PR `beb79da`. The tour booking flow now charges per adult/child/infant using the three price tiers set in Phase 7.3; the booking cart is aware of traveler counts and the total is accurate. Tour departure statuses (open/confirmed/cancelled/completed) are now writable by the expert, so a departure can be marked confirmed-for-travel or cancelled from the dashboard.
+
+### Phase 9.4 — Business network completion (PRD §12.1–12.3) — Done (2026-10-06)
+
+- **BusinessType enum** (12 PRD §12.1 types + OTHER) replaces the free-text `business_type` column. Existing rows are migrated via a keyword mapping; original text is preserved in a new `business_type_note` column. When type is OTHER, a note is required.
+- **OwnershipType expansion**: `MANAGED` (manages but doesn't own), `PARTNER` (registered Ovigo partner), `UNVERIFIED_RECOMMENDATION` (trust-pending; can never earn commission or be linked to a partner until converted to REFERRED and reclaimed by the owner).
+- **Network bookings view**: new `GET /api/v1/business-network/network-bookings` endpoint returns NETWORK commission rows attributable to this expert via the referred business. Displayed as a "Business network bookings" panel on `/dashboard/network`.
+- **Frontend form upgrade**: business type Select dropdown (13 options), conditional `business_type_note` input when OTHER is selected, 5 ownership type radio cards with plain-language descriptions and a commission-ineligibility warning for UNVERIFIED_RECOMMENDATION.
+- **Migration** `cf2033d11142`: `autocommit_block()` for the three `ownership_type` ADD VALUE statements, USING clause for the VARCHAR → enum ALTER COLUMN, data-preserving keyword mapping step before the ALTER.
+- **Tests**: 19 pure-rule tests (enum completeness, schema validation, guard logic) — all 73 non-DB suite tests passing.
+
 ## Infrastructure note — Postgres off Neon, image-serving performance fix (2026-09-22)
 
 The user reported the homepage taking 5-10 seconds to load images, and separately asked to move the database off Neon onto the user's own VPS. Investigation found both were real, and partly the same root cause: Neon is in `ap-southeast-1` (Singapore) while the Dokploy VPS is in Mumbai, plus Neon's serverless compute has cold-start behavior — every DB query paid cross-region latency on top of that. Separately, a genuine backend bug made the image slowness far worse than DB latency alone would explain.
