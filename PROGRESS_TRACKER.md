@@ -1054,6 +1054,7 @@ See PR `beb79da`. The tour booking flow now charges per adult/child/infant using
 - **Frontend form upgrade**: business type Select dropdown (13 options), conditional `business_type_note` input when OTHER is selected, 5 ownership type radio cards with plain-language descriptions and a commission-ineligibility warning for UNVERIFIED_RECOMMENDATION.
 - **Migration** `cf2033d11142`: `autocommit_block()` for the three `ownership_type` ADD VALUE statements, USING clause for the VARCHAR → enum ALTER COLUMN, data-preserving keyword mapping step before the ALTER.
 - **Tests**: 19 pure-rule tests (enum completeness, schema validation, guard logic) — all 73 non-DB suite tests passing.
+- **Post-deploy fixes** (same day): three bugs found on production smoke-test and fixed in quick succession — (1) `ownership_type`/`referral_status` Postgres enum values were UPPERCASE from the original migration but Phase 9.4 lowercased the Python StrEnum values without a data-normalisation step (migration `d4e7f3a9b1c2` added lowercase labels and normalised existing rows); (2) SQLAlchemy 2.0 requires explicit `values_callable=lambda x: [e.value for e in x]` for str-enum columns to use `.value` instead of `.name` as the DB representation — added to all three `Enum(…)` calls on `BusinessReferral`; (3) `list_network_bookings` selected `BookingItem.description` which doesn't exist — replaced with `item_type` only.
 
 ## Infrastructure note — Postgres off Neon, image-serving performance fix (2026-09-22)
 
