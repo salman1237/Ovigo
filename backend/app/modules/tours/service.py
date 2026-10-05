@@ -101,6 +101,18 @@ PUBLIC_TOUR_STATUSES = {
     TourStatus.SCHEDULED,
 }
 
+# Subset of PUBLIC_TOUR_STATUSES that still accept new bookings (PRD §10.4 Bug B4).
+# SOLD_OUT is included because the seat check in _reserve_tour_departure will catch it;
+# IN_PROGRESS, COMPLETED, CANCELLED, etc. are excluded.
+BOOKABLE_TOUR_STATUSES = {
+    TourStatus.PUBLISHED,
+    TourStatus.SCHEDULED,
+    TourStatus.BOOKING_OPEN,
+    TourStatus.ALMOST_FULL,
+    TourStatus.SOLD_OUT,
+    TourStatus.CONFIRMED,
+}
+
 # PRD 10.5: "Reapproval after material price, itinerary or safety changes." Only
 # statuses where the tour is still upcoming and bookable are pulled back for
 # re-review — editing safety notes on a tour that's IN_PROGRESS or COMPLETED

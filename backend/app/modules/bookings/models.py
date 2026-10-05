@@ -174,6 +174,10 @@ class BookingItem(Base):
     check_out_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     quantity: Mapped[int] = mapped_column(Integer, default=1)
+    # Typed traveler counts (tour departures only); null means legacy single-type booking.
+    adults_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    children_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    infants_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2))
 

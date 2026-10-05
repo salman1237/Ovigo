@@ -1,11 +1,11 @@
 /** What's included, prices, extras and policies (PRD §10.3 Included / Excluded
  * Services, Pricing, Add-Ons, Policies). */
-import { Check, ChevronDown, FileText, Gift, Info, ReceiptText, Sparkles, X } from "lucide-react";
+import { Check, ChevronDown, FileText, Gift, ReceiptText, Sparkles, X } from "lucide-react";
 
 import { formatMoney, percent } from "@/lib/format";
 import type { Tour } from "@/types/tour";
 
-import { Callout, Pill, SubCard, DetailSection } from "@/components/shared/DetailSection";
+import { Pill, SubCard, DetailSection } from "@/components/shared/DetailSection";
 
 export function IncludedSection({ tour }: { tour: Tour }) {
   const included = tour.included_services ?? [];
@@ -111,12 +111,6 @@ export function PricingSection({ tour }: { tour: Tour }) {
           {tour.payment_deadline_days ? `, the rest due ${tour.payment_deadline_days} days before departure` : ""}.
         </p>
       )}
-      <div className="mt-4">
-        <Callout tone="primary" icon={<Info className="text-primary-600" />}>
-          Online checkout currently charges the per-person price for every traveler. For child, infant, couple or group
-          rates, message your expert before you book.
-        </Callout>
-      </div>
     </DetailSection>
   );
 }
