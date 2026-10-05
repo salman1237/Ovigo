@@ -9,11 +9,15 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
 import { Textarea } from "@/components/ui/Textarea";
 import { apiClient, ApiError } from "@/lib/api-client";
 import {
+  BUSINESS_TYPE_LABELS,
   BusinessReferral,
+  BusinessType,
+  OWNERSHIP_TYPE_DESCRIPTIONS,
   OWNERSHIP_TYPE_LABELS,
   OwnershipType,
   REFERRAL_STATUS_LABELS,
@@ -117,6 +121,10 @@ function ReferralCard({ referral: r, onChange }: { referral: BusinessReferral; o
   };
 
   const claimUrl = r.invite_token ? `${window.location.origin}/business-network/claim/${r.invite_token}` : null;
+  const typeLabel = BUSINESS_TYPE_LABELS[r.business_type] ?? r.business_type;
+  const displayType = r.business_type === "other" && r.business_type_note
+    ? `Other — ${r.business_type_note}`
+    : typeLabel;
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 px-3.5 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-900/40">
@@ -128,11 +136,16 @@ function ReferralCard({ referral: r, onChange }: { referral: BusinessReferral; o
         </div>
       </div>
       <p className="mt-1 text-xs text-zinc-500">
-        {r.business_type} · {OWNERSHIP_TYPE_LABELS[r.ownership_type]}
+        {displayType} · {OWNERSHIP_TYPE_LABELS[r.ownership_type]}
       </p>
       {r.description && <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{r.description}</p>}
       {r.status === "rejected" && r.rejection_reason && (
         <p className="mt-1 text-xs text-red-600">Reason: {r.rejection_reason}</p>
+      )}
+      {r.ownership_type === "unverified_recommendation" && (
+        <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+          Unverified recommendations cannot earn commission. Contact support to convert to Referred.
+        </p>
       )}
 
       {r.ownership_type === "referred" && r.status === "approved" && (
@@ -181,9 +194,18 @@ function ReferralCard({ referral: r, onChange }: { referral: BusinessReferral; o
   );
 }
 
+const ALL_OWNERSHIP_TYPES: OwnershipType[] = [
+  "owned",
+  "managed",
+  "referred",
+  "partner",
+  "unverified_recommendation",
+];
+
 function ReferralForm({ onCreated }: { onCreated: () => void }) {
   const [businessName, setBusinessName] = useState("");
-  const [businessType, setBusinessType] = useState("");
+  const [businessType, setBusinessType] = useState<BusinessType | "">("");
+  const [businessTypeNote, setBusinessTypeNote] = useState("");
   const [ownershipType, setOwnershipType] = useState<OwnershipType>("referred");
   const [contactPhone, setContactPhone] = useState("");
   const [contactEmail, setContactEmail] = useState("");
@@ -192,6 +214,7 @@ function ReferralForm({ onCreated }: { onCreated: () => void }) {
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
+    if (!businessType) return;
     setError(null);
     setBusy(true);
     try {
@@ -200,6 +223,7 @@ function ReferralForm({ onCreated }: { onCreated: () => void }) {
         {
           business_name: businessName,
           business_type: businessType,
+          business_type_note: businessTypeNote || undefined,
           ownership_type: ownershipType,
           contact_phone: contactPhone || undefined,
           contact_email: contactEmail || undefined,
@@ -215,29 +239,62 @@ function ReferralForm({ onCreated }: { onCreated: () => void }) {
     }
   };
 
+  const isValid = !!businessName && !!businessType && (businessType !== "other" || !!businessTypeNote);
+
   return (
     <Card variant="elevated" className="flex flex-col gap-3">
       <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Add a business</h2>
-      <Input value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="Business name" />
-      <Input value={businessType} onChange={(e) => setBusinessType(e.target.value)} placeholder="Type (e.g. restaurant, shop, transport)" />
-      <div className="flex gap-4">
-        {(["owned", "referred"] as OwnershipType[]).map((t) => (
-          <label key={t} className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+
+      <Input
+        value={businessName}
+        onChange={(e) => setBusinessName(e.target.value)}
+        placeholder="Business name"
+      />
+
+      <Select
+        label="Business type"
+        value={businessType}
+        onChange={(e) => setBusinessType(e.target.value as BusinessType | "")}
+      >
+        <option value="" disabled>Select a type...</option>
+        {(Object.keys(BUSINESS_TYPE_LABELS) as BusinessType[]).map((t) => (
+          <option key={t} value={t}>{BUSINESS_TYPE_LABELS[t]}</option>
+        ))}
+      </Select>
+
+      {businessType === "other" && (
+        <Input
+          value={businessTypeNote}
+          onChange={(e) => setBusinessTypeNote(e.target.value)}
+          placeholder="Describe the business type (required)"
+        />
+      )}
+
+      <div className="flex flex-col gap-2">
+        <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Your relationship to this business</p>
+        {ALL_OWNERSHIP_TYPES.map((t) => (
+          <label key={t} className="flex cursor-pointer items-start gap-2 rounded-lg border border-zinc-200 px-3 py-2.5 transition-colors has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50/50 dark:border-zinc-700 dark:has-[:checked]:border-primary-500 dark:has-[:checked]:bg-primary-950/20">
             <input
               type="radio"
+              name="ownership_type"
               checked={ownershipType === t}
               onChange={() => setOwnershipType(t)}
-              className="h-3.5 w-3.5 accent-primary-600"
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-primary-600"
             />
-            {OWNERSHIP_TYPE_LABELS[t]}
+            <div>
+              <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200">{OWNERSHIP_TYPE_LABELS[t]}</p>
+              <p className="text-xs text-zinc-500">{OWNERSHIP_TYPE_DESCRIPTIONS[t]}</p>
+            </div>
           </label>
         ))}
       </div>
+
       <Input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="Contact phone (optional)" />
       <Input value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="Contact email (optional)" />
       <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description (optional)" rows={2} />
+
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <Button onClick={submit} loading={busy} disabled={!businessName || !businessType} className="self-start">
+      <Button onClick={submit} loading={busy} disabled={!isValid} className="self-start">
         Submit for review
       </Button>
     </Card>

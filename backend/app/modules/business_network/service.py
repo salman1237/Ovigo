@@ -2,6 +2,7 @@ import secrets
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.core import audit
 from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.business_network.models import BusinessReferral, OwnershipType, ReferralStatus
-from app.modules.business_network.schemas import BusinessReferralCreate
+from app.modules.business_network.schemas import COMMISSION_INELIGIBLE_OWNERSHIP, INVITE_ELIGIBLE_OWNERSHIP, BusinessReferralCreate
 from app.modules.fraud import service as fraud_service
 from app.modules.notifications import service as notifications_service
 from app.modules.notifications.models import NotificationType
@@ -120,6 +121,11 @@ async def link_partner(db: AsyncSession, admin: User, referral_id: uuid.UUID, pa
     referral = await _get_referral_or_404(db, referral_id)
     if referral.status != ReferralStatus.APPROVED:
         raise ConflictError("Only an approved referral can be linked to a partner")
+    if referral.ownership_type in COMMISSION_INELIGIBLE_OWNERSHIP:
+        raise ConflictError(
+            "An UNVERIFIED_RECOMMENDATION cannot be linked to a partner or earn commission. "
+            "Convert it to REFERRED first, have the owner claim the invite, then link."
+        )
     referral.linked_partner_role_id = partner_role_id
     await db.flush()
     await referrals_service.upsert_for_business_referral(db, referral)
@@ -165,11 +171,11 @@ async def reject_referral(db: AsyncSession, admin: User, referral_id: uuid.UUID,
 
 async def send_invite(db: AsyncSession, expert_role: PartnerRole, referral_id: uuid.UUID) -> BusinessReferral:
     """The referring expert generates a shareable claim link for the actual business
-    owner — only meaningful for a REFERRED (not OWNED) referral, and only once an
-    admin has approved it as a legitimate submission."""
+    owner — only meaningful for REFERRED ownership (not OWNED / MANAGED / PARTNER /
+    UNVERIFIED_RECOMMENDATION), and only once an admin has approved it."""
     referral = await get_own_referral_or_404(db, expert_role, referral_id)
-    if referral.ownership_type != OwnershipType.REFERRED:
-        raise ConflictError("Only a referred (not owned) business needs an owner invite")
+    if referral.ownership_type not in INVITE_ELIGIBLE_OWNERSHIP:
+        raise ConflictError("Only a REFERRED business needs an owner invite")
     if referral.status != ReferralStatus.APPROVED:
         raise ConflictError(f"Referral is {referral.status.value} — can only invite the owner of an approved referral")
     referral.invite_token = secrets.token_urlsafe(24)
@@ -246,3 +252,63 @@ async def set_commission_rate(db: AsyncSession, admin: User, referral_id: uuid.U
         extra={"rate": str(rate) if rate is not None else None},
     )
     return await _get_referral_or_404(db, referral_id)
+
+
+async def list_network_bookings(db: AsyncSession, expert_role: PartnerRole) -> list[dict[str, Any]]:
+    """All completed bookings that earned this expert a NETWORK commission —
+    shown on /dashboard/network as a record of what the referral network produced.
+    Traveler PII is masked (booking ref only, no name/email)."""
+    from app.modules.bookings.models import Booking, BookingItem
+    from app.modules.commissions.models import Commission, CommissionSource
+    from app.modules.referrals.models import NetworkAttribution
+
+    result = await db.execute(
+        select(
+            Commission.id,
+            Commission.commission_amount,
+            Commission.rate,
+            Commission.created_at,
+            Booking.id.label("booking_id"),
+            Booking.created_at.label("booking_date"),
+            BookingItem.item_type,
+            BookingItem.description,
+            PartnerRole.id.label("partner_role_id"),
+            PartnerAccount.id.label("partner_account_id"),
+        )
+        .join(BookingItem, Commission.booking_item_id == BookingItem.id)
+        .join(Booking, BookingItem.booking_id == Booking.id)
+        .join(NetworkAttribution, Commission.attribution_id == NetworkAttribution.id)
+        .join(PartnerRole, NetworkAttribution.referred_partner_role_id == PartnerRole.id)
+        .join(PartnerAccount, PartnerRole.partner_account_id == PartnerAccount.id)
+        .where(
+            Commission.source == CommissionSource.NETWORK,
+            Commission.partner_role_id == expert_role.id,
+        )
+        .order_by(Commission.created_at.desc())
+        .limit(200)
+    )
+    rows = result.all()
+
+    # Resolve partner names in a second pass (avoids a huge join)
+    from app.modules.users.models import User as UserModel
+    partner_account_ids = list({r.partner_account_id for r in rows})
+    name_map: dict[uuid.UUID, str] = {}
+    if partner_account_ids:
+        names = await db.execute(
+            select(PartnerAccount.id, UserModel.full_name)
+            .join(UserModel, PartnerAccount.user_id == UserModel.id)
+            .where(PartnerAccount.id.in_(partner_account_ids))
+        )
+        name_map = {r.id: r.full_name for r in names.all()}
+
+    return [
+        {
+            "booking_id": r.booking_id,
+            "partner_name": name_map.get(r.partner_account_id, "Partner"),
+            "item_description": r.description or r.item_type,
+            "booking_date": r.booking_date,
+            "commission_amount": r.commission_amount,
+            "commission_rate": r.rate,
+        }
+        for r in rows
+    ]

@@ -12,6 +12,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
 import type { BusinessReferral, ClaimReferralInfo } from "@/types/business-network";
+import { BUSINESS_TYPE_LABELS } from "@/types/business-network";
 
 export default function ClaimReferralPage() {
   const { token } = useParams<{ token: string }>();
@@ -49,7 +50,11 @@ export default function ClaimReferralPage() {
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">You&apos;ve been invited to Ovigo</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           <span className="font-medium">{info.referring_expert_name}</span> referred your business,{" "}
-          <span className="font-medium">{info.business_name}</span> ({info.business_type}), to join Ovigo.
+          <span className="font-medium">{info.business_name}</span> (
+          {info.business_type === "other" && info.business_type_note
+            ? info.business_type_note
+            : BUSINESS_TYPE_LABELS[info.business_type] ?? info.business_type}
+          ), to join Ovigo.
         </p>
         {info.description && <p className="mt-2 text-sm text-zinc-500">{info.description}</p>}
 

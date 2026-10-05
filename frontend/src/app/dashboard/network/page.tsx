@@ -27,6 +27,7 @@ import {
   type NetworkMemberStatus,
   type ReferralLink,
 } from "@/types/referrals";
+import { type NetworkBooking } from "@/types/business-network";
 
 const STATUS_FILTERS: { key: NetworkMemberStatus | "all"; label: string }[] = [
   { key: "all", label: "All" },
@@ -74,6 +75,7 @@ export default function NetworkPage() {
           <LinkCard link={link} onRegenerated={() => queryClient.invalidateQueries({ queryKey: ["referrals"] })} />
           <StatsRow link={link} />
           <Members />
+          <NetworkBookings />
         </>
       )}
     </div>
@@ -355,5 +357,50 @@ function MemberRow({ member: m }: { member: NetworkMember }) {
         </span>
       </div>
     </div>
+  );
+}
+
+function NetworkBookings() {
+  const { data: bookings, isLoading, isError } = useQuery({
+    queryKey: ["business-network", "bookings"],
+    queryFn: () => apiClient.get<NetworkBooking[]>("/api/v1/business-network/network-bookings", { auth: true }),
+  });
+
+  return (
+    <Card className="mt-6">
+      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Business network bookings</h2>
+      <p className="mt-0.5 text-xs text-zinc-500">
+        Bookings from your referred business partners that earned you a network commission.
+      </p>
+      <div className="mt-4 flex flex-col gap-3">
+        {isLoading && <Spinner />}
+        {isError && <ErrorState message="Couldn't load network bookings." />}
+        {!isLoading && !isError && (bookings ?? []).length === 0 && (
+          <EmptyState
+            title="No network bookings yet"
+            description="Once your referred businesses complete bookings, they'll appear here."
+          />
+        )}
+        {(bookings ?? []).map((b) => (
+          <div
+            key={b.booking_id}
+            className="rounded-xl border border-zinc-200 bg-zinc-50/60 px-3.5 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-900/40"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate font-medium text-zinc-900 dark:text-zinc-50">{b.item_description}</p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  via {b.partner_name} · {formatDate(b.booking_date)}
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-sm font-semibold text-emerald-600">{formatMoney(b.commission_amount)}</p>
+                <p className="text-xs text-zinc-500">{(Number(b.commission_rate) * 100).toFixed(1)}% rate</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }

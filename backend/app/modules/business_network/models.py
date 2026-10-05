@@ -12,6 +12,14 @@ never linked (e.g. a restaurant with nothing bookable on Ovigo) earns nothing,
 since there's no booking activity to take a cut of. Partners who join through an
 expert's referral link get the same kind of attribution without a
 BusinessReferral at all.
+
+Phase 9.4 adds:
+- BusinessType enum (12 PRD §12.1 values + OTHER) replacing the old free-text column.
+  Existing rows that don't map to a known value are kept in `business_type_note`.
+- OwnershipType gains MANAGED, PARTNER and UNVERIFIED_RECOMMENDATION (PRD §12.2).
+  UNVERIFIED_RECOMMENDATION is a trust-pending recommendation that can never be
+  linked to a partner role or earn commission until it's converted to REFERRED and
+  goes through the full approval + invite flow.
 """
 import enum
 import uuid
@@ -25,9 +33,28 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
+class BusinessType(str, enum.Enum):
+    HOTEL = "hotel"
+    RESORT = "resort"
+    HOMESTAY = "homestay"
+    GUESTHOUSE = "guesthouse"
+    RESTAURANT = "restaurant"
+    LOCAL_TRANSPORT = "local_transport"
+    RENT_A_CAR = "rent_a_car"
+    ACTIVITY_PROVIDER = "activity_provider"
+    PHOTOGRAPHER = "photographer"
+    LOCAL_PRODUCT_BRAND = "local_product_brand"
+    EQUIPMENT_RENTAL = "equipment_rental"
+    EVENT_CULTURAL = "event_cultural"
+    OTHER = "other"
+
+
 class OwnershipType(str, enum.Enum):
-    OWNED = "owned"  # the referring expert owns or co-owns this business
-    REFERRED = "referred"  # a pure referral of someone else's business
+    OWNED = "owned"                                   # expert owns / co-owns
+    MANAGED = "managed"                               # expert manages but doesn't own
+    REFERRED = "referred"                             # pure referral — sends an owner invite
+    PARTNER = "partner"                               # a formal registered Ovigo partner
+    UNVERIFIED_RECOMMENDATION = "unverified_recommendation"  # cannot earn commission until converted
 
 
 class ReferralStatus(str, enum.Enum):
@@ -44,7 +71,10 @@ class BusinessReferral(Base):
         UUID(as_uuid=True), ForeignKey("partner_roles.id", ondelete="CASCADE"), index=True
     )
     business_name: Mapped[str] = mapped_column(String(255))
-    business_type: Mapped[str] = mapped_column(String(100))  # free text: "restaurant", "shop", "transport", ...
+    business_type: Mapped[BusinessType] = mapped_column(Enum(BusinessType, name="business_type_enum"))
+    # Preserves the original free text when the old value didn't map to a BusinessType value,
+    # or when the expert selects OTHER and wants to describe the business type further.
+    business_type_note: Mapped[str | None] = mapped_column(String(200), nullable=True)
     contact_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -16,6 +16,7 @@ from app.modules.business_network.schemas import (
     BusinessReferralRead,
     ClaimReferralRead,
     LinkPartnerRequest,
+    NetworkBookingRead,
     SetCommissionRateRequest,
     VerifyBusinessRequest,
 )
@@ -51,6 +52,16 @@ async def list_my_referrals(
     return await service.list_my_referrals(db, role)
 
 
+@router.get("/network-bookings", response_model=list[NetworkBookingRead])
+async def list_network_bookings(
+    role: PartnerRole = Depends(require_approved_role(PartnerRoleType.LOCAL_EXPERT)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Bookings from the expert's network members that earned this expert a NETWORK commission."""
+    rows = await service.list_network_bookings(db, role)
+    return [NetworkBookingRead(**r) for r in rows]
+
+
 @router.get("/{referral_id}", response_model=BusinessReferralRead)
 async def get_referral(
     referral_id: uuid.UUID,
@@ -76,6 +87,7 @@ async def get_claim_info(token: str, db: AsyncSession = Depends(get_db)):
         id=referral.id,
         business_name=referral.business_name,
         business_type=referral.business_type,
+        business_type_note=referral.business_type_note,
         description=referral.description,
         referring_expert_name=referral.referring_expert_role.partner_account.user.full_name,
         already_claimed=referral.invited_user_id is not None,
