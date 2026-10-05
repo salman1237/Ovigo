@@ -44,7 +44,7 @@ from app.modules.rentcar.models import Vehicle, VehicleAvailability, VehicleStat
 from app.modules.stays import service as stays_service
 from app.modules.stays.models import AvailabilityCalendar, HousekeepingStatus, Property, PropertyStatus, Room, RoomType
 from app.modules.tours.models import Tour, TourDeparture, TourStatus, TourStay
-from app.modules.tours.service import PUBLIC_TOUR_STATUSES
+from app.modules.tours.service import BOOKABLE_TOUR_STATUSES, PUBLIC_TOUR_STATUSES
 from app.modules.users.models import SystemRole, User
 
 _EAGER = (
@@ -72,6 +72,9 @@ class Reserved(NamedTuple):
     owner_role_id: uuid.UUID
     entity_type: TaggableEntityType | None  # None: not something a sponsored ad can advertise
     entity_id: uuid.UUID
+    adults_count: int | None = None
+    children_count: int | None = None
+    infants_count: int | None = None
 
 
 async def _reserve_tour_departure(db: AsyncSession, item: BookingItemCreate) -> Reserved:
@@ -84,14 +87,33 @@ async def _reserve_tour_departure(db: AsyncSession, item: BookingItemCreate) -> 
 
     tour_result = await db.execute(select(Tour).where(Tour.id == departure.tour_id))
     tour = tour_result.scalar_one_or_none()
-    if tour is None or tour.status != TourStatus.PUBLISHED:
+    if tour is None or tour.status not in BOOKABLE_TOUR_STATUSES:
         raise ConflictError("This tour is not available for booking")
-    if departure.available_seats < item.quantity:
-        raise ConflictError(f"Only {departure.available_seats} seat(s) left on this departure")
 
-    departure.available_seats -= item.quantity
-    unit_price = departure.price_override or tour.base_price
-    return Reserved(unit_price, unit_price * item.quantity, tour.local_expert_role_id, TaggableEntityType.TOUR, tour.id)
+    adult_price = departure.price_override or tour.base_price
+
+    # Tiered pricing (PRD §10.5): adults/children/infants each at their own rate.
+    if item.adults is not None:
+        adults = item.adults
+        children = item.children
+        infants = item.infants
+        total_seats = adults + children + infants
+        if departure.available_seats < total_seats:
+            raise ConflictError(f"Only {departure.available_seats} seat(s) left on this departure")
+        child_price = tour.child_price if tour.child_price is not None else adult_price
+        infant_price = tour.infant_price if tour.infant_price is not None else Decimal("0")
+        subtotal = adults * adult_price + children * child_price + infants * infant_price
+        departure.available_seats -= total_seats
+        return Reserved(
+            adult_price, subtotal, tour.local_expert_role_id, TaggableEntityType.TOUR, tour.id,
+            adults_count=adults, children_count=children, infants_count=infants,
+        )
+    else:
+        # Legacy path: single quantity of adults.
+        if departure.available_seats < item.quantity:
+            raise ConflictError(f"Only {departure.available_seats} seat(s) left on this departure")
+        departure.available_seats -= item.quantity
+        return Reserved(adult_price, adult_price * item.quantity, tour.local_expert_role_id, TaggableEntityType.TOUR, tour.id)
 
 
 async def _release_tour_departure(db: AsyncSession, departure_id: uuid.UUID, quantity: int) -> None:
@@ -341,6 +363,8 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
         await loyalty_service.apply_redemption(db, user, booking.id, payload.redeem_points)
 
     for item, reserved, curating_tour in prepared:
+        # For tiered bookings, quantity = total seats (adults + children + infants).
+        qty = (reserved.adults_count or 0) + (reserved.children_count or 0) + (reserved.infants_count or 0)
         db.add(
             BookingItem(
                 booking_id=booking.id,
@@ -351,7 +375,10 @@ async def create_booking(db: AsyncSession, user: User, payload: BookingCreate) -
                 guide_package_id=item.guide_package_id,
                 check_in_date=item.check_in_date,
                 check_out_date=item.check_out_date,
-                quantity=item.quantity,
+                quantity=qty if qty else item.quantity,
+                adults_count=reserved.adults_count,
+                children_count=reserved.children_count,
+                infants_count=reserved.infants_count,
                 unit_price=reserved.unit_price,
                 subtotal=reserved.subtotal,
                 # Booked through a tour that includes it, the curating expert sold it.

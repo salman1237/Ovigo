@@ -17,6 +17,11 @@ class BookingItemCreate(BaseModel):
     check_in_date: date | None = None
     check_out_date: date | None = None
     quantity: int = 1
+    # Tiered traveler counts for tour departures (PRD §10.5 Bug B5).
+    # When adults is provided, quantity is ignored; children/infants default to 0.
+    adults: int | None = None
+    children: int = 0
+    infants: int = 0
     # Booking a stay that a tour includes (TourStay.property_id), through that tour —
     # credits the tour's Local Expert a tour-curation commission (PRD §12.4).
     via_tour_id: uuid.UUID | None = None
@@ -28,6 +33,11 @@ class BookingItemCreate(BaseModel):
         if self.item_type == BookingItemType.TOUR_DEPARTURE:
             if not self.tour_departure_id:
                 raise ValueError("tour_departure_id is required for a tour_departure item")
+            if self.adults is not None:
+                if self.adults < 1:
+                    raise ValueError("adults must be at least 1")
+                if self.children < 0 or self.infants < 0:
+                    raise ValueError("children and infants cannot be negative")
         elif self.item_type == BookingItemType.ROOM_TYPE:
             if not self.room_type_id or not self.check_in_date or not self.check_out_date:
                 raise ValueError("room_type_id, check_in_date and check_out_date are required for a room_type item")
@@ -88,6 +98,9 @@ class BookingItemRead(BaseModel):
     check_in_date: date | None
     check_out_date: date | None
     quantity: int
+    adults_count: int | None = None
+    children_count: int | None = None
+    infants_count: int | None = None
     unit_price: Decimal
     subtotal: Decimal
     assigned_room_id: uuid.UUID | None
