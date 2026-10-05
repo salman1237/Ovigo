@@ -71,16 +71,21 @@ class BusinessReferral(Base):
         UUID(as_uuid=True), ForeignKey("partner_roles.id", ondelete="CASCADE"), index=True
     )
     business_name: Mapped[str] = mapped_column(String(255))
-    business_type: Mapped[BusinessType] = mapped_column(Enum(BusinessType, name="business_type_enum"))
+    business_type: Mapped[BusinessType] = mapped_column(
+        Enum(BusinessType, name="business_type_enum", values_callable=lambda x: [e.value for e in x])
+    )
     # Preserves the original free text when the old value didn't map to a BusinessType value,
     # or when the expert selects OTHER and wants to describe the business type further.
     business_type_note: Mapped[str | None] = mapped_column(String(200), nullable=True)
     contact_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    ownership_type: Mapped[OwnershipType] = mapped_column(Enum(OwnershipType, name="ownership_type"))
+    ownership_type: Mapped[OwnershipType] = mapped_column(
+        Enum(OwnershipType, name="ownership_type", values_callable=lambda x: [e.value for e in x])
+    )
     status: Mapped[ReferralStatus] = mapped_column(
-        Enum(ReferralStatus, name="referral_status"), default=ReferralStatus.PENDING
+        Enum(ReferralStatus, name="referral_status", values_callable=lambda x: [e.value for e in x]),
+        default=ReferralStatus.PENDING,
     )
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Set by an admin once the referred business itself registers as an actual Ovigo
