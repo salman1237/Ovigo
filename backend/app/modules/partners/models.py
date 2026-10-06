@@ -16,8 +16,8 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, LargeBinary, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, LargeBinary, String, Text, func
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -34,7 +34,23 @@ class DocumentType(str, enum.Enum):
     TRADE_LICENSE = "trade_license"
     PROPERTY_DEED = "property_deed"
     VEHICLE_REGISTRATION = "vehicle_registration"
+    UTILITY_BILL = "utility_bill"
+    FITNESS_CERTIFICATE = "fitness_certificate"
+    INSURANCE = "insurance"
+    DRIVER_LICENSE = "driver_license"
+    POLICE_CLEARANCE = "police_clearance"
+    FIRST_AID_CERTIFICATE = "first_aid_certificate"
     OTHER = "other"
+
+
+class NationalIdType(str, enum.Enum):
+    ID_CARD = "id_card"
+    PASSPORT = "passport"
+
+
+class PayoutMethod(str, enum.Enum):
+    BANK = "bank"
+    MOBILE_FINANCIAL_SERVICE = "mobile_financial_service"
 
 
 class DocumentStatus(str, enum.Enum):
@@ -51,9 +67,31 @@ class DocumentStatus(str, enum.Enum):
 REQUIRED_DOCUMENT_TYPES: dict[str, list[DocumentType]] = {
     "local_expert": [DocumentType.ID_CARD],
     "guide": [DocumentType.ID_CARD],
-    "host": [DocumentType.ID_CARD, DocumentType.PROPERTY_DEED],
-    "hotel": [DocumentType.ID_CARD, DocumentType.PROPERTY_DEED, DocumentType.TRADE_LICENSE],
-    "rent_a_car": [DocumentType.ID_CARD, DocumentType.TRADE_LICENSE, DocumentType.VEHICLE_REGISTRATION],
+    "host": [DocumentType.ID_CARD, DocumentType.PROPERTY_DEED, DocumentType.UTILITY_BILL],
+    "hotel": [
+        DocumentType.ID_CARD,
+        DocumentType.PROPERTY_DEED,
+        DocumentType.UTILITY_BILL,
+        DocumentType.TRADE_LICENSE,
+    ],
+    "rent_a_car": [
+        DocumentType.ID_CARD,
+        DocumentType.TRADE_LICENSE,
+        DocumentType.VEHICLE_REGISTRATION,
+        DocumentType.FITNESS_CERTIFICATE,
+        DocumentType.INSURANCE,
+        DocumentType.DRIVER_LICENSE,
+    ],
+}
+
+# Offered but not required — surfaced to the frontend wizard's Documents step as
+# optional uploads (PRD §7.2/§7.4 call these out explicitly as "optional").
+OPTIONAL_DOCUMENT_TYPES: dict[str, list[DocumentType]] = {
+    "local_expert": [DocumentType.POLICE_CLEARANCE, DocumentType.FIRST_AID_CERTIFICATE, DocumentType.OTHER],
+    "guide": [DocumentType.FIRST_AID_CERTIFICATE, DocumentType.OTHER],
+    "host": [],
+    "hotel": [],
+    "rent_a_car": [],
 }
 
 
@@ -72,6 +110,34 @@ class PartnerRoleApplication(Base):
         UUID(as_uuid=True), ForeignKey("partner_roles.id", ondelete="CASCADE")
     )
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # PRD §7.1 common verification fields — nullable at the DB level so existing rows
+    # (and the admin-created/legacy paths) don't break, but required() in service.py's
+    # apply_for_role enforces these before a new application can be submitted.
+    full_legal_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    contact_mobile_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    national_id_type: Mapped[NationalIdType | None] = mapped_column(
+        Enum(NationalIdType, name="national_id_type"), nullable=True
+    )
+    national_id_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    permanent_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    current_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    emergency_contact_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    emergency_contact_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    payout_method: Mapped[PayoutMethod | None] = mapped_column(
+        Enum(PayoutMethod, name="payout_method"), nullable=True
+    )
+    payout_provider_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    payout_account_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    payout_account_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    tax_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    agreed_to_partner_terms: Mapped[bool] = mapped_column(Boolean, default=False)
+    agreed_to_background_check: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # PRD §7.2-§7.5 role-specific fields, validated server-side against the matching
+    # model in ROLE_DETAILS_SCHEMA (partners/schemas.py) — see that map's docstring.
+    role_details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
     status: Mapped[ApplicationStatus] = mapped_column(
         Enum(ApplicationStatus, name="application_status"), default=ApplicationStatus.PENDING
     )

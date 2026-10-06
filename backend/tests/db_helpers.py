@@ -45,8 +45,65 @@ async def admin_token(api) -> str:
     return token
 
 
+def _role_details(role_type: str) -> dict:
+    if role_type == "local_expert":
+        return {
+            "primary_destination": "Bandarban",
+            "secondary_destinations": ["Rangamati"],
+            "years_experience": 5,
+            "languages": ["Bangla", "English"],
+            "training_background": "Tourism board certified guide training",
+            "local_references": "Jane Doe, +8801700000000",
+            "expertise_categories": ["trekking"],
+            "emergency_handling_capability": True,
+        }
+    if role_type == "guide":
+        return {
+            "languages": ["Bangla", "English"],
+            "service_locations": "Bandarban, Rangamati",
+            "expertise": ["trekking"],
+            "years_experience": 3,
+        }
+    if role_type in ("host", "hotel"):
+        return {
+            "ownership_type": "owner",
+            "property_address": "House 12, Road 5, Cox's Bazar",
+            "fire_safety_info": "Fire extinguishers on every floor, clear exits",
+            "cancellation_policy_agreement": True,
+            "guest_registration_compliance": True,
+        }
+    if role_type == "rent_a_car":
+        return {"service_area": "Dhaka city", "emergency_support_number": "+8801700000001"}
+    return {}
+
+
+def _common_application_fields() -> dict:
+    return {
+        "full_legal_name": "Test Partner",
+        "contact_mobile_number": "+8801700000000",
+        "national_id_type": "id_card",
+        "national_id_number": "1234567890",
+        "permanent_address": "Test permanent address",
+        "current_address": "Test current address",
+        "emergency_contact_name": "Emergency Contact",
+        "emergency_contact_phone": "+8801700000002",
+        "payout_method": "bank",
+        "payout_provider_name": "Test Bank",
+        "payout_account_name": "Test Partner",
+        "payout_account_number": "0000000000",
+        "agreed_to_partner_terms": True,
+        "agreed_to_background_check": True,
+    }
+
+
 async def apply(api, token: str, role_type: str, **extra):
-    return await api.post("/api/v1/partners/roles", json={"role_type": role_type, **extra}, headers=auth(token))
+    payload = {
+        "role_type": role_type,
+        **_common_application_fields(),
+        "role_details": _role_details(role_type),
+        **extra,
+    }
+    return await api.post("/api/v1/partners/roles", json=payload, headers=auth(token))
 
 
 async def upload_required_documents(api, token: str, role_id: str, role_type: str) -> None:

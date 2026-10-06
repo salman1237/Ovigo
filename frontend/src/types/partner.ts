@@ -1,8 +1,21 @@
 export type PartnerRoleType = "local_expert" | "host" | "guide" | "hotel" | "rent_a_car";
 export type PartnerRoleStatus = "pending" | "approved" | "rejected" | "suspended";
 export type ApplicationStatus = "pending" | "approved" | "rejected";
-export type DocumentType = "id_card" | "trade_license" | "property_deed" | "vehicle_registration" | "other";
+export type DocumentType =
+  | "id_card"
+  | "trade_license"
+  | "property_deed"
+  | "vehicle_registration"
+  | "utility_bill"
+  | "fitness_certificate"
+  | "insurance"
+  | "driver_license"
+  | "police_clearance"
+  | "first_aid_certificate"
+  | "other";
 export type DocumentStatus = "pending" | "verified" | "rejected";
+export type NationalIdType = "id_card" | "passport";
+export type PayoutMethod = "bank" | "mobile_financial_service";
 
 export const ROLE_LABELS: Record<PartnerRoleType, string> = {
   local_expert: "Local Expert",
@@ -17,6 +30,12 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   trade_license: "Trade License",
   property_deed: "Property Deed",
   vehicle_registration: "Vehicle Registration",
+  utility_bill: "Utility Bill",
+  fitness_certificate: "Fitness Certificate",
+  insurance: "Insurance",
+  driver_license: "Driver's License",
+  police_clearance: "Police Clearance",
+  first_aid_certificate: "First Aid Certificate",
   other: "Other",
 };
 
@@ -26,6 +45,22 @@ export interface PartnerRoleApplication {
   message: string | null;
   rejection_reason: string | null;
   created_at: string;
+  full_legal_name?: string | null;
+  contact_mobile_number?: string | null;
+  national_id_type?: NationalIdType | null;
+  national_id_number?: string | null;
+  permanent_address?: string | null;
+  current_address?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
+  payout_method?: PayoutMethod | null;
+  payout_provider_name?: string | null;
+  payout_account_name?: string | null;
+  payout_account_number?: string | null;
+  tax_id?: string | null;
+  agreed_to_partner_terms?: boolean | null;
+  agreed_to_background_check?: boolean | null;
+  role_details?: Record<string, unknown> | null;
 }
 
 export interface PartnerDocument {

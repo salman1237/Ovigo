@@ -22,6 +22,11 @@ class ConflictError(AppError):
         super().__init__(message, status.HTTP_409_CONFLICT)
 
 
+class ValidationError(AppError):
+    def __init__(self, message: str = "Validation failed"):
+        super().__init__(message, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+
 class UnauthorizedError(AppError):
     def __init__(self, message: str = "Unauthorized"):
         super().__init__(message, status.HTTP_401_UNAUTHORIZED)

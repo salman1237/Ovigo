@@ -93,9 +93,9 @@ def _should_block_role_approval(role_type: str, uploaded_types: list) -> bool:
     ("local_expert", [], True),
     ("local_expert", ["id_card"], False),
     ("rent_a_car", ["id_card"], True),
-    ("rent_a_car", ["id_card", "trade_license", "vehicle_registration"], False),
+    ("rent_a_car", ["id_card", "trade_license", "vehicle_registration", "fitness_certificate", "insurance", "driver_license"], False),
     ("host", ["id_card"], True),
-    ("host", ["id_card", "property_deed"], False),
+    ("host", ["id_card", "property_deed", "utility_bill"], False),
 ])
 def test_role_approval_gate_matrix(role_type, uploaded, should_block):
     from app.modules.partners.models import DocumentType

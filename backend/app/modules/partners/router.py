@@ -12,8 +12,9 @@ from app.modules.locations import service as locations_service
 from app.modules.locations.models import TaggableEntityType
 from app.modules.locations.schemas import LocationTagRead, LocationTagSet
 from app.modules.partners import service
-from app.modules.partners.models import REQUIRED_DOCUMENT_TYPES, DocumentType
+from app.modules.partners.models import OPTIONAL_DOCUMENT_TYPES, REQUIRED_DOCUMENT_TYPES, DocumentType
 from app.modules.partners.schemas import (
+    ROLE_DETAILS_SCHEMA,
     PartnerDocumentRead,
     PartnerRoleApplyRequest,
     PartnerRoleRead,
@@ -31,6 +32,24 @@ async def get_document_requirements():
     return REQUIRED_DOCUMENT_TYPES
 
 
+@router.get("/optional-document-requirements", response_model=dict[str, list[DocumentType]])
+async def get_optional_document_requirements():
+    """Documents PRD §7 calls out as optional (e.g. a Local Expert's police
+    verification) — offered in the wizard's Documents step but not gating approval."""
+    return OPTIONAL_DOCUMENT_TYPES
+
+
+@router.get("/role-field-requirements", response_model=dict[str, list[str]])
+async def get_role_field_requirements():
+    """Required PRD §7.2-§7.5 field names per role, generated from the same
+    Pydantic models service.apply_for_role validates `role_details` against — so the
+    wizard's required-field list can never drift from what the backend enforces."""
+    return {
+        role_type: [name for name, field in schema.model_fields.items() if field.is_required()]
+        for role_type, schema in ROLE_DETAILS_SCHEMA.items()
+    }
+
+
 @router.post("/roles", response_model=PartnerRoleRead, status_code=201)
 async def apply_for_role(
     payload: PartnerRoleApplyRequest,
@@ -44,6 +63,24 @@ async def apply_for_role(
         payload.message,
         referral_code=payload.referral_code,
         accept_network_terms=payload.accept_network_terms,
+        common_details={
+            "full_legal_name": payload.full_legal_name,
+            "contact_mobile_number": payload.contact_mobile_number,
+            "national_id_type": payload.national_id_type,
+            "national_id_number": payload.national_id_number,
+            "permanent_address": payload.permanent_address,
+            "current_address": payload.current_address,
+            "emergency_contact_name": payload.emergency_contact_name,
+            "emergency_contact_phone": payload.emergency_contact_phone,
+            "payout_method": payload.payout_method,
+            "payout_provider_name": payload.payout_provider_name,
+            "payout_account_name": payload.payout_account_name,
+            "payout_account_number": payload.payout_account_number,
+            "tax_id": payload.tax_id,
+            "agreed_to_partner_terms": payload.agreed_to_partner_terms,
+            "agreed_to_background_check": payload.agreed_to_background_check,
+        },
+        role_details=payload.role_details,
     )
 
 

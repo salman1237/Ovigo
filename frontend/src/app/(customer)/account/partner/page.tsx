@@ -15,7 +15,6 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
-import { Textarea } from "@/components/ui/Textarea";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { clearReferralCode, useStoredReferralCode } from "@/lib/referral";
 import { useAuthStore } from "@/stores/auth-store";
@@ -31,8 +30,22 @@ import {
 } from "@/types/partner";
 import { JOINABLE_ROLE_TYPES, type JoinableRoleType, type PublicReferralLink } from "@/types/referrals";
 
+import { PartnerApplicationWizard } from "./_components/ApplicationWizard";
+
 const ALL_ROLE_TYPES: PartnerRoleType[] = ["local_expert", "host", "guide", "hotel", "rent_a_car"];
-const ALL_DOCUMENT_TYPES: DocumentType[] = ["id_card", "trade_license", "property_deed", "vehicle_registration", "other"];
+const ALL_DOCUMENT_TYPES: DocumentType[] = [
+  "id_card",
+  "trade_license",
+  "property_deed",
+  "vehicle_registration",
+  "utility_bill",
+  "fitness_certificate",
+  "insurance",
+  "driver_license",
+  "police_clearance",
+  "first_aid_certificate",
+  "other",
+];
 
 const STATUS_VARIANTS: Record<string, BadgeProps["variant"]> = {
   pending: "warning",
@@ -70,10 +83,7 @@ function PartnerOnboardingContent() {
   const [applyRoleType, setApplyRoleType] = useState<PartnerRoleType>(
     presetRole && ALL_ROLE_TYPES.includes(presetRole) ? presetRole : "local_expert"
   );
-  const [applyMessage, setApplyMessage] = useState("");
   const [acceptTerms, setAcceptTerms] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
 
   // Which expert's network this application joins, if any: the code remembered from
   // /join/{code} first, else the link this account registered through (server-side,
@@ -107,36 +117,22 @@ function PartnerOnboardingContent() {
     staleTime: Infinity,
   });
 
+  const { data: optionalDocumentRequirements } = useQuery({
+    queryKey: ["partner-optional-document-requirements"],
+    queryFn: () => apiClient.get<Record<string, DocumentType[]>>("/api/v1/partners/optional-document-requirements"),
+    staleTime: Infinity,
+  });
+
   const refetchRoles = () => queryClient.invalidateQueries({ queryKey: ["my-partner-roles"] });
 
   const takenRoleTypes = new Set(
     (roles ?? []).filter((r) => r.status !== "rejected").map((r) => r.role_type)
   );
 
-  const handleApply = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSubmitting(true);
-    try {
-      await apiClient.post(
-        "/api/v1/partners/roles",
-        {
-          role_type: applyRoleType,
-          message: applyMessage || undefined,
-          referral_code: joiningNetwork ? invite?.code : undefined,
-          accept_network_terms: joiningNetwork ? acceptTerms : undefined,
-        },
-        { auth: true }
-      );
-      setApplyMessage("");
-      if (joiningNetwork) clearReferralCode();
-      refetchRoles();
-    } catch (err) {
-      if (err instanceof ApiError && err.message.includes("no longer active")) clearReferralCode();
-      setError(err instanceof ApiError ? err.message : "Something went wrong");
-    } finally {
-      setSubmitting(false);
-    }
+  const handleApplySubmitted = () => {
+    setAcceptTerms(false);
+    if (joiningNetwork) clearReferralCode();
+    refetchRoles();
   };
 
   if (!user) {
@@ -153,7 +149,7 @@ function PartnerOnboardingContent() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
+    <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
       <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Become a Partner</h1>
       <p className="mt-1 text-sm text-zinc-500">
         Apply as a Local Expert, Host, Guide, Hotel/Resort, or Rent-a-Car operator. Every application is
@@ -175,7 +171,7 @@ function PartnerOnboardingContent() {
         </div>
       )}
 
-      <Card as="form" onSubmit={handleApply} className="mt-6 flex flex-col gap-3">
+      <Card className="mt-6 flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Apply for a new role</h2>
         <Select value={applyRoleType} onChange={(e) => setApplyRoleType(e.target.value as PartnerRoleType)}>
           {ALL_ROLE_TYPES.map((rt) => (
@@ -185,24 +181,6 @@ function PartnerOnboardingContent() {
             </option>
           ))}
         </Select>
-        {documentRequirements?.[applyRoleType] && documentRequirements[applyRoleType].length > 0 && (
-          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>
-              After submitting, you&apos;ll need to upload: {" "}
-              <span className="font-medium">
-                {documentRequirements[applyRoleType].map((dt) => DOCUMENT_TYPE_LABELS[dt]).join(", ")}
-              </span>
-              . Your role won&apos;t be approved until these are on file.
-            </p>
-          </div>
-        )}
-        <Textarea
-          value={applyMessage}
-          onChange={(e) => setApplyMessage(e.target.value)}
-          placeholder="Tell us a bit about yourself (optional)"
-          rows={3}
-        />
         {joiningNetwork && invite && (
           <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
             <p className="font-medium text-zinc-700 dark:text-zinc-300">Network terms</p>
@@ -225,11 +203,27 @@ function PartnerOnboardingContent() {
             </label>
           </div>
         )}
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <Button type="submit" loading={submitting} disabled={joiningNetwork && !acceptTerms} className="self-start">
-          {submitting ? "Submitting…" : "Submit application"}
-        </Button>
       </Card>
+
+      {!takenRoleTypes.has(applyRoleType) && (
+        <div className="mt-4">
+          <PartnerApplicationWizard
+            key={applyRoleType}
+            roleType={applyRoleType}
+            requiredDocumentTypes={documentRequirements?.[applyRoleType] ?? []}
+            optionalDocumentTypes={optionalDocumentRequirements?.[applyRoleType] ?? []}
+            extraPayload={{
+              referral_code: joiningNetwork ? invite?.code : undefined,
+              accept_network_terms: joiningNetwork ? acceptTerms : undefined,
+            }}
+            extraSubmitDisabled={joiningNetwork && !acceptTerms}
+            onSubmitted={handleApplySubmitted}
+            onError={(err) => {
+              if (err instanceof ApiError && err.message.includes("no longer active")) clearReferralCode();
+            }}
+          />
+        </div>
+      )}
 
       <h2 className="mt-10 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Your roles</h2>
       {isLoading && <Spinner />}
