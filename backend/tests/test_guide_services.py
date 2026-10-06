@@ -24,6 +24,7 @@ from tests.db_helpers import (
     db_tests,
     register,
     session,
+    upload_required_documents,
 )
 
 D = lambda days: date.today() + timedelta(days=days)  # noqa: E731
@@ -69,6 +70,7 @@ async def _invited_guide(api, admin: str, expert_token: str, name: str = "Guide 
     supervision = await _invite(api, expert_token, user["email"])
     await _accept(api, token, supervision["id"])
     role_id = supervision["guide"]["id"]
+    await upload_required_documents(api, token, role_id, "guide")
     r = await api.post(f"/api/v1/admin/partners/roles/{role_id}/approve", headers=auth(admin))
     assert r.status_code == 200, r.text
     return token, user, role_id

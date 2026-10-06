@@ -7,7 +7,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
-from tests.db_helpers import admin_token, approved_expert, auth, db_tests, register, session
+from tests.db_helpers import admin_token, approved_expert, auth, db_tests, register, session, upload_required_documents
 
 
 async def _publish_profile(api, expert_token: str) -> None:
@@ -170,6 +170,7 @@ async def test_profile_lists_the_experts_guides_stays_and_transport(api):
     guide_token, guide = await register(api, "Guide Thowai")
     sup = (await api.post("/api/v1/guides/invite", json={"email": guide["email"]}, headers=auth(expert_token))).json()
     await api.post(f"/api/v1/guides/supervisions/{sup['id']}/respond", json={"accept": True}, headers=auth(guide_token))
+    await upload_required_documents(api, guide_token, sup["guide"]["id"], "guide")
     await api.post(f"/api/v1/admin/partners/roles/{sup['guide']['id']}/approve", headers=auth(admin))
 
     p = (await api.get(f"/api/v1/partners/profiles/expert/{expert_role}/public")).json()

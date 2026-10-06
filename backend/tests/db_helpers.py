@@ -49,11 +49,25 @@ async def apply(api, token: str, role_type: str, **extra):
     return await api.post("/api/v1/partners/roles", json={"role_type": role_type, **extra}, headers=auth(token))
 
 
+async def upload_required_documents(api, token: str, role_id: str, role_type: str) -> None:
+    from app.modules.partners.models import REQUIRED_DOCUMENT_TYPES
+
+    for document_type in REQUIRED_DOCUMENT_TYPES.get(role_type, []):
+        r = await api.post(
+            f"/api/v1/partners/roles/{role_id}/documents",
+            data={"document_type": document_type.value},
+            files={"file": ("doc.txt", b"test document", "text/plain")},
+            headers=auth(token),
+        )
+        assert r.status_code == 201, r.text
+
+
 async def approved_partner(api, admin: str, name: str, role_type: str, **extra) -> tuple[str, dict, str]:
     token, user = await register(api, name)
     r = await apply(api, token, role_type, **extra)
     assert r.status_code == 201, r.text
     role_id = r.json()["id"]
+    await upload_required_documents(api, token, role_id, role_type)
     r = await api.post(f"/api/v1/admin/partners/roles/{role_id}/approve", headers=auth(admin))
     assert r.status_code == 200, r.text
     return token, user, role_id

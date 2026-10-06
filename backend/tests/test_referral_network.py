@@ -85,6 +85,7 @@ from tests.db_helpers import (  # noqa: E402
     db_tests,
     register as _register,
     session as _session,
+    upload_required_documents as _upload_required_documents,
 )
 
 
@@ -157,6 +158,7 @@ async def test_host_joins_through_link_and_expert_earns_network_commission(api, 
     assert any(n["type"] == "network_member_joined" for n in note_items)
 
     # Admin approval activates a 12-month window.
+    await _upload_required_documents(api, host_token, host_role_id, "host")
     r = await api.post(f"/api/v1/admin/partners/roles/{host_role_id}/approve", headers=_auth(admin))
     assert r.status_code == 200, r.text
     member = (await api.get("/api/v1/referrals/me/members", headers=_auth(expert_token))).json()[0]
@@ -295,6 +297,7 @@ async def test_business_referral_link_partner_writes_attribution(api, monkeypatc
 
     host_token, _ = await _register(api, "Biz Owner")
     host_role_id = (await _apply(api, host_token, "host")).json()["id"]
+    await _upload_required_documents(api, host_token, host_role_id, "host")
     await api.post(f"/api/v1/admin/partners/roles/{host_role_id}/approve", headers=_auth(admin))
 
     r = await api.post(
