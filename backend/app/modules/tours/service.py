@@ -474,6 +474,8 @@ async def delete_child(
 
 
 async def submit_for_review(db: AsyncSession, role: PartnerRole, tour_id: uuid.UUID) -> Tour:
+    from app.modules.profiles.models import LocalExpertProfile
+
     tour = await get_own_tour_or_404(db, role, tour_id)
     if tour.status not in (TourStatus.DRAFT, TourStatus.REJECTED, TourStatus.CHANGES_REQUESTED):
         raise ConflictError(f"Tour is {tour.status.value} — cannot be resubmitted")
@@ -484,9 +486,33 @@ async def submit_for_review(db: AsyncSession, role: PartnerRole, tour_id: uuid.U
     if not await locations_service.has_tags(db, TaggableEntityType.TOUR, tour.id):
         raise ConflictError("Tag at least one destination before submitting")
 
-    tour.status = TourStatus.SUBMITTED_FOR_REVIEW
-    tour.rejection_reason = None
-    await db.commit()
+    # PRD §10.5 auto-approval: trusted experts bypass manual review for tours
+    # with no high-risk activities. The admin still sees the tour in the
+    # "recently auto-approved" list and can suspend it.
+    has_high_risk = any(a.is_high_risk for a in (tour.activities or []))
+    profile = (
+        await db.execute(select(LocalExpertProfile).where(LocalExpertProfile.partner_role_id == role.id))
+    ).scalar_one_or_none()
+    is_trusted = bool(profile and profile.is_trusted)
+
+    if is_trusted and not has_high_risk:
+        tour.status = TourStatus.PUBLISHED
+        tour.rejection_reason = None
+        await db.commit()
+        await search_engine.index_tour(tour.id, tour.title, tour.description, tour.base_price)
+        await notifications_service.notify(
+            db,
+            user_id=role.partner_account.user_id,
+            type=NotificationType.LISTING_APPROVED,
+            title="Tour published automatically",
+            message=f'Your tour "{tour.title}" has been published automatically — you are a trusted expert.',
+            link=f"/tours/{tour.id}",
+        )
+    else:
+        tour.status = TourStatus.SUBMITTED_FOR_REVIEW
+        tour.rejection_reason = None
+        await db.commit()
+
     return await get_own_tour_or_404(db, role, tour_id)
 
 

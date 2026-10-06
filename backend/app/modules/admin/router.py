@@ -24,6 +24,7 @@ from app.modules.admin.schemas import (
     AdminUserSummary,
     AdminVehicleRead,
     AdPerformanceRow,
+    ApproveTourRequest,
     AuditLogRead,
     BookingsSummaryRow,
     CustomBidConversionRow,
@@ -246,9 +247,12 @@ async def list_tours(
 
 @router.post("/tours/{tour_id}/approve", response_model=AdminTourRead)
 async def approve_tour(
-    tour_id: uuid.UUID, current_user: User = Depends(require_admin_permission("tours.approve")), db: AsyncSession = Depends(get_db)
+    tour_id: uuid.UUID,
+    payload: ApproveTourRequest = ApproveTourRequest(),
+    current_user: User = Depends(require_admin_permission("tours.approve")),
+    db: AsyncSession = Depends(get_db),
 ):
-    return await service.approve_tour(db, current_user, tour_id)
+    return await service.approve_tour(db, current_user, tour_id, payload.safety_checklist_confirmed)
 
 
 @router.post("/tours/{tour_id}/reject", response_model=AdminTourRead)
@@ -288,6 +292,20 @@ async def unsuspend_tour(
     db: AsyncSession = Depends(get_db),
 ):
     return await service.unsuspend_tour(db, current_user, tour_id)
+
+
+class SetTrustedRequest(BaseModel):
+    is_trusted: bool
+
+
+@router.post("/experts/{role_id}/trusted", status_code=204)
+async def set_expert_trusted(
+    role_id: uuid.UUID,
+    payload: SetTrustedRequest,
+    current_user: User = Depends(require_admin_permission("partners.approve")),
+    db: AsyncSession = Depends(get_db),
+):
+    await service.set_expert_trusted(db, current_user, role_id, payload.is_trusted)
 
 
 @router.get("/properties", response_model=list[AdminPropertyRead])

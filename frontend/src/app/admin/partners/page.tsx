@@ -8,6 +8,7 @@ import {
   FileCheck2,
   ShieldAlert,
   ShieldCheck,
+  Star,
   UserCheck,
 } from "lucide-react";
 import { useState } from "react";
@@ -220,6 +221,20 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
     }
   };
 
+  const toggleTrusted = async () => {
+    const newValue = !profile?.is_trusted;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiClient.post(`/api/v1/admin/experts/${role.id}/trusted`, { is_trusted: newValue }, { auth: true });
+      onChange();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to update trusted status");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const viewDocument = async (documentId: string, fileName: string) => {
     const blob = await apiClient.getBlob(`/api/v1/admin/partners/documents/${documentId}/file`, { auth: true });
     const url = URL.createObjectURL(blob);
@@ -269,6 +284,11 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
               )}
               {role.status === "rejected" && <Badge variant="danger">Rejected</Badge>}
               {role.status === "pending" && <Badge variant="warning">Pending Review</Badge>}
+              {role.role_type === "local_expert" && profile?.is_trusted && (
+                <Badge variant="success" className="flex items-center gap-1">
+                  <Star className="h-3 w-3" /> Trusted Expert
+                </Badge>
+              )}
             </div>
 
             <p className="mt-1 text-xs text-zinc-500">
@@ -296,6 +316,19 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
           {role.status === "approved" && (
             <Button size="sm" variant="destructive" onClick={() => setShowSuspend((s) => !s)} disabled={busy}>
               <ShieldAlert className="mr-1.5 h-3.5 w-3.5" /> Suspend Role
+            </Button>
+          )}
+          {role.status === "approved" && role.role_type === "local_expert" && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={toggleTrusted}
+              loading={busy}
+              className={profile?.is_trusted ? "border-amber-500 text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-600 dark:hover:bg-amber-950/20" : ""}
+              title={profile?.is_trusted ? "Remove trusted status — future tours will require manual review" : "Mark as trusted expert — future tours without high-risk activities will auto-publish"}
+            >
+              <Star className="mr-1 h-3.5 w-3.5" />
+              {profile?.is_trusted ? "Remove Trusted" : "Mark Trusted"}
             </Button>
           )}
           {role.status === "suspended" && (

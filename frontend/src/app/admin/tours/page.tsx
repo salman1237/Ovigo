@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   Bus,
   ChevronDown,
   ChevronUp,
@@ -9,6 +10,7 @@ import {
   FileText,
   ShieldAlert,
   ShieldCheck,
+  Star,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState } from "react";
@@ -62,6 +64,8 @@ interface AdminTour {
   permit_requirements?: string | null;
   first_aid_available?: boolean;
   insurance_included?: boolean;
+  has_high_risk_activities?: boolean;
+  expert_is_trusted?: boolean;
   applicant: { full_name: string; email: string | null; phone: string | null };
   expert_documents?: AdminTourDoc[];
 }
@@ -142,19 +146,38 @@ function TourReviewCard({ tour, onChange }: { tour: AdminTour; onChange: () => v
   const [suspendReason, setSuspendReason] = useState("");
   const [showSuspend, setShowSuspend] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [showSafetyChecklist, setShowSafetyChecklist] = useState(false);
+  const [safetyChecks, setSafetyChecks] = useState([false, false, false]);
+  const allSafetyChecked = safetyChecks.every(Boolean);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const approve = async () => {
+  const isHighRisk = !!tour.has_high_risk_activities;
+
+  const approve = async (safetyConfirmed = false) => {
     setBusy(true);
     setError(null);
     try {
-      await apiClient.post(`/api/v1/admin/tours/${tour.id}/approve`, undefined, { auth: true });
+      await apiClient.post(
+        `/api/v1/admin/tours/${tour.id}/approve`,
+        { safety_checklist_confirmed: safetyConfirmed },
+        { auth: true }
+      );
+      setShowSafetyChecklist(false);
       onChange();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to approve");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleApproveClick = () => {
+    if (isHighRisk) {
+      setSafetyChecks([false, false, false]);
+      setShowSafetyChecklist(true);
+    } else {
+      approve(false);
     }
   };
 
@@ -244,6 +267,16 @@ function TourReviewCard({ tour, onChange }: { tour: AdminTour; onChange: () => v
                 {tour.tour_type.replace(/_/g, " ")}
               </Badge>
             )}
+            {isHighRisk && (
+              <Badge variant="danger" className="flex items-center gap-1 text-xs">
+                <AlertTriangle className="h-3 w-3" /> High-risk
+              </Badge>
+            )}
+            {tour.expert_is_trusted && (
+              <Badge variant="success" className="flex items-center gap-1 text-xs">
+                <Star className="h-3 w-3" /> Trusted expert
+              </Badge>
+            )}
           </div>
           <p className="mt-1 text-xs text-zinc-500">
             {tour.duration_days} Days{tour.duration_nights ? ` / ${tour.duration_nights} Nights` : ""} · Base Price:{" "}
@@ -261,8 +294,8 @@ function TourReviewCard({ tour, onChange }: { tour: AdminTour; onChange: () => v
 
           {(tour.status === "pending_review" || tour.status === "submitted_for_review") && (
             <>
-              <Button size="sm" onClick={approve} loading={busy}>
-                Approve Tour
+              <Button size="sm" onClick={handleApproveClick} loading={busy}>
+                {isHighRisk ? <><AlertTriangle className="h-3.5 w-3.5 mr-1 text-amber-400" /> Approve (High-risk)</> : "Approve Tour"}
               </Button>
               <Button size="sm" variant="secondary" onClick={() => setShowRequestChanges((s) => !s)} disabled={busy}>
                 Request Changes
@@ -329,6 +362,41 @@ function TourReviewCard({ tour, onChange }: { tour: AdminTour; onChange: () => v
           <Button size="sm" variant="destructive" onClick={suspend} disabled={busy || !suspendReason.trim()}>
             Confirm Suspend
           </Button>
+        </div>
+      )}
+
+      {showSafetyChecklist && (
+        <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50/70 p-4 dark:border-amber-700/60 dark:bg-amber-950/30">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">High-risk safety checklist — required before approval</p>
+          </div>
+          <div className="space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
+            {[
+              "Insurance policy verified (public liability or equivalent)",
+              "Required permits are present and valid",
+              "A Level 2 certified guide is assigned for high-risk activities",
+            ].map((item, idx) => (
+              <label key={item} className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={safetyChecks[idx]}
+                  onChange={(e) => setSafetyChecks((prev) => prev.map((v, i) => i === idx ? e.target.checked : v))}
+                  className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-primary-600"
+                />
+                <span>{item}</span>
+              </label>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-zinc-500">Check all items to confirm you have reviewed the safety documentation.</p>
+          <div className="mt-3 flex gap-2">
+            <Button size="sm" onClick={() => approve(true)} disabled={!allSafetyChecked || busy} loading={busy}>
+              Confirm &amp; Approve
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setShowSafetyChecklist(false)} disabled={busy}>
+              Cancel
+            </Button>
+          </div>
         </div>
       )}
 

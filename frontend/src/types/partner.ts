@@ -77,6 +77,7 @@ export interface AdminPartnerRole {
     emergency_contact_number?: string | null;
     security_verification_status?: string | null;
     badge_level?: string | null;
+    is_trusted?: boolean | null;
   } | null;
 }
 

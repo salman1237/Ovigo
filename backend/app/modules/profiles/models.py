@@ -47,6 +47,9 @@ class LocalExpertProfile(Base):
     completion_rate_percent: Mapped[int] = mapped_column(Integer, default=100)
     cancellation_rate_percent: Mapped[int] = mapped_column(Integer, default=0)
     badge_level: Mapped[str] = mapped_column(String(50), default="Verified Expert")
+    # Admin-set trust flag. When True and the tour has no high-risk activities,
+    # submit_for_review auto-publishes the tour instead of queuing it for review.
+    is_trusted: Mapped[bool] = mapped_column(Boolean, default=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

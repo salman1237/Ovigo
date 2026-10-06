@@ -106,8 +106,16 @@ class AdminTourRead(BaseModel):
     permit_requirements: str | None = None
     first_aid_available: bool = False
     insurance_included: bool = False
+    has_high_risk_activities: bool = False
+    expert_is_trusted: bool = False
     applicant: AdminUserSummary
     expert_documents: list[PartnerDocumentRead] = []
+
+
+class ApproveTourRequest(BaseModel):
+    # Required True for tours with high-risk activities — forces the admin to
+    # explicitly confirm the safety checklist (insurance, permits, guide level).
+    safety_checklist_confirmed: bool = False
 
 
 class AdminPropertyRead(BaseModel):

@@ -31,7 +31,8 @@ from app.modules.payments.models import Payment, PaymentStatus
 from app.modules.referrals import service as referrals_service
 from app.modules.rentcar.models import Vehicle, VehicleStatus
 from app.modules.stays.models import Property, PropertyStatus
-from app.modules.tours.models import Tour, TourStatus
+from app.modules.profiles.models import LocalExpertProfile
+from app.modules.tours.models import Tour, TourActivity, TourStatus
 from app.modules.users.models import AdminPermissionRole, PartnerAccount, PartnerRole, PartnerRoleStatus, SystemRole, User
 
 
@@ -79,6 +80,7 @@ async def list_roles(db: AsyncSession, status: PartnerRoleStatus | None) -> list
                 "emergency_contact_number": prof.emergency_contact_number,
                 "security_verification_status": prof.security_verification_status,
                 "badge_level": prof.badge_level,
+                "is_trusted": prof.is_trusted,
             }
 
     return [_to_admin_read(role, profiles_by_role_id.get(role.id)) for role in roles]
@@ -432,8 +434,10 @@ async def request_reverification(db: AsyncSession, admin: User, document_id: uui
     )
 
 
-def _to_admin_tour_read(tour: Tour) -> AdminTourRead:
+def _to_admin_tour_read(tour: Tour, expert_is_trusted: bool = False) -> AdminTourRead:
     docs = list(tour.local_expert_role.documents) if tour.local_expert_role and hasattr(tour.local_expert_role, "documents") else []
+    has_high_risk = any(a.is_high_risk for a in (tour.activities or []))
+    expert_trusted = expert_is_trusted
     return AdminTourRead(
         id=tour.id,
         local_expert_role_id=tour.local_expert_role_id,
@@ -459,48 +463,64 @@ def _to_admin_tour_read(tour: Tour) -> AdminTourRead:
         permit_requirements=tour.permit_requirements,
         first_aid_available=bool(tour.first_aid_available),
         insurance_included=bool(tour.insurance_included),
+        has_high_risk_activities=has_high_risk,
+        expert_is_trusted=expert_trusted,
         applicant=AdminUserSummary.model_validate(tour.local_expert_role.partner_account.user),
         expert_documents=docs,
     )
 
 
-async def list_tours(db: AsyncSession, status: TourStatus | None) -> list[AdminTourRead]:
-    query = select(Tour).options(
-        selectinload(Tour.local_expert_role)
-        .selectinload(PartnerRole.partner_account)
-        .selectinload(PartnerAccount.user),
-        selectinload(Tour.local_expert_role).selectinload(PartnerRole.documents),
+_TOUR_OPTIONS = [
+    selectinload(Tour.local_expert_role).selectinload(PartnerRole.partner_account).selectinload(PartnerAccount.user),
+    selectinload(Tour.local_expert_role).selectinload(PartnerRole.documents),
+    selectinload(Tour.activities),
+]
+
+
+async def _fetch_expert_trusted_map(db: AsyncSession, role_ids: list[uuid.UUID]) -> dict[uuid.UUID, bool]:
+    """Return {partner_role_id: is_trusted} for the given expert role IDs."""
+    if not role_ids:
+        return {}
+    rows = await db.execute(
+        select(LocalExpertProfile.partner_role_id, LocalExpertProfile.is_trusted).where(
+            LocalExpertProfile.partner_role_id.in_(role_ids)
+        )
     )
+    return {row.partner_role_id: row.is_trusted for row in rows.all()}
+
+
+async def list_tours(db: AsyncSession, status: TourStatus | None) -> list[AdminTourRead]:
+    query = select(Tour).options(*_TOUR_OPTIONS)
     if status is not None:
         query = query.where(Tour.status == status)
     result = await db.execute(query.order_by(Tour.created_at.desc()))
-    return [_to_admin_tour_read(tour) for tour in result.scalars().all()]
+    tours = list(result.scalars().all())
+    trusted_map = await _fetch_expert_trusted_map(db, [t.local_expert_role_id for t in tours])
+    return [_to_admin_tour_read(tour, trusted_map.get(tour.local_expert_role_id, False)) for tour in tours]
 
 
-async def _get_tour_with_relations(db: AsyncSession, tour_id: uuid.UUID) -> Tour:
-    result = await db.execute(
-        select(Tour)
-        .where(Tour.id == tour_id)
-        .options(
-            selectinload(Tour.local_expert_role)
-            .selectinload(PartnerRole.partner_account)
-            .selectinload(PartnerAccount.user),
-            selectinload(Tour.local_expert_role).selectinload(PartnerRole.documents),
-        )
-    )
+async def _get_tour_with_relations(db: AsyncSession, tour_id: uuid.UUID) -> tuple["Tour", bool]:
+    result = await db.execute(select(Tour).where(Tour.id == tour_id).options(*_TOUR_OPTIONS))
     tour = result.scalar_one_or_none()
     if tour is None:
         raise NotFoundError("Tour not found")
-    return tour
+    trusted_map = await _fetch_expert_trusted_map(db, [tour.local_expert_role_id])
+    return tour, trusted_map.get(tour.local_expert_role_id, False)
 
 
-async def approve_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID) -> AdminTourRead:
-    tour = await _get_tour_with_relations(db, tour_id)
+async def approve_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID, safety_checklist_confirmed: bool = False) -> AdminTourRead:
+    tour, is_trusted = await _get_tour_with_relations(db, tour_id)
     # SUBMITTED_FOR_REVIEW is the current PRD 10.4 status a submission lands in;
     # PENDING_REVIEW is kept for any tour already in that state from before this
     # status set existed (see tours/models.py's "Backward compatibility aliases").
     if tour.status not in (TourStatus.PENDING_REVIEW, TourStatus.SUBMITTED_FOR_REVIEW):
         raise ConflictError(f"Tour is {tour.status.value}, not pending review")
+    has_high_risk = any(a.is_high_risk for a in (tour.activities or []))
+    if has_high_risk and not safety_checklist_confirmed:
+        raise ConflictError(
+            "This tour has high-risk activities. Confirm the safety checklist "
+            "(insurance, permits, Level 2 certified guide) before approving."
+        )
     tour.status = TourStatus.PUBLISHED
     await notifications_service.notify(
         db,
@@ -512,12 +532,15 @@ async def approve_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID) -> Adm
     )
     await db.commit()
     await search_engine.index_tour(tour.id, tour.title, tour.description, tour.base_price)
-    await audit.record(db, actor_id=admin.id, action="tour.approve", entity_type="tour", entity_id=tour.id)
-    return _to_admin_tour_read(tour)
+    await audit.record(
+        db, actor_id=admin.id, action="tour.approve", entity_type="tour", entity_id=tour.id,
+        extra={"high_risk": has_high_risk, "safety_checklist_confirmed": safety_checklist_confirmed},
+    )
+    return _to_admin_tour_read(tour, is_trusted)
 
 
 async def reject_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID, reason: str) -> AdminTourRead:
-    tour = await _get_tour_with_relations(db, tour_id)
+    tour, is_trusted = await _get_tour_with_relations(db, tour_id)
     if tour.status not in (TourStatus.PENDING_REVIEW, TourStatus.SUBMITTED_FOR_REVIEW):
         raise ConflictError(f"Tour is {tour.status.value}, not pending review")
     tour.status = TourStatus.REJECTED
@@ -533,7 +556,7 @@ async def reject_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID, reason:
     await audit.record(
         db, actor_id=admin.id, action="tour.reject", entity_type="tour", entity_id=tour.id, extra={"reason": reason}
     )
-    return _to_admin_tour_read(tour)
+    return _to_admin_tour_read(tour, is_trusted)
 
 
 async def request_tour_changes(db: AsyncSession, admin: User, tour_id: uuid.UUID, reason: str) -> AdminTourRead:
@@ -541,7 +564,7 @@ async def request_tour_changes(db: AsyncSession, admin: User, tour_id: uuid.UUID
     is asked to revise specific things and resubmit, not told the tour is
     permanently declined. tours.service.submit_for_review already accepts
     CHANGES_REQUESTED as a resubmittable status."""
-    tour = await _get_tour_with_relations(db, tour_id)
+    tour, is_trusted = await _get_tour_with_relations(db, tour_id)
     if tour.status not in (TourStatus.PENDING_REVIEW, TourStatus.SUBMITTED_FOR_REVIEW):
         raise ConflictError(f"Tour is {tour.status.value}, not pending review")
     tour.status = TourStatus.CHANGES_REQUESTED
@@ -558,11 +581,11 @@ async def request_tour_changes(db: AsyncSession, admin: User, tour_id: uuid.UUID
     await audit.record(
         db, actor_id=admin.id, action="tour.request_changes", entity_type="tour", entity_id=tour.id, extra={"reason": reason}
     )
-    return _to_admin_tour_read(tour)
+    return _to_admin_tour_read(tour, is_trusted)
 
 
 async def suspend_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID, reason: str) -> AdminTourRead:
-    tour = await _get_tour_with_relations(db, tour_id)
+    tour, is_trusted = await _get_tour_with_relations(db, tour_id)
     if tour.status == TourStatus.SUSPENDED:
         raise ConflictError("Tour is already suspended")
     tour.status = TourStatus.SUSPENDED
@@ -578,11 +601,11 @@ async def suspend_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID, reason
     await audit.record(
         db, actor_id=admin.id, action="tour.suspend", entity_type="tour", entity_id=tour.id, extra={"reason": reason}
     )
-    return _to_admin_tour_read(tour)
+    return _to_admin_tour_read(tour, is_trusted)
 
 
 async def unsuspend_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID) -> AdminTourRead:
-    tour = await _get_tour_with_relations(db, tour_id)
+    tour, is_trusted = await _get_tour_with_relations(db, tour_id)
     if tour.status != TourStatus.SUSPENDED:
         raise ConflictError("Tour is not suspended")
     tour.status = TourStatus.PUBLISHED
@@ -596,7 +619,24 @@ async def unsuspend_tour(db: AsyncSession, admin: User, tour_id: uuid.UUID) -> A
     )
     await db.commit()
     await audit.record(db, actor_id=admin.id, action="tour.unsuspend", entity_type="tour", entity_id=tour.id)
-    return _to_admin_tour_read(tour)
+    return _to_admin_tour_read(tour, is_trusted)
+
+
+async def set_expert_trusted(db: AsyncSession, admin: User, role_id: uuid.UUID, is_trusted: bool) -> None:
+    """Admin toggle: mark a Local Expert as trusted (auto-approves future tours
+    that have no high-risk activities) or remove the trust flag."""
+    result = await db.execute(select(LocalExpertProfile).where(LocalExpertProfile.partner_role_id == role_id))
+    profile = result.scalar_one_or_none()
+    if profile is None:
+        raise NotFoundError("No Local Expert profile found for this role")
+    profile.is_trusted = is_trusted
+    await db.commit()
+    await audit.record(
+        db, actor_id=admin.id,
+        action="expert.set_trusted" if is_trusted else "expert.remove_trusted",
+        entity_type="local_expert_profile",
+        entity_id=profile.id,
+    )
 
 
 def _to_admin_property_read(prop: Property) -> AdminPropertyRead:
