@@ -1056,6 +1056,18 @@ See PR `beb79da`. The tour booking flow now charges per adult/child/infant using
 - **Tests**: 19 pure-rule tests (enum completeness, schema validation, guard logic) — all 73 non-DB suite tests passing.
 - **Post-deploy fixes** (same day): three bugs found on production smoke-test and fixed in quick succession — (1) `ownership_type`/`referral_status` Postgres enum values were UPPERCASE from the original migration but Phase 9.4 lowercased the Python StrEnum values without a data-normalisation step (migration `d4e7f3a9b1c2` added lowercase labels and normalised existing rows); (2) SQLAlchemy 2.0 requires explicit `values_callable=lambda x: [e.value for e in x]` for str-enum columns to use `.value` instead of `.name` as the DB representation — added to all three `Enum(…)` calls on `BusinessReferral`; (3) `list_network_bookings` selected `BookingItem.description` which doesn't exist — replaced with `item_type` only.
 
+### Phase 9.6 — Tour approval flow refinements (PRD §10.5) — Done (2026-10-06)
+
+- **Trusted-expert auto-approval**: new `is_trusted` flag on `LocalExpertProfile` (migration `a1b2c3d4e5f6`). When set by an admin and the tour has no high-risk activities, `submit_for_review` auto-publishes the tour instead of queueing it for manual review.
+- **High-risk moderation**: any tour with a `TourActivity.is_high_risk=True` activity always goes to manual review, even from a trusted expert. `approve_tour` now rejects approval (409) unless the admin passes `safety_checklist_confirmed: true`.
+- **Admin UI**: tours list shows a high-risk badge and a trusted-expert badge; the approve button opens a 3-item safety checklist modal for high-risk tours before allowing confirmation. Partners page gets a "Trusted Expert" badge and a toggle button (`POST /admin/experts/{role_id}/trusted`) for approved `LOCAL_EXPERT` roles.
+- **Tests**: 17 new pure-rule tests (auto-approval eligibility matrix, safety checklist gate matrix, schema defaults) — 90 total passing.
+- **Production smoke test**: confirmed `has_high_risk_activities`/`expert_is_trusted` fields on `GET /admin/tours`, confirmed the trusted-toggle endpoint end-to-end (set → verify → revert, no lasting state change). No high-risk tour exists in prod yet to exercise the approval-gate path live; covered by unit tests instead. Noted `demo-admin@ovigo-demo.com` is `moderator`-only (403 on `partners.approve`) — `demo-superadmin@ovigo-demo.com` has full admin rights.
+
+### Phase 9.7 — Expert public profile enhancements (PRD §8.2) — Already complete
+
+Confirmed already fully built in a prior session: `profiles/stats.py` computes track-record stats live, `get_public_expert_profile` aggregates tours/departures/guides/properties/transport, and the `/experts/[id]` frontend page has hero, track record, about, upcoming, tours, network, and reviews sections plus a report dialog. Per-category ratings and a certificates document type remain open items, out of scope for this phase.
+
 ## Infrastructure note — Postgres off Neon, image-serving performance fix (2026-09-22)
 
 The user reported the homepage taking 5-10 seconds to load images, and separately asked to move the database off Neon onto the user's own VPS. Investigation found both were real, and partly the same root cause: Neon is in `ap-southeast-1` (Singapore) while the Dokploy VPS is in Mumbai, plus Neon's serverless compute has cold-start behavior — every DB query paid cross-region latency on top of that. Separately, a genuine backend bug made the image slowness far worse than DB latency alone would explain.
