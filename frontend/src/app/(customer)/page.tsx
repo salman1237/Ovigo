@@ -96,7 +96,7 @@ export default function HomePage() {
 
   const heroImage = cms?.settings.has_hero_image
     ? cmsHeroImageUrl(new Date(cms.settings.updated_at).getTime())
-    : ranked.map(destinationCoverUrl).find(Boolean);
+    : ranked.map(destinationCoverUrl).find(Boolean) ?? dummyPhotoAt(0);
 
   const settings = cms?.settings;
 
@@ -169,7 +169,7 @@ export default function HomePage() {
           </p>
           <div className="mt-10 flex flex-wrap justify-center gap-x-2 gap-y-6 sm:gap-x-4">
             {topDestinations.map((dest, i) => {
-              const cover = destinationCoverUrl(dest);
+              const cover = destinationCoverUrl(dest) ?? dummyPhotoAt(i);
               const count = dest.published_tour_count + dest.published_property_count + dest.published_vehicle_count;
               return (
                 <motion.div
@@ -476,12 +476,12 @@ export default function HomePage() {
           section, adapted: a real link to the real partner-application flow. */}
       <section className="mx-auto w-full max-w-6xl px-6 py-16">
         <div className="relative flex flex-col items-center gap-5 overflow-hidden rounded-3xl px-8 py-12 text-center shadow-elevated sm:flex-row sm:justify-between sm:text-left">
-          <div className={settings?.has_banner_image ? "absolute inset-0 -z-10" : "absolute inset-0 -z-10 bg-gradient-to-r from-accent-400 to-accent-600"}>
-            {settings?.has_banner_image && (
+          <div className="absolute inset-0 -z-10 bg-gradient-to-r from-accent-400 to-accent-600">
+            {(settings?.has_banner_image || dummyPhotoAt(0)) && (
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={cmsBannerImageUrl(new Date(settings.updated_at).getTime())}
+                  src={settings?.has_banner_image ? cmsBannerImageUrl(new Date(settings.updated_at).getTime()) : dummyPhotoAt(0)!}
                   alt=""
                   className="h-full w-full object-cover"
                 />
@@ -529,6 +529,13 @@ export default function HomePage() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={cmsTileImageUrl(tile.id, new Date(tile.updated_at).getTime())}
+                      alt=""
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                  ) : dummyPhotoAt(i) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={dummyPhotoAt(i)!}
                       alt=""
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
