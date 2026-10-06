@@ -2,18 +2,35 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Car, Compass, Flag, Map, Smartphone, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 import { HeroSearchWidget } from "@/components/shared/HeroSearchWidget";
+import { ApproxPrice } from "@/components/shared/ApproxPrice";
 import { Card } from "@/components/ui/Card";
 import { useRankedDestinations } from "@/hooks/useRankedDestinations";
 import { apiClient } from "@/lib/api-client";
 import { cmsBannerImageUrl, cmsHeroImageUrl, cmsTileImageUrl, destinationCoverUrl, firstImageId, propertyImageUrl, tourImageUrl } from "@/lib/media";
 import { formatMoney } from "@/lib/format";
+import { VEHICLE_TYPE_ICONS } from "@/lib/vehicleIcons";
 import type { HomepageContent } from "@/types/cms";
+import { GUIDE_CERTIFICATION_LABELS, type PublicGuideSummary } from "@/types/guides";
+import { VEHICLE_TYPE_LABELS, type Vehicle } from "@/types/rentcar";
 import type { PropertySummary } from "@/types/stay";
 import type { TourSummary } from "@/types/tour";
+
+// Every service Ovigo offers, hard-coded (not CMS-driven) so it can never
+// silently disappear from the homepage depending on admin configuration —
+// mirrors the same five services + custom-bid flow already in Header.tsx's
+// PRIMARY_NAV / Footer.tsx's EXPLORE_LINKS.
+const ALL_SERVICES = [
+  { href: "/tours", label: "Tours", icon: Map, description: "Fixed-date itineraries led by verified local experts." },
+  { href: "/stays", label: "Stays", icon: Compass, description: "Hotels, resorts & homestays booked direct from the host." },
+  { href: "/rent-a-car", label: "Rent a Car", icon: Car, description: "Self-drive or chauffeured vehicles by destination." },
+  { href: "/guides", label: "Guides", icon: Flag, description: "Book a verified local guide by the half or full day." },
+  { href: "/esim", label: "eSIM", icon: Smartphone, description: "Stay connected the moment you land." },
+  { href: "/custom-requests", label: "Custom Trip", icon: Sparkles, description: "Post your trip, get bids from local experts." },
+];
 
 // A small alternating tilt per card — the "fanned deck" treatment used for the
 // destinations rail, echoing sharetrip.net's own "Most Popular Destinations"
@@ -34,6 +51,14 @@ export default function HomePage() {
     queryKey: ["home-properties"],
     queryFn: () => apiClient.get<PropertySummary[]>("/api/v1/properties"),
   });
+  const { data: guides } = useQuery({
+    queryKey: ["home-guides"],
+    queryFn: () => apiClient.get<PublicGuideSummary[]>("/api/v1/guides/public"),
+  });
+  const { data: vehicles } = useQuery({
+    queryKey: ["home-vehicles"],
+    queryFn: () => apiClient.get<Vehicle[]>("/api/v1/vehicles"),
+  });
 
   const topDestinations = ranked.slice(0, 6);
 
@@ -49,6 +74,9 @@ export default function HomePage() {
   const featuredStays = pinnedPropertyIds.length > 0
     ? (pinnedPropertyIds.map((id) => properties?.find((p) => p.id === id)).filter(Boolean) as PropertySummary[])
     : (properties ?? []).slice(0, 4);
+
+  const featuredGuides = (guides ?? []).slice(0, 4);
+  const featuredVehicles = (vehicles ?? []).slice(0, 4);
 
   const totalTours = ranked.reduce((s, d) => s + d.published_tour_count, 0);
   const totalProperties = ranked.reduce((s, d) => s + d.published_property_count, 0);
@@ -162,6 +190,40 @@ export default function HomePage() {
         </section>
       )}
 
+      {/* All our services — hard-coded, not CMS-driven, so every service Ovigo
+          offers is always visible regardless of admin tile configuration. */}
+      <section className="mx-auto w-full max-w-6xl px-6 pb-20">
+        <h2 className="text-center text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+          Everything you need for your trip
+        </h2>
+        <p className="mt-1 text-center text-sm text-zinc-500 dark:text-zinc-400">
+          One verified marketplace — tours, stays, transport, guides and more.
+        </p>
+        <div className="mt-8 grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-3">
+          {ALL_SERVICES.map((service, i) => (
+            <motion.div
+              key={service.href}
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-40px" }}
+              transition={{ duration: 0.4, delay: i * 0.05 }}
+            >
+              <Link href={service.href}>
+                <Card hoverable variant="elevated" className="flex h-full flex-col gap-3 p-5">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-indigo-600 text-white">
+                    <service.icon className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">{service.label}</h3>
+                    <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{service.description}</p>
+                  </div>
+                </Card>
+              </Link>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
       {featuredTours.length > 0 && (
         <section className="bg-zinc-50 py-20 dark:bg-zinc-950">
           <div className="mx-auto w-full max-w-6xl px-6">
@@ -265,6 +327,113 @@ export default function HomePage() {
                         <div className="flex flex-1 flex-col p-4">
                           <h3 className="line-clamp-1 font-semibold text-zinc-900 dark:text-zinc-50">{prop.name}</h3>
                           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400 capitalize">{prop.property_type}</p>
+                        </div>
+                      </Card>
+                    </Link>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {featuredGuides.length > 0 && (
+        <section className="bg-zinc-50 py-20 dark:bg-zinc-950">
+          <div className="mx-auto w-full max-w-6xl px-6">
+            <div className="flex items-end justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Local guides to book directly</h2>
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                  Verified guides, by the half day or full day.
+                </p>
+              </div>
+              <Link
+                href="/guides"
+                className="hidden shrink-0 items-center gap-1 text-sm font-medium text-primary-600 hover:underline dark:text-primary-400 sm:flex"
+              >
+                See all guides <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+            <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {featuredGuides.map((guide, i) => (
+                <motion.div
+                  key={guide.guide_role_id}
+                  initial={{ opacity: 0, y: 16 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-40px" }}
+                  transition={{ duration: 0.4, delay: i * 0.06 }}
+                >
+                  <Link href={`/guides/${guide.guide_role_id}`}>
+                    <Card hoverable variant="elevated" className="flex h-full flex-col p-5">
+                      <div className="flex items-start gap-3">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-indigo-600 text-lg font-semibold text-white">
+                          {guide.full_name.charAt(0).toUpperCase()}
+                        </span>
+                        <div className="min-w-0">
+                          <h3 className="truncate font-semibold text-zinc-900 dark:text-zinc-50">{guide.full_name}</h3>
+                          {guide.city && <p className="text-sm text-zinc-500 dark:text-zinc-400">{guide.city}</p>}
+                        </div>
+                      </div>
+                      <div className="mt-auto flex items-end justify-between gap-2 pt-4">
+                        <p className="text-sm font-medium text-primary-600 dark:text-primary-400">
+                          From {formatMoney(guide.from_price)} <ApproxPrice amountBDT={guide.from_price} />
+                        </p>
+                        {guide.certification_level !== "none" && (
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                            {GUIDE_CERTIFICATION_LABELS[guide.certification_level]}
+                          </span>
+                        )}
+                      </div>
+                    </Card>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {featuredVehicles.length > 0 && (
+        <section className="py-20">
+          <div className="mx-auto w-full max-w-6xl px-6">
+            <div className="flex items-end justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Rent a vehicle for your trip</h2>
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                  Self-drive or chauffeured, by destination.
+                </p>
+              </div>
+              <Link
+                href="/rent-a-car"
+                className="hidden shrink-0 items-center gap-1 text-sm font-medium text-primary-600 hover:underline dark:text-primary-400 sm:flex"
+              >
+                See all vehicles <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+            <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {featuredVehicles.map((vehicle, i) => {
+                const TypeIcon = VEHICLE_TYPE_ICONS[vehicle.vehicle_type];
+                return (
+                  <motion.div
+                    key={vehicle.id}
+                    initial={{ opacity: 0, y: 16 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-40px" }}
+                    transition={{ duration: 0.4, delay: i * 0.06 }}
+                  >
+                    <Link href={`/rent-a-car/${vehicle.id}`}>
+                      <Card hoverable variant="elevated" className="flex h-full flex-col overflow-hidden p-0">
+                        <div className="flex aspect-[4/3] w-full items-center justify-center bg-gradient-to-br from-primary-500 to-indigo-600">
+                          <TypeIcon className="h-12 w-12 text-white/90" strokeWidth={1.25} />
+                        </div>
+                        <div className="flex flex-1 flex-col p-4">
+                          <h3 className="line-clamp-1 font-semibold text-zinc-900 dark:text-zinc-50">
+                            {vehicle.make} {vehicle.model}
+                          </h3>
+                          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                            {VEHICLE_TYPE_LABELS[vehicle.vehicle_type]} · {formatMoney(vehicle.price_per_day)}/day
+                          </p>
                         </div>
                       </Card>
                     </Link>
