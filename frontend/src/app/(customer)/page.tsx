@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ArrowRight, Car, Compass, Flag, Map, Smartphone, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 import { HeroSearchWidget } from "@/components/shared/HeroSearchWidget";
@@ -24,12 +24,12 @@ import type { TourSummary } from "@/types/tour";
 // mirrors the same five services + custom-bid flow already in Header.tsx's
 // PRIMARY_NAV / Footer.tsx's EXPLORE_LINKS.
 const ALL_SERVICES = [
-  { href: "/tours", label: "Tours", icon: Map, description: "Fixed-date itineraries led by verified local experts." },
-  { href: "/stays", label: "Stays", icon: Compass, description: "Hotels, resorts & homestays booked direct from the host." },
-  { href: "/rent-a-car", label: "Rent a Car", icon: Car, description: "Self-drive or chauffeured vehicles by destination." },
-  { href: "/guides", label: "Guides", icon: Flag, description: "Book a verified local guide by the half or full day." },
-  { href: "/esim", label: "eSIM", icon: Smartphone, description: "Stay connected the moment you land." },
-  { href: "/custom-requests", label: "Custom Trip", icon: Sparkles, description: "Post your trip, get bids from local experts." },
+  { href: "/tours", label: "Tours", description: "Fixed-date itineraries led by verified local experts." },
+  { href: "/stays", label: "Stays", description: "Hotels, resorts & homestays booked direct from the host." },
+  { href: "/rent-a-car", label: "Rent a Car", description: "Self-drive or chauffeured vehicles by destination." },
+  { href: "/guides", label: "Guides", description: "Book a verified local guide by the half or full day." },
+  { href: "/esim", label: "eSIM", description: "Stay connected the moment you land." },
+  { href: "/custom-requests", label: "Custom Trip", description: "Post your trip, get bids from local experts." },
 ];
 
 // A small alternating tilt per card — the "fanned deck" treatment used for the
@@ -77,6 +77,18 @@ export default function HomePage() {
 
   const featuredGuides = (guides ?? []).slice(0, 4);
   const featuredVehicles = (vehicles ?? []).slice(0, 4);
+
+  // Guides and vehicles have no photos of their own yet, and the service
+  // tiles have no dedicated marketing photography — reuse real tour photos
+  // as stand-in imagery everywhere an icon used to be, cycling through
+  // whatever's actually published so every card still shows a real photo.
+  const dummyPhotos = (tours ?? [])
+    .map((t) => {
+      const cover = firstImageId(t.images);
+      return cover ? tourImageUrl(t.id, cover.id) : null;
+    })
+    .filter((url): url is string => Boolean(url));
+  const dummyPhotoAt = (i: number) => (dummyPhotos.length > 0 ? dummyPhotos[i % dummyPhotos.length] : null);
 
   const totalTours = ranked.reduce((s, d) => s + d.published_tour_count, 0);
   const totalProperties = ranked.reduce((s, d) => s + d.published_property_count, 0);
@@ -209,11 +221,14 @@ export default function HomePage() {
               transition={{ duration: 0.4, delay: i * 0.05 }}
             >
               <Link href={service.href}>
-                <Card hoverable variant="elevated" className="flex h-full flex-col gap-3 p-5">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-indigo-600 text-white">
-                    <service.icon className="h-5 w-5" />
-                  </span>
-                  <div>
+                <Card hoverable variant="elevated" className="flex h-full flex-col overflow-hidden p-0">
+                  <div className="aspect-[4/3] w-full bg-zinc-100 dark:bg-zinc-800">
+                    {dummyPhotoAt(i) && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={dummyPhotoAt(i)!} alt={service.label} className="h-full w-full object-cover" />
+                    )}
+                  </div>
+                  <div className="flex flex-1 flex-col p-4">
                     <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">{service.label}</h3>
                     <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{service.description}</p>
                   </div>
@@ -365,25 +380,26 @@ export default function HomePage() {
                   transition={{ duration: 0.4, delay: i * 0.06 }}
                 >
                   <Link href={`/guides/${guide.guide_role_id}`}>
-                    <Card hoverable variant="elevated" className="flex h-full flex-col p-5">
-                      <div className="flex items-start gap-3">
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-indigo-600 text-lg font-semibold text-white">
-                          {guide.full_name.charAt(0).toUpperCase()}
-                        </span>
-                        <div className="min-w-0">
-                          <h3 className="truncate font-semibold text-zinc-900 dark:text-zinc-50">{guide.full_name}</h3>
-                          {guide.city && <p className="text-sm text-zinc-500 dark:text-zinc-400">{guide.city}</p>}
-                        </div>
-                      </div>
-                      <div className="mt-auto flex items-end justify-between gap-2 pt-4">
-                        <p className="text-sm font-medium text-primary-600 dark:text-primary-400">
-                          From {formatMoney(guide.from_price)} <ApproxPrice amountBDT={guide.from_price} />
-                        </p>
-                        {guide.certification_level !== "none" && (
-                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                            {GUIDE_CERTIFICATION_LABELS[guide.certification_level]}
-                          </span>
+                    <Card hoverable variant="elevated" className="flex h-full flex-col overflow-hidden p-0">
+                      <div className="aspect-[4/3] w-full bg-zinc-100 dark:bg-zinc-800">
+                        {dummyPhotoAt(i) && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={dummyPhotoAt(i)!} alt={guide.full_name} className="h-full w-full object-cover" />
                         )}
+                      </div>
+                      <div className="flex flex-1 flex-col p-4">
+                        <h3 className="truncate font-semibold text-zinc-900 dark:text-zinc-50">{guide.full_name}</h3>
+                        {guide.city && <p className="text-sm text-zinc-500 dark:text-zinc-400">{guide.city}</p>}
+                        <div className="mt-auto flex items-end justify-between gap-2 pt-4">
+                          <p className="text-sm font-medium text-primary-600 dark:text-primary-400">
+                            From {formatMoney(guide.from_price)} <ApproxPrice amountBDT={guide.from_price} />
+                          </p>
+                          {guide.certification_level !== "none" && (
+                            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                              {GUIDE_CERTIFICATION_LABELS[guide.certification_level]}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </Card>
                   </Link>
@@ -424,8 +440,19 @@ export default function HomePage() {
                   >
                     <Link href={`/rent-a-car/${vehicle.id}`}>
                       <Card hoverable variant="elevated" className="flex h-full flex-col overflow-hidden p-0">
-                        <div className="flex aspect-[4/3] w-full items-center justify-center bg-gradient-to-br from-primary-500 to-indigo-600">
-                          <TypeIcon className="h-12 w-12 text-white/90" strokeWidth={1.25} />
+                        <div className="aspect-[4/3] w-full bg-zinc-100 dark:bg-zinc-800">
+                          {dummyPhotoAt(i) ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={dummyPhotoAt(i)!}
+                              alt={`${vehicle.make} ${vehicle.model}`}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary-500 to-indigo-600">
+                              <TypeIcon className="h-12 w-12 text-white/90" strokeWidth={1.25} />
+                            </div>
+                          )}
                         </div>
                         <div className="flex flex-1 flex-col p-4">
                           <h3 className="line-clamp-1 font-semibold text-zinc-900 dark:text-zinc-50">
