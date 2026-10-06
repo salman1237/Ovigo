@@ -109,7 +109,9 @@ function PartnerOnboardingContent() {
 
   const refetchRoles = () => queryClient.invalidateQueries({ queryKey: ["my-partner-roles"] });
 
-  const takenRoleTypes = new Set((roles ?? []).map((r) => r.role_type));
+  const takenRoleTypes = new Set(
+    (roles ?? []).filter((r) => r.status !== "rejected").map((r) => r.role_type)
+  );
 
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
