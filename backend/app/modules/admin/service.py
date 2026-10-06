@@ -26,6 +26,7 @@ from app.modules.partners.models import (
     DocumentStatus,
     PartnerDocument,
     PartnerRoleApplication,
+    missing_required_documents,
 )
 from app.modules.payments.models import Payment, PaymentStatus
 from app.modules.referrals import service as referrals_service
@@ -106,6 +107,14 @@ async def approve_role(db: AsyncSession, admin: User, role_id: uuid.UUID) -> Adm
     role = await _get_role_with_relations(db, role_id)
     if role.status != PartnerRoleStatus.PENDING:
         raise ConflictError(f"Role is {role.status.value}, not pending")
+
+    missing = missing_required_documents(role.role_type.value, list(role.documents or []))
+    if missing:
+        labels = ", ".join(dt.value.replace("_", " ") for dt in missing)
+        raise ConflictError(
+            f"Cannot approve — missing required document(s): {labels}. "
+            "The applicant must upload these before this role can be approved."
+        )
 
     role.status = PartnerRoleStatus.APPROVED
     role.approved_at = datetime.now(timezone.utc)

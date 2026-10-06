@@ -43,6 +43,27 @@ class DocumentStatus(str, enum.Enum):
     REJECTED = "rejected"
 
 
+# PRD §7 (Partner Verification and Onboarding) ties each role to a specific set of
+# documents beyond the common ID requirement — this is the enforcement point that
+# was previously missing: nothing stopped a role from reaching APPROVED with zero
+# documents attached. Keyed by the PartnerRoleType string value (not the enum
+# itself) to avoid a circular import with app.modules.users.models.
+REQUIRED_DOCUMENT_TYPES: dict[str, list[DocumentType]] = {
+    "local_expert": [DocumentType.ID_CARD],
+    "guide": [DocumentType.ID_CARD],
+    "host": [DocumentType.ID_CARD, DocumentType.PROPERTY_DEED],
+    "hotel": [DocumentType.ID_CARD, DocumentType.PROPERTY_DEED, DocumentType.TRADE_LICENSE],
+    "rent_a_car": [DocumentType.ID_CARD, DocumentType.TRADE_LICENSE, DocumentType.VEHICLE_REGISTRATION],
+}
+
+
+def missing_required_documents(role_type: str, documents: list["PartnerDocument"]) -> list[DocumentType]:
+    """Required document types for `role_type` that have no uploaded document of that type yet."""
+    required = REQUIRED_DOCUMENT_TYPES.get(role_type, [])
+    present = {d.document_type for d in documents}
+    return [dt for dt in required if dt not in present]
+
+
 class PartnerRoleApplication(Base):
     __tablename__ = "partner_role_applications"
 

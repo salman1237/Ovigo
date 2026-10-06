@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
-import { Upload, UserPlus } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Upload, UserPlus } from "lucide-react";
 
 import { LocationPicker } from "@/components/shared/LocationPicker";
 import { Badge, type BadgeProps } from "@/components/ui/Badge";
@@ -101,6 +101,12 @@ function PartnerOnboardingContent() {
     enabled: !!user,
   });
 
+  const { data: documentRequirements } = useQuery({
+    queryKey: ["partner-document-requirements"],
+    queryFn: () => apiClient.get<Record<string, DocumentType[]>>("/api/v1/partners/document-requirements"),
+    staleTime: Infinity,
+  });
+
   const refetchRoles = () => queryClient.invalidateQueries({ queryKey: ["my-partner-roles"] });
 
   const takenRoleTypes = new Set((roles ?? []).map((r) => r.role_type));
@@ -177,6 +183,18 @@ function PartnerOnboardingContent() {
             </option>
           ))}
         </Select>
+        {documentRequirements?.[applyRoleType] && documentRequirements[applyRoleType].length > 0 && (
+          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>
+              After submitting, you&apos;ll need to upload: {" "}
+              <span className="font-medium">
+                {documentRequirements[applyRoleType].map((dt) => DOCUMENT_TYPE_LABELS[dt]).join(", ")}
+              </span>
+              . Your role won&apos;t be approved until these are on file.
+            </p>
+          </div>
+        )}
         <Textarea
           value={applyMessage}
           onChange={(e) => setApplyMessage(e.target.value)}
@@ -220,14 +238,29 @@ function PartnerOnboardingContent() {
 
       <div className="mt-3 flex flex-col gap-4">
         {(roles ?? []).map((role) => (
-          <RoleCard key={role.id} role={role} onChange={refetchRoles} />
+          <RoleCard
+            key={role.id}
+            role={role}
+            onChange={refetchRoles}
+            requiredDocumentTypes={documentRequirements?.[role.role_type] ?? []}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function RoleCard({ role, onChange }: { role: PartnerRole; onChange: () => void }) {
+function RoleCard({
+  role,
+  onChange,
+  requiredDocumentTypes,
+}: {
+  role: PartnerRole;
+  onChange: () => void;
+  requiredDocumentTypes: DocumentType[];
+}) {
+  const presentDocumentTypes = new Set(role.documents.map((d) => d.document_type));
+  const missingDocumentTypes = requiredDocumentTypes.filter((dt) => !presentDocumentTypes.has(dt));
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationsSaved, setLocationsSaved] = useState(false);
   const [documentType, setDocumentType] = useState<DocumentType>("id_card");
@@ -274,6 +307,29 @@ function RoleCard({ role, onChange }: { role: PartnerRole; onChange: () => void 
 
       {role.applications[0]?.rejection_reason && (
         <p className="mt-1 text-sm text-red-600">Reason: {role.applications[0].rejection_reason}</p>
+      )}
+
+      {role.status === "pending" && requiredDocumentTypes.length > 0 && (
+        <div className="mt-3 flex flex-col gap-1 rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+          <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Required documents</p>
+          {requiredDocumentTypes.map((dt) => (
+            <div key={dt} className="flex items-center gap-1.5 text-xs">
+              {presentDocumentTypes.has(dt) ? (
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+              ) : (
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+              )}
+              <span className={presentDocumentTypes.has(dt) ? "text-zinc-600 dark:text-zinc-400" : "text-amber-800 dark:text-amber-300"}>
+                {DOCUMENT_TYPE_LABELS[dt]}
+              </span>
+            </div>
+          ))}
+          {missingDocumentTypes.length > 0 && (
+            <p className="mt-1 text-xs text-zinc-500">
+              This role can&apos;t be approved until all required documents above are uploaded.
+            </p>
+          )}
+        </div>
       )}
 
       {role.status === "pending" && (

@@ -25,6 +25,7 @@ import {
   AdminExpiringDocument,
   AdminPartnerRole,
   DOCUMENT_TYPE_LABELS,
+  DocumentType,
   isExpired,
   isExpiringSoon,
   PartnerRoleStatus,
@@ -45,6 +46,12 @@ export default function AdminPartnersPage() {
   });
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: ["admin-partner-roles"] });
+
+  const { data: documentRequirements } = useQuery({
+    queryKey: ["partner-document-requirements"],
+    queryFn: () => apiClient.get<Record<string, DocumentType[]>>("/api/v1/partners/document-requirements"),
+    staleTime: Infinity,
+  });
 
   return (
     <div>
@@ -87,7 +94,12 @@ export default function AdminPartnersPage() {
 
       <div className="mt-6 flex flex-col gap-4">
         {(roles ?? []).map((role) => (
-          <RoleReviewCard key={role.id} role={role} onChange={refetch} />
+          <RoleReviewCard
+            key={role.id}
+            role={role}
+            onChange={refetch}
+            requiredDocumentTypes={documentRequirements?.[role.role_type] ?? []}
+          />
         ))}
       </div>
 
@@ -124,7 +136,17 @@ function ExpiringDocuments() {
   );
 }
 
-function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: () => void }) {
+function RoleReviewCard({
+  role,
+  onChange,
+  requiredDocumentTypes,
+}: {
+  role: AdminPartnerRole;
+  onChange: () => void;
+  requiredDocumentTypes: DocumentType[];
+}) {
+  const presentDocumentTypes = new Set(role.documents.map((d) => d.document_type));
+  const missingDocumentTypes = requiredDocumentTypes.filter((dt) => !presentDocumentTypes.has(dt));
   const [rejectReason, setRejectReason] = useState("");
   const [showReject, setShowReject] = useState(false);
   const [suspendReason, setSuspendReason] = useState("");
@@ -284,6 +306,11 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
               )}
               {role.status === "rejected" && <Badge variant="danger">Rejected</Badge>}
               {role.status === "pending" && <Badge variant="warning">Pending Review</Badge>}
+              {role.status === "pending" && missingDocumentTypes.length > 0 && (
+                <Badge variant="danger" title={missingDocumentTypes.map((dt) => DOCUMENT_TYPE_LABELS[dt]).join(", ")}>
+                  Missing {missingDocumentTypes.length} required document{missingDocumentTypes.length > 1 ? "s" : ""}
+                </Badge>
+              )}
               {role.role_type === "local_expert" && profile?.is_trusted && (
                 <Badge variant="success" className="flex items-center gap-1">
                   <Star className="h-3 w-3" /> Trusted Expert
@@ -305,7 +332,14 @@ function RoleReviewCard({ role, onChange }: { role: AdminPartnerRole; onChange: 
         <div className="flex flex-wrap items-center gap-2">
           {role.status === "pending" && (
             <>
-              <Button size="sm" onClick={approve} loading={busy} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              <Button
+                size="sm"
+                onClick={approve}
+                loading={busy}
+                disabled={missingDocumentTypes.length > 0}
+                title={missingDocumentTypes.length > 0 ? `Missing: ${missingDocumentTypes.map((dt) => DOCUMENT_TYPE_LABELS[dt]).join(", ")}` : undefined}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
+              >
                 Approve Role
               </Button>
               <Button size="sm" variant="destructive" onClick={() => setShowReject((s) => !s)} disabled={busy}>

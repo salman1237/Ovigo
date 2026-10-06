@@ -12,7 +12,7 @@ from app.modules.locations import service as locations_service
 from app.modules.locations.models import TaggableEntityType
 from app.modules.locations.schemas import LocationTagRead, LocationTagSet
 from app.modules.partners import service
-from app.modules.partners.models import DocumentType
+from app.modules.partners.models import REQUIRED_DOCUMENT_TYPES, DocumentType
 from app.modules.partners.schemas import (
     PartnerDocumentRead,
     PartnerRoleApplyRequest,
@@ -21,6 +21,14 @@ from app.modules.partners.schemas import (
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/api/v1/partners", tags=["partners"])
+
+
+@router.get("/document-requirements", response_model=dict[str, list[DocumentType]])
+async def get_document_requirements():
+    """PRD §7 required-document mapping per role type. Public/static — no auth
+    needed, lets the apply form and admin review UI render the same checklist
+    the backend actually enforces at approval time, without duplicating it."""
+    return REQUIRED_DOCUMENT_TYPES
 
 
 @router.post("/roles", response_model=PartnerRoleRead, status_code=201)
