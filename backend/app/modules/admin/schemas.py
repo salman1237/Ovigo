@@ -10,7 +10,9 @@ from app.modules.partners.schemas import PartnerDocumentRead, PartnerRoleApplica
 from app.modules.payments.models import EscrowStatus, PaymentProvider, PaymentStatus
 from app.modules.rentcar.models import VehicleStatus
 from app.modules.stays.models import PropertyStatus
+from app.modules.stays.schemas import PropertyRead
 from app.modules.tours.models import TourStatus
+from app.modules.tours.schemas import TourRead
 from app.modules.users.models import AdminPermissionRole, PartnerRoleStatus, PartnerRoleType, SystemRole
 
 
@@ -77,35 +79,10 @@ class AdminExpiringDocumentRead(BaseModel):
     applicant: AdminUserSummary
 
 
-class AdminTourRead(BaseModel):
-    """A tour as seen in the moderation queue — includes full specs and expert's documents."""
+class AdminTourRead(TourRead):
+    """A tour as seen in the moderation queue — the full public read schema (pricing, pickup,
+    safety, every policy field, and all nested collections) plus admin-only review fields."""
 
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    local_expert_role_id: uuid.UUID
-    title: str
-    slug: str
-    description: str | None
-    short_summary: str | None = None
-    duration_days: int
-    duration_nights: int | None = None
-    base_price: Decimal
-    currency: str = "BDT"
-    tour_type: str | None = None
-    status: TourStatus
-    rejection_reason: str | None
-    created_at: datetime
-    pickup_location: str | None = None
-    dropoff_location: str | None = None
-    pickup_time: str | None = None
-    dropoff_time: str | None = None
-    pickup_coordinates: dict | None = None
-    nearest_hospital: str | None = None
-    emergency_contact_phone: str | None = None
-    permit_requirements: str | None = None
-    first_aid_available: bool = False
-    insurance_included: bool = False
     has_high_risk_activities: bool = False
     expert_is_trusted: bool = False
     applicant: AdminUserSummary
@@ -118,18 +95,10 @@ class ApproveTourRequest(BaseModel):
     safety_checklist_confirmed: bool = False
 
 
-class AdminPropertyRead(BaseModel):
-    """A property as seen in the moderation queue — includes the submitting host's identity."""
+class AdminPropertyRead(PropertyRead):
+    """A property as seen in the moderation queue — the full public read schema (policies,
+    room_types, amenities, images) plus the submitting host's identity."""
 
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    name: str
-    slug: str
-    description: str | None
-    status: PropertyStatus
-    rejection_reason: str | None
-    created_at: datetime
     applicant: AdminUserSummary
 
 
@@ -148,6 +117,7 @@ class AdminVehicleRead(BaseModel):
     seats: int = 4
     price_per_day: Decimal = Decimal("0")
     with_driver: bool = False
+    assigned_driver_id: uuid.UUID | None = None
     description: str | None = None
     status: VehicleStatus
     rejection_reason: str | None

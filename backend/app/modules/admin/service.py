@@ -32,8 +32,10 @@ from app.modules.payments.models import Payment, PaymentStatus
 from app.modules.referrals import service as referrals_service
 from app.modules.rentcar.models import Vehicle, VehicleStatus
 from app.modules.stays.models import Property, PropertyStatus
+from app.modules.stays.schemas import PropertyRead
 from app.modules.profiles.models import LocalExpertProfile
 from app.modules.tours.models import Tour, TourActivity, TourStatus
+from app.modules.tours.schemas import TourRead
 from app.modules.users.models import AdminPermissionRole, PartnerAccount, PartnerRole, PartnerRoleStatus, SystemRole, User
 
 
@@ -446,34 +448,11 @@ async def request_reverification(db: AsyncSession, admin: User, document_id: uui
 def _to_admin_tour_read(tour: Tour, expert_is_trusted: bool = False) -> AdminTourRead:
     docs = list(tour.local_expert_role.documents) if tour.local_expert_role and hasattr(tour.local_expert_role, "documents") else []
     has_high_risk = any(a.is_high_risk for a in (tour.activities or []))
-    expert_trusted = expert_is_trusted
+    base = TourRead.model_validate(tour)
     return AdminTourRead(
-        id=tour.id,
-        local_expert_role_id=tour.local_expert_role_id,
-        title=tour.title,
-        slug=tour.slug,
-        description=tour.description,
-        short_summary=tour.short_summary,
-        duration_days=tour.duration_days,
-        duration_nights=tour.duration_nights,
-        base_price=tour.base_price,
-        currency=tour.currency or "BDT",
-        tour_type=tour.tour_type.value if tour.tour_type else None,
-        status=tour.status,
-        rejection_reason=tour.rejection_reason,
-        created_at=tour.created_at,
-        pickup_location=tour.pickup_location,
-        dropoff_location=tour.dropoff_location,
-        pickup_time=tour.pickup_time,
-        dropoff_time=tour.dropoff_time,
-        pickup_coordinates=tour.pickup_coordinates,
-        nearest_hospital=tour.nearest_hospital,
-        emergency_contact_phone=tour.emergency_contact_phone,
-        permit_requirements=tour.permit_requirements,
-        first_aid_available=bool(tour.first_aid_available),
-        insurance_included=bool(tour.insurance_included),
+        **base.model_dump(),
         has_high_risk_activities=has_high_risk,
-        expert_is_trusted=expert_trusted,
+        expert_is_trusted=expert_is_trusted,
         applicant=AdminUserSummary.model_validate(tour.local_expert_role.partner_account.user),
         expert_documents=docs,
     )
@@ -482,7 +461,14 @@ def _to_admin_tour_read(tour: Tour, expert_is_trusted: bool = False) -> AdminTou
 _TOUR_OPTIONS = [
     selectinload(Tour.local_expert_role).selectinload(PartnerRole.partner_account).selectinload(PartnerAccount.user),
     selectinload(Tour.local_expert_role).selectinload(PartnerRole.documents),
+    selectinload(Tour.itinerary),
+    selectinload(Tour.departures),
+    selectinload(Tour.meals),
     selectinload(Tour.activities),
+    selectinload(Tour.addons),
+    selectinload(Tour.transport),
+    selectinload(Tour.stays),
+    selectinload(Tour.images),
 ]
 
 
@@ -648,23 +634,24 @@ async def set_expert_trusted(db: AsyncSession, admin: User, role_id: uuid.UUID, 
     )
 
 
+_PROPERTY_OPTIONS = [
+    selectinload(Property.host_role).selectinload(PartnerRole.partner_account).selectinload(PartnerAccount.user),
+    selectinload(Property.room_types),
+    selectinload(Property.amenities),
+    selectinload(Property.images),
+]
+
+
 def _to_admin_property_read(prop: Property) -> AdminPropertyRead:
+    base = PropertyRead.model_validate(prop)
     return AdminPropertyRead(
-        id=prop.id,
-        name=prop.name,
-        slug=prop.slug,
-        description=prop.description,
-        status=prop.status,
-        rejection_reason=prop.rejection_reason,
-        created_at=prop.created_at,
+        **base.model_dump(),
         applicant=AdminUserSummary.model_validate(prop.host_role.partner_account.user),
     )
 
 
 async def list_properties(db: AsyncSession, status: PropertyStatus | None) -> list[AdminPropertyRead]:
-    query = select(Property).options(
-        selectinload(Property.host_role).selectinload(PartnerRole.partner_account).selectinload(PartnerAccount.user)
-    )
+    query = select(Property).options(*_PROPERTY_OPTIONS)
     if status is not None:
         query = query.where(Property.status == status)
     result = await db.execute(query.order_by(Property.created_at.desc()))
@@ -673,13 +660,7 @@ async def list_properties(db: AsyncSession, status: PropertyStatus | None) -> li
 
 async def _get_property_with_relations(db: AsyncSession, property_id: uuid.UUID) -> Property:
     result = await db.execute(
-        select(Property)
-        .where(Property.id == property_id)
-        .options(
-            selectinload(Property.host_role)
-            .selectinload(PartnerRole.partner_account)
-            .selectinload(PartnerAccount.user)
-        )
+        select(Property).where(Property.id == property_id).options(*_PROPERTY_OPTIONS)
     )
     prop = result.scalar_one_or_none()
     if prop is None:
@@ -767,6 +748,7 @@ def _to_admin_vehicle_read(vehicle: Vehicle) -> AdminVehicleRead:
         seats=vehicle.seats or 4,
         price_per_day=vehicle.price_per_day,
         with_driver=bool(vehicle.with_driver),
+        assigned_driver_id=vehicle.assigned_driver_id,
         description=vehicle.description,
         status=vehicle.status,
         rejection_reason=vehicle.rejection_reason,

@@ -41,6 +41,7 @@ interface AdminVehicle {
   seats?: number;
   price_per_day?: string;
   with_driver?: boolean;
+  assigned_driver_id?: string | null;
   description?: string | null;
   status: VehicleStatus;
   rejection_reason: string | null;
@@ -306,6 +307,9 @@ function VehicleReviewCard({ vehicle, onChange }: { vehicle: AdminVehicle; onCha
               <p className="mt-0.5 text-zinc-600 dark:text-zinc-400">
                 Driver Option: {vehicle.with_driver ? "✓ Dedicated driver included" : "Self-drive rental"}
               </p>
+              {vehicle.assigned_driver_id && (
+                <p className="text-zinc-600 dark:text-zinc-400">Assigned Driver ID: {vehicle.assigned_driver_id}</p>
+              )}
             </div>
 
             <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">

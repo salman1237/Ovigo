@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+import { DetailField, humanizeDetailValue, humanizeKey } from "@/components/admin/DetailField";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -626,33 +627,6 @@ function RoleReviewCard({
   );
 }
 
-function ApplicationField({ label, value }: { label: string; value: string | null | undefined }) {
-  if (!value) return null;
-  return (
-    <div>
-      <span className="text-zinc-400">{label}: </span>
-      <span className="font-medium text-zinc-800 dark:text-zinc-200">{value}</span>
-    </div>
-  );
-}
-
-function humanizeKey(key: string): string {
-  return key
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
-
-function humanizeRoleDetailValue(value: unknown): string | null {
-  if (value == null || value === "") return null;
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (Array.isArray(value)) {
-    const items = value.filter((v) => v != null && v !== "");
-    return items.length ? items.join(", ") : null;
-  }
-  return String(value);
-}
-
 function ApplicationFormDetails({ application }: { application: PartnerRoleApplication }) {
   const a = application;
   const hasIdentity = a.full_legal_name || a.contact_mobile_number || a.national_id_type || a.national_id_number;
@@ -672,9 +646,9 @@ function ApplicationFormDetails({ application }: { application: PartnerRoleAppli
         Application Form Details
       </h4>
       <div className="mt-2.5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 text-xs">
-        <ApplicationField label="Full Legal Name" value={a.full_legal_name} />
-        <ApplicationField label="Contact Mobile" value={a.contact_mobile_number} />
-        <ApplicationField
+        <DetailField label="Full Legal Name" value={a.full_legal_name} />
+        <DetailField label="Contact Mobile" value={a.contact_mobile_number} />
+        <DetailField
           label="National ID"
           value={
             a.national_id_type || a.national_id_number
@@ -682,18 +656,18 @@ function ApplicationFormDetails({ application }: { application: PartnerRoleAppli
               : null
           }
         />
-        <ApplicationField label="Permanent Address" value={a.permanent_address} />
-        <ApplicationField label="Current Address" value={a.current_address} />
-        <ApplicationField label="Emergency Contact" value={a.emergency_contact_name} />
-        <ApplicationField label="Emergency Phone" value={a.emergency_contact_phone} />
-        <ApplicationField
+        <DetailField label="Permanent Address" value={a.permanent_address} />
+        <DetailField label="Current Address" value={a.current_address} />
+        <DetailField label="Emergency Contact" value={a.emergency_contact_name} />
+        <DetailField label="Emergency Phone" value={a.emergency_contact_phone} />
+        <DetailField
           label="Payout Method"
           value={a.payout_method === "bank" ? "Bank Transfer" : a.payout_method === "mobile_financial_service" ? "Mobile Financial Service" : null}
         />
-        <ApplicationField label="Payout Provider" value={a.payout_provider_name} />
-        <ApplicationField label="Payout Account Name" value={a.payout_account_name} />
-        <ApplicationField label="Payout Account Number" value={a.payout_account_number} />
-        <ApplicationField label="Tax ID" value={a.tax_id} />
+        <DetailField label="Payout Provider" value={a.payout_provider_name} />
+        <DetailField label="Payout Account Name" value={a.payout_account_name} />
+        <DetailField label="Payout Account Number" value={a.payout_account_number} />
+        <DetailField label="Tax ID" value={a.tax_id} />
         {hasAgreements && (
           <div className="col-span-full flex flex-wrap items-center gap-2 pt-1">
             <Badge variant={a.agreed_to_partner_terms ? "success" : "danger"} className="text-[10px]">
@@ -706,7 +680,7 @@ function ApplicationFormDetails({ application }: { application: PartnerRoleAppli
         )}
         {hasRoleDetails &&
           Object.entries(a.role_details as Record<string, unknown>).map(([key, value]) => (
-            <ApplicationField key={key} label={humanizeKey(key)} value={humanizeRoleDetailValue(value)} />
+            <DetailField key={key} label={humanizeKey(key)} value={humanizeDetailValue(value)} />
           ))}
       </div>
     </div>

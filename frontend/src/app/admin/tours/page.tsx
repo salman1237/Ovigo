@@ -15,6 +15,7 @@ import {
 import dynamic from "next/dynamic";
 import { useState } from "react";
 
+import { DetailField, humanizeDetailValue, humanizeKey } from "@/components/admin/DetailField";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -24,7 +25,8 @@ import { Spinner } from "@/components/ui/Spinner";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { formatMoney } from "@/lib/format";
-import type { TourStatus } from "@/types/tour";
+import type { AdminUserSummary } from "@/types/partner";
+import type { Tour, TourStatus } from "@/types/tour";
 
 const RouteMap = dynamic(
   () => import("@/components/shared/RouteMap").then((m) => m.RouteMap),
@@ -39,34 +41,10 @@ interface AdminTourDoc {
   expiry_date?: string | null;
 }
 
-interface AdminTour {
-  id: string;
-  local_expert_role_id: string;
-  title: string;
-  slug: string;
-  description: string | null;
-  short_summary?: string | null;
-  duration_days: number;
-  duration_nights?: number | null;
-  base_price: string;
-  currency?: string;
-  tour_type?: string | null;
-  status: TourStatus;
-  rejection_reason: string | null;
-  created_at: string;
-  pickup_location?: string | null;
-  dropoff_location?: string | null;
-  pickup_time?: string | null;
-  dropoff_time?: string | null;
-  pickup_coordinates?: { lat?: number; lng?: number } | null;
-  nearest_hospital?: string | null;
-  emergency_contact_phone?: string | null;
-  permit_requirements?: string | null;
-  first_aid_available?: boolean;
-  insurance_included?: boolean;
+interface AdminTour extends Tour {
   has_high_risk_activities?: boolean;
   expert_is_trusted?: boolean;
-  applicant: { full_name: string; email: string | null; phone: string | null };
+  applicant: AdminUserSummary;
   expert_documents?: AdminTourDoc[];
 }
 
@@ -422,8 +400,8 @@ function TourReviewCard({ tour, onChange }: { tour: AdminTour; onChange: () => v
                     tour.pickup_location
                       ? {
                           label: tour.pickup_location,
-                          lat: tour.pickup_coordinates?.lat ?? 23.8103,
-                          lng: tour.pickup_coordinates?.lng ?? 90.4125,
+                          lat: (tour.pickup_coordinates?.lat as number | undefined) ?? 23.8103,
+                          lng: (tour.pickup_coordinates?.lng as number | undefined) ?? 90.4125,
                         }
                       : null
                   }
@@ -443,18 +421,78 @@ function TourReviewCard({ tour, onChange }: { tour: AdminTour; onChange: () => v
             </div>
           )}
 
+          {/* Pricing & Inclusions */}
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/40">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Pricing & Inclusions</h4>
+            <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 text-xs">
+              <DetailField label="Child Price" value={tour.child_price ? formatMoney(tour.child_price) : null} />
+              <DetailField label="Infant Price" value={tour.infant_price ? formatMoney(tour.infant_price) : null} />
+              <DetailField label="Price Per Group" value={tour.price_per_group ? formatMoney(tour.price_per_group) : null} />
+              <DetailField label="Single Room Supplement" value={tour.single_room_supplement ? formatMoney(tour.single_room_supplement) : null} />
+              <DetailField label="Couple Price" value={tour.couple_price ? formatMoney(tour.couple_price) : null} />
+              <DetailField label="Weekend Price" value={tour.weekend_price ? formatMoney(tour.weekend_price) : null} />
+              <DetailField label="Early Bird Discount" value={tour.early_bird_discount} />
+              <DetailField label="Group Discount" value={tour.group_discount} />
+              <DetailField label="Tax Rate" value={tour.tax_rate ? `${tour.tax_rate}%` : null} />
+              <DetailField label="Service Charge Rate" value={tour.service_charge_rate ? `${tour.service_charge_rate}%` : null} />
+              <DetailField label="Deposit Percentage" value={tour.deposit_percentage ? `${tour.deposit_percentage}%` : null} />
+              <DetailField label="Payment Deadline" value={tour.payment_deadline_days ? `${tour.payment_deadline_days} days before departure` : null} />
+              <DetailField label="Included Services" value={humanizeDetailValue(tour.included_services)} />
+              <DetailField label="Excluded Services" value={humanizeDetailValue(tour.excluded_services)} />
+            </div>
+          </div>
+
+          {/* Pickup & Drop-off */}
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/40">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Pickup & Drop-off</h4>
+            <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 text-xs">
+              <DetailField label="Pickup Window" value={tour.pickup_window} />
+              <DetailField label="Pickup Contact Person" value={tour.pickup_contact_person} />
+              <DetailField label="Home/Hotel Pickup Available" value={humanizeDetailValue(tour.home_hotel_pickup_available)} />
+              <DetailField label="Home Pickup Extra Charge" value={tour.home_pickup_extra_charge ? formatMoney(tour.home_pickup_extra_charge) : null} />
+              <DetailField label="Late Arrival Policy" value={tour.late_arrival_policy} />
+            </div>
+          </div>
+
           {/* Safety & Emergency Profile */}
           <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3.5 text-xs dark:border-zinc-800 dark:bg-zinc-900/40">
             <h4 className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
               <ShieldCheck className="h-4 w-4 text-emerald-600" /> Safety & Emergency Profile
             </h4>
-            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-zinc-600 dark:text-zinc-400">
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 text-zinc-600 dark:text-zinc-400">
               <p><span className="font-medium text-zinc-800 dark:text-zinc-200">Nearest Hospital:</span> {tour.nearest_hospital ?? "Not specified"}</p>
               <p><span className="font-medium text-zinc-800 dark:text-zinc-200">Emergency Phone:</span> {tour.emergency_contact_phone ?? "Not specified"}</p>
               <p><span className="font-medium text-zinc-800 dark:text-zinc-200">Permit Requirements:</span> {tour.permit_requirements ?? "None"}</p>
               <p><span className="font-medium text-zinc-800 dark:text-zinc-200">First-Aid Kit:</span> {tour.first_aid_available ? "✓ Certified responder on tour" : "Not equipped"}</p>
+              <DetailField label="Women Safety Notes" value={tour.women_safety_notes} />
+              <DetailField label="Child Safety Notes" value={tour.child_safety_notes} />
+              <DetailField label="Night Travel Policy" value={tour.night_travel_policy} />
+              <DetailField label="Insurance Included" value={humanizeDetailValue(tour.insurance_included)} />
+              <DetailField label="Emergency Procedure" value={tour.emergency_procedure} />
+              <DetailField label="Weather Risk Note" value={tour.weather_risk_note} />
+              <DetailField label="Activity Risk Note" value={tour.activity_risk_note} />
             </div>
           </div>
+
+          {/* Policies */}
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/40">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Policies</h4>
+            <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 text-xs">
+              <DetailField label="Cancellation Policy" value={tour.cancellation_policy} />
+              <DetailField label="Refund Policy" value={tour.refund_policy} />
+              <DetailField label="Child Policy" value={tour.child_policy} />
+              <DetailField label="Rescheduling Policy" value={tour.rescheduling_policy} />
+              <DetailField label="Minimum Participant Policy" value={tour.min_participant_policy} />
+              <DetailField label="Bad Weather Policy" value={tour.bad_weather_policy} />
+              <DetailField label="No-Show Policy" value={tour.no_show_policy} />
+              <DetailField label="Pet Policy" value={tour.pet_policy} />
+              <DetailField label="Accessibility Policy" value={tour.accessibility_policy} />
+              <DetailField label="Traveler Conduct Policy" value={tour.traveler_conduct_policy} />
+            </div>
+          </div>
+
+          {/* Itinerary, Departures, Meals, Activities, Addons, Transport, Stays */}
+          <TourNestedCollections tour={tour} />
 
           {/* Local Expert Attested Documents */}
           <div>
@@ -496,5 +534,139 @@ function TourReviewCard({ tour, onChange }: { tour: AdminTour; onChange: () => v
         </div>
       )}
     </Card>
+  );
+}
+
+function TourNestedCollections({ tour }: { tour: AdminTour }) {
+  const hasAny =
+    tour.itinerary.length > 0 ||
+    tour.departures.length > 0 ||
+    tour.meals.length > 0 ||
+    tour.activities.length > 0 ||
+    tour.addons.length > 0 ||
+    tour.transport.length > 0 ||
+    tour.stays.length > 0;
+  if (!hasAny) return null;
+
+  return (
+    <div className="space-y-3">
+      {tour.itinerary.length > 0 && (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3.5 text-xs dark:border-zinc-800 dark:bg-zinc-900/40">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Itinerary ({tour.itinerary.length} day{tour.itinerary.length > 1 ? "s" : ""})
+          </h4>
+          <ol className="mt-2 space-y-1.5">
+            {tour.itinerary
+              .slice()
+              .sort((a, b) => a.day_number - b.day_number)
+              .map((day) => (
+                <li key={day.id} className="text-zinc-600 dark:text-zinc-400">
+                  <span className="font-semibold text-zinc-800 dark:text-zinc-200">Day {day.day_number}: {day.title}</span>
+                  {day.location_name && <span className="text-zinc-400"> — {day.location_name}</span>}
+                  {day.description && <p className="mt-0.5">{day.description}</p>}
+                </li>
+              ))}
+          </ol>
+        </div>
+      )}
+
+      {tour.departures.length > 0 && (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3.5 text-xs dark:border-zinc-800 dark:bg-zinc-900/40">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Departures ({tour.departures.length})
+          </h4>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {tour.departures.map((d) => (
+              <div key={d.id} className="rounded-lg border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-900">
+                <p className="font-medium text-zinc-800 dark:text-zinc-200">
+                  {d.departure_date}{d.return_date ? ` → ${d.return_date}` : ""}
+                </p>
+                <p className="text-zinc-500">
+                  {d.available_seats} seats available · {d.status}
+                  {d.price_override ? ` · ${formatMoney(d.price_override)}` : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tour.meals.length > 0 && (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3.5 text-xs dark:border-zinc-800 dark:bg-zinc-900/40">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Meals ({tour.meals.length})</h4>
+          <ul className="mt-2 flex flex-wrap gap-1.5">
+            {tour.meals.map((m) => (
+              <Badge key={m.id} variant="neutral" className="capitalize text-[11px]">
+                {m.meal_type}{m.day_number ? ` (Day ${m.day_number})` : ""}
+              </Badge>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {tour.activities.length > 0 && (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3.5 text-xs dark:border-zinc-800 dark:bg-zinc-900/40">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Activities ({tour.activities.length})
+          </h4>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {tour.activities.map((a) => (
+              <Badge key={a.id} variant={a.is_high_risk ? "danger" : "neutral"} className="text-[11px]">
+                {a.name}{a.is_high_risk ? " ⚠" : ""}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tour.addons.length > 0 && (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3.5 text-xs dark:border-zinc-800 dark:bg-zinc-900/40">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Add-ons ({tour.addons.length})</h4>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {tour.addons.map((a) => (
+              <Badge key={a.id} variant="accent" className="text-[11px]">
+                {a.name} — {formatMoney(a.price)}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tour.transport.length > 0 && (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3.5 text-xs dark:border-zinc-800 dark:bg-zinc-900/40">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Transport ({tour.transport.length})
+          </h4>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {tour.transport.map((t) => (
+              <div key={t.id} className="rounded-lg border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-900">
+                <p className="font-medium capitalize text-zinc-800 dark:text-zinc-200">{t.mode}{t.vehicle_type ? ` — ${t.vehicle_type}` : ""}</p>
+                {t.description && <p className="text-zinc-500">{t.description}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tour.stays.length > 0 && (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3.5 text-xs dark:border-zinc-800 dark:bg-zinc-900/40">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Included Stays ({tour.stays.length})
+          </h4>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {tour.stays.map((s) => (
+              <div key={s.id} className="rounded-lg border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-900">
+                <p className="font-medium text-zinc-800 dark:text-zinc-200">
+                  {s.stay_name ?? "Stay"} — {s.nights} night{s.nights > 1 ? "s" : ""}
+                </p>
+                <p className="text-zinc-500">
+                  {[s.property_type, s.room_category].filter(Boolean).map((v) => humanizeKey(String(v))).join(" · ")}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
