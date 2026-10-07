@@ -28,6 +28,7 @@ import {
   DocumentType,
   isExpired,
   isExpiringSoon,
+  PartnerRoleApplication,
   PartnerRoleStatus,
   ROLE_LABELS,
 } from "@/types/partner";
@@ -431,6 +432,8 @@ function RoleReviewCard({
             </div>
           )}
 
+          {latestApplication && <ApplicationFormDetails application={latestApplication} />}
+
           {profile && (
             <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
               <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
@@ -620,6 +623,80 @@ function RoleReviewCard({
       {showHistory && <VerificationHistory entityType="partner_role" entityId={role.id} />}
       {error && <p className="mt-2 text-xs font-medium text-red-600">{error}</p>}
     </Card>
+  );
+}
+
+function ApplicationField({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <div>
+      <span className="text-zinc-400">{label}: </span>
+      <span className="font-medium text-zinc-800 dark:text-zinc-200">{value}</span>
+    </div>
+  );
+}
+
+function ApplicationFormDetails({ application }: { application: PartnerRoleApplication }) {
+  const a = application;
+  const hasIdentity = a.full_legal_name || a.contact_mobile_number || a.national_id_type || a.national_id_number;
+  const hasAddress = a.permanent_address || a.current_address;
+  const hasEmergency = a.emergency_contact_name || a.emergency_contact_phone;
+  const hasPayout = a.payout_method || a.payout_provider_name || a.payout_account_name || a.payout_account_number || a.tax_id;
+  const hasRoleDetails = a.role_details && Object.keys(a.role_details).length > 0;
+  const hasAgreements = a.agreed_to_partner_terms != null || a.agreed_to_background_check != null;
+
+  if (!hasIdentity && !hasAddress && !hasEmergency && !hasPayout && !hasRoleDetails && !hasAgreements) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+      <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+        Application Form Details
+      </h4>
+      <div className="mt-2.5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 text-xs">
+        <ApplicationField label="Full Legal Name" value={a.full_legal_name} />
+        <ApplicationField label="Contact Mobile" value={a.contact_mobile_number} />
+        <ApplicationField
+          label="National ID"
+          value={
+            a.national_id_type || a.national_id_number
+              ? `${a.national_id_type === "passport" ? "Passport" : a.national_id_type === "id_card" ? "ID Card" : ""}${a.national_id_number ? ` — ${a.national_id_number}` : ""}`
+              : null
+          }
+        />
+        <ApplicationField label="Permanent Address" value={a.permanent_address} />
+        <ApplicationField label="Current Address" value={a.current_address} />
+        <ApplicationField label="Emergency Contact" value={a.emergency_contact_name} />
+        <ApplicationField label="Emergency Phone" value={a.emergency_contact_phone} />
+        <ApplicationField
+          label="Payout Method"
+          value={a.payout_method === "bank" ? "Bank Transfer" : a.payout_method === "mobile_financial_service" ? "Mobile Financial Service" : null}
+        />
+        <ApplicationField label="Payout Provider" value={a.payout_provider_name} />
+        <ApplicationField label="Payout Account Name" value={a.payout_account_name} />
+        <ApplicationField label="Payout Account Number" value={a.payout_account_number} />
+        <ApplicationField label="Tax ID" value={a.tax_id} />
+        {hasAgreements && (
+          <div className="col-span-full flex flex-wrap items-center gap-2 pt-1">
+            <Badge variant={a.agreed_to_partner_terms ? "success" : "danger"} className="text-[10px]">
+              {a.agreed_to_partner_terms ? "Agreed to Partner Terms" : "Did Not Agree to Partner Terms"}
+            </Badge>
+            <Badge variant={a.agreed_to_background_check ? "success" : "danger"} className="text-[10px]">
+              {a.agreed_to_background_check ? "Agreed to Background Check" : "Did Not Agree to Background Check"}
+            </Badge>
+          </div>
+        )}
+        {hasRoleDetails && (
+          <div className="col-span-full">
+            <span className="text-zinc-400">Role-specific Details: </span>
+            <pre className="mt-1 overflow-x-auto rounded-lg bg-zinc-100 p-2 text-[11px] text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+              {JSON.stringify(a.role_details, null, 2)}
+            </pre>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
