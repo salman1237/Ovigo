@@ -636,6 +636,23 @@ function ApplicationField({ label, value }: { label: string; value: string | nul
   );
 }
 
+function humanizeKey(key: string): string {
+  return key
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function humanizeRoleDetailValue(value: unknown): string | null {
+  if (value == null || value === "") return null;
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (Array.isArray(value)) {
+    const items = value.filter((v) => v != null && v !== "");
+    return items.length ? items.join(", ") : null;
+  }
+  return String(value);
+}
+
 function ApplicationFormDetails({ application }: { application: PartnerRoleApplication }) {
   const a = application;
   const hasIdentity = a.full_legal_name || a.contact_mobile_number || a.national_id_type || a.national_id_number;
@@ -687,14 +704,10 @@ function ApplicationFormDetails({ application }: { application: PartnerRoleAppli
             </Badge>
           </div>
         )}
-        {hasRoleDetails && (
-          <div className="col-span-full">
-            <span className="text-zinc-400">Role-specific Details: </span>
-            <pre className="mt-1 overflow-x-auto rounded-lg bg-zinc-100 p-2 text-[11px] text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-              {JSON.stringify(a.role_details, null, 2)}
-            </pre>
-          </div>
-        )}
+        {hasRoleDetails &&
+          Object.entries(a.role_details as Record<string, unknown>).map(([key, value]) => (
+            <ApplicationField key={key} label={humanizeKey(key)} value={humanizeRoleDetailValue(value)} />
+          ))}
       </div>
     </div>
   );
