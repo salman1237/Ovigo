@@ -37,7 +37,7 @@ from app.modules.stays.schemas import (
     StaffInviteCreate,
     StaffRead,
 )
-from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleType, User
+from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleType, SystemRole, User
 
 router = APIRouter(prefix="/api/v1/properties", tags=["stays"])
 staff_router = APIRouter(prefix="/api/v1/staff", tags=["stays"])
@@ -90,9 +90,11 @@ async def list_my_properties(role: PartnerRole = Depends(require_host), db: Asyn
 async def get_property(
     property_id: uuid.UUID,
     viewer_role: PartnerRole | None = Depends(_viewer_role),
+    current_user: User | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
-    return await service.get_property_for_view(db, property_id, viewer_role)
+    is_admin = bool(current_user and current_user.system_role in (SystemRole.ADMIN, SystemRole.SUPER_ADMIN))
+    return await service.get_property_for_view(db, property_id, viewer_role, is_admin)
 
 
 @router.put("/{property_id}", response_model=PropertyRead)

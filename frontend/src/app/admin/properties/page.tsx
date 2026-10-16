@@ -1,12 +1,12 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Eye } from "lucide-react";
 import { useState } from "react";
 
 import { DetailField, humanizeDetailValue } from "@/components/admin/DetailField";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonVariants } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
@@ -126,6 +126,14 @@ function PropertyReviewCard({ property, onChange }: { property: AdminProperty; o
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={`/stays/${property.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonVariants({ variant: "ghost", size: "sm", className: "text-xs" })}
+          >
+            <Eye className="h-4 w-4 mr-1" /> Preview
+          </a>
           <Button size="sm" variant="ghost" onClick={() => setShowDetails((v) => !v)} className="text-xs">
             {showDetails ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
             {showDetails ? "Hide Application" : "View Application & Docs"}

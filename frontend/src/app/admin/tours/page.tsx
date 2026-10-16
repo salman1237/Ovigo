@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronUp,
   Download,
+  Eye,
   FileText,
   ShieldAlert,
   ShieldCheck,
@@ -17,7 +18,7 @@ import { useState } from "react";
 
 import { DetailField, humanizeDetailValue, humanizeKey } from "@/components/admin/DetailField";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonVariants } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
@@ -265,6 +266,14 @@ function TourReviewCard({ tour, onChange }: { tour: AdminTour; onChange: () => v
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={`/tours/${tour.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonVariants({ variant: "ghost", size: "sm", className: "text-xs" })}
+          >
+            <Eye className="h-4 w-4 mr-1" /> Preview
+          </a>
           <Button size="sm" variant="ghost" onClick={() => setShowDetails((v) => !v)} className="text-xs">
             {showDetails ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
             {showDetails ? "Hide Application" : "View Application & Docs"}

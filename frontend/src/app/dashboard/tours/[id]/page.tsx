@@ -6,6 +6,7 @@ import {
   Bus,
   CalendarDays,
   ClipboardList,
+  Eye,
   Hotel,
   ImageIcon,
   ListTree,
@@ -17,13 +18,13 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { BadgeApplications } from "@/components/shared/BadgeApplications";
 import { ImageGallery } from "@/components/shared/ImageGallery";
 import { LocationPicker } from "@/components/shared/LocationPicker";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonVariants } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Input } from "@/components/ui/Input";
@@ -108,11 +109,21 @@ export default function TourEditPage() {
             {tour.status.replace(/_/g, " ")}
           </Badge>
         </div>
-        {(tour.status === "draft" || tour.status === "rejected" || tour.status === "changes_requested") && (
-          <Button onClick={() => run(() => apiClient.post(`/api/v1/tours/${id}/submit`, undefined, { auth: true }))}>
-            Submit for review
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <a
+            href={`/tours/${tour.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonVariants({ variant: "secondary", size: "md" })}
+          >
+            <Eye className="h-4 w-4" /> Preview
+          </a>
+          {(tour.status === "draft" || tour.status === "rejected" || tour.status === "changes_requested") && (
+            <Button onClick={() => run(() => apiClient.post(`/api/v1/tours/${id}/submit`, undefined, { auth: true }))}>
+              Submit for review
+            </Button>
+          )}
+        </div>
       </div>
 
       {tour.rejection_reason && (tour.status === "changes_requested" || tour.status === "suspended") && (
@@ -135,6 +146,7 @@ export default function TourEditPage() {
 
       <Tabs
         className="mt-8"
+        keepMounted
         items={[
           {
             key: "overview",
@@ -162,6 +174,15 @@ export default function TourEditPage() {
             content: (
               <div className="flex flex-col gap-6">
                 <ItinerarySection tour={tour} run={run} />
+              </div>
+            ),
+          },
+          {
+            key: "departures",
+            label: "Departures",
+            icon: <CalendarDays className="h-4 w-4" />,
+            content: (
+              <div className="flex flex-col gap-6">
                 <DeparturesSection tour={tour} run={run} />
               </div>
             ),
@@ -375,6 +396,32 @@ function DetailsSection({ tour, run }: { tour: Tour; run: RunFn }) {
     );
   };
 
+  // Autosave: debounce 1.5s after the last keystroke so unsaved edits in this tab
+  // survive a tab switch (via Tabs' keepMounted) without requiring the explicit
+  // "Save Tour Specifications" click.
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    const timer = setTimeout(save, 1500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    tourType, shortSummary, durationNights, minGroupSize,
+    childPrice, infantPrice, pricePerGroup, couplePrice, singleRoomSupplement, weekendPrice,
+    earlyBirdDiscount, groupDiscount, taxRate, serviceChargeRate, depositPercentage,
+    paymentDeadlineDays, includedServices, excludedServices,
+    pickupLocation, pickupTime, pickupWindow, dropoffLocation, dropoffTime,
+    homePickupAvailable, homePickupExtraCharge, lateArrivalPolicy,
+    nearestHospital, firstAidAvailable, womenSafetyNotes, childSafetyNotes,
+    nightTravelPolicy, permitRequirements, insuranceIncluded, emergencyProcedure,
+    emergencyContactPhone, weatherRiskNote, activityRiskNote,
+    cancellationPolicy, refundPolicy, childPolicy, reschedulingPolicy,
+    minParticipantPolicy, badWeatherPolicy, noShowPolicy, petPolicy, accessibilityPolicy,
+  ]);
+
   return (
     <Section title="Tour Builder Details & Specifications" icon={<Settings2 className="h-4 w-4" />}>
       <div className="flex flex-col gap-6">
@@ -553,10 +600,15 @@ function DetailsSection({ tour, run }: { tour: Tour; run: RunFn }) {
 function ItinerarySection({ tour, run }: { tour: Tour; run: RunFn }) {
   const [dayNumber, setDayNumber] = useState<number>((tour.itinerary?.length ?? 0) + 1);
   const [title, setTitle] = useState("");
+  const [titleTouched, setTitleTouched] = useState(false);
   const [description, setDescription] = useState("");
   const [locationName, setLocationName] = useState("");
 
   const add = () => {
+    if (!title.trim()) {
+      setTitleTouched(true);
+      return;
+    }
     run(() =>
       apiClient.post(
         `/api/v1/tours/${tour.id}/itinerary`,
@@ -570,6 +622,7 @@ function ItinerarySection({ tour, run }: { tour: Tour; run: RunFn }) {
       )
     );
     setTitle("");
+    setTitleTouched(false);
     setDescription("");
     setLocationName("");
     setDayNumber((tour.itinerary?.length ?? 0) + 2);
@@ -626,6 +679,8 @@ function ItinerarySection({ tour, run }: { tour: Tour; run: RunFn }) {
             label="Day Title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+            onBlur={() => setTitleTouched(true)}
+            error={titleTouched && !title.trim() ? "Required" : undefined}
             placeholder="e.g. Arrival in Cox's Bazar & Marine Drive"
             className="flex-1 min-w-[12rem]"
             required
@@ -657,6 +712,7 @@ function ItinerarySection({ tour, run }: { tour: Tour; run: RunFn }) {
 
 function DeparturesSection({ tour, run }: { tour: Tour; run: RunFn }) {
   const [date, setDate] = useState("");
+  const [dateTouched, setDateTouched] = useState(false);
   const [returnDate, setReturnDate] = useState("");
   const [departureTime, setDepartureTime] = useState("");
   const [returnTime, setReturnTime] = useState("");
@@ -681,6 +737,10 @@ function DeparturesSection({ tour, run }: { tour: Tour; run: RunFn }) {
   });
 
   const add = () => {
+    if (!date) {
+      setDateTouched(true);
+      return;
+    }
     run(() =>
       apiClient.post(
         `/api/v1/tours/${tour.id}/departures`,
@@ -696,6 +756,7 @@ function DeparturesSection({ tour, run }: { tour: Tour; run: RunFn }) {
       )
     );
     setDate("");
+    setDateTouched(false);
     setReturnDate("");
     setDepartureTime("");
     setReturnTime("");
@@ -800,7 +861,15 @@ function DeparturesSection({ tour, run }: { tour: Tour; run: RunFn }) {
 
       {/* Add New Departure Row */}
       <div className="mt-4 flex flex-wrap items-end gap-2.5 rounded-xl border border-dashed border-zinc-300 p-3.5 dark:border-zinc-700">
-        <Input type="date" label="Departure Date" value={date} onChange={(e) => setDate(e.target.value)} required />
+        <Input
+          type="date"
+          label="Departure Date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          onBlur={() => setDateTouched(true)}
+          error={dateTouched && !date ? "Required" : undefined}
+          required
+        />
         <Input type="date" label="Return Date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
         <Input label="Dep. Time" value={departureTime} onChange={(e) => setDepartureTime(e.target.value)} placeholder="08:00 AM" className="w-28" />
         <Input label="Return Time" value={returnTime} onChange={(e) => setReturnTime(e.target.value)} placeholder="06:00 PM" className="w-28" />

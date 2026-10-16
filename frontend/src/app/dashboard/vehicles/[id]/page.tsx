@@ -1,13 +1,13 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarRange, MapPin, UserRound } from "lucide-react";
+import { CalendarRange, Eye, MapPin, UserRound } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
 import { LocationPicker } from "@/components/shared/LocationPicker";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonVariants } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -68,11 +68,21 @@ export default function VehicleEditPage() {
             <span className="text-sm font-medium text-zinc-500">{formatMoney(vehicle.price_per_day)}/day</span>
           </div>
         </div>
-        {(vehicle.status === "draft" || vehicle.status === "rejected") && (
-          <Button onClick={() => run(() => apiClient.post(`/api/v1/vehicles/${id}/submit`, undefined, { auth: true }))}>
-            Submit for review
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <a
+            href={`/rent-a-car/${vehicle.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonVariants({ variant: "secondary", size: "md" })}
+          >
+            <Eye className="h-4 w-4" /> Preview
+          </a>
+          {(vehicle.status === "draft" || vehicle.status === "rejected") && (
+            <Button onClick={() => run(() => apiClient.post(`/api/v1/vehicles/${id}/submit`, undefined, { auth: true }))}>
+              Submit for review
+            </Button>
+          )}
+        </div>
       </div>
 
       {vehicle.rejection_reason && (

@@ -22,7 +22,7 @@ from app.modules.rentcar.schemas import (
     VehicleRead,
     VehicleUpdate,
 )
-from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleType, User
+from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleType, SystemRole, User
 
 router = APIRouter(prefix="/api/v1/vehicles", tags=["rent-a-car"])
 drivers_router = APIRouter(prefix="/api/v1/drivers", tags=["rent-a-car"])
@@ -88,7 +88,8 @@ async def get_vehicle(
             .where(PartnerAccount.user_id == current_user.id, PartnerRole.role_type == PartnerRoleType.RENT_A_CAR)
         )
         viewer_role = result.scalars().first()
-    return await service.get_vehicle_for_view(db, vehicle_id, viewer_role)
+    is_admin = bool(current_user and current_user.system_role in (SystemRole.ADMIN, SystemRole.SUPER_ADMIN))
+    return await service.get_vehicle_for_view(db, vehicle_id, viewer_role, is_admin)
 
 
 @router.put("/{vehicle_id}", response_model=VehicleRead)

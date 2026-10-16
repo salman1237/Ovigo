@@ -6,6 +6,7 @@ import {
   BedDouble,
   CalendarClock,
   CalendarSync,
+  Eye,
   ImageIcon,
   MapPin,
   Plus,
@@ -22,7 +23,7 @@ import { BadgeApplications } from "@/components/shared/BadgeApplications";
 import { ImageGallery } from "@/components/shared/ImageGallery";
 import { LocationPicker } from "@/components/shared/LocationPicker";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonVariants } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Input } from "@/components/ui/Input";
@@ -95,11 +96,21 @@ export default function PropertyEditPage() {
             {property.status.replace("_", " ")}
           </Badge>
         </div>
-        {(property.status === "draft" || property.status === "rejected") && (
-          <Button onClick={() => run(() => apiClient.post(`/api/v1/properties/${id}/submit`, undefined, { auth: true }))}>
-            Submit for review
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <a
+            href={`/stays/${property.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonVariants({ variant: "secondary", size: "md" })}
+          >
+            <Eye className="h-4 w-4" /> Preview
+          </a>
+          {(property.status === "draft" || property.status === "rejected") && (
+            <Button onClick={() => run(() => apiClient.post(`/api/v1/properties/${id}/submit`, undefined, { auth: true }))}>
+              Submit for review
+            </Button>
+          )}
+        </div>
       </div>
 
       {property.rejection_reason && (

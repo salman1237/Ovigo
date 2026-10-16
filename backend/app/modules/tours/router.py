@@ -29,7 +29,7 @@ from app.modules.tours.schemas import (
     TourUpdate,
     TransportCreate,
 )
-from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleType, User
+from app.modules.users.models import PartnerAccount, PartnerRole, PartnerRoleType, SystemRole, User
 
 router = APIRouter(prefix="/api/v1/tours", tags=["tours"])
 
@@ -73,11 +73,15 @@ async def list_my_tours(role: PartnerRole = Depends(require_expert), db: AsyncSe
 
 @router.get("/{tour_id}", response_model=PublicTourRead)
 async def get_tour(
-    tour_id: uuid.UUID, viewer_role: PartnerRole | None = Depends(_viewer_role), db: AsyncSession = Depends(get_db)
+    tour_id: uuid.UUID,
+    viewer_role: PartnerRole | None = Depends(_viewer_role),
+    current_user: User | None = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
 ):
     from app.modules.profiles import service as profiles_service  # profiles imports tours
 
-    tour = await service.get_tour_for_view(db, tour_id, viewer_role)
+    is_admin = bool(current_user and current_user.system_role in (SystemRole.ADMIN, SystemRole.SUPER_ADMIN))
+    tour = await service.get_tour_for_view(db, tour_id, viewer_role, is_admin)
     read = PublicTourRead.model_validate(tour)
     read.expert = await profiles_service.tour_expert_card(db, tour.local_expert_role_id)
     return read

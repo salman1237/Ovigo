@@ -139,15 +139,17 @@ MATERIAL_REAPPROVAL_FIELDS = {
 }
 
 
-async def get_tour_for_view(db: AsyncSession, tour_id: uuid.UUID, viewer_role: PartnerRole | None) -> Tour:
-    """Published tours are visible to anyone; drafts/pending/rejected only to the owner."""
+async def get_tour_for_view(
+    db: AsyncSession, tour_id: uuid.UUID, viewer_role: PartnerRole | None, is_admin: bool = False
+) -> Tour:
+    """Published tours are visible to anyone; drafts/pending/rejected only to the owner or an admin (preview)."""
     result = await db.execute(
         select(Tour).where(Tour.id == tour_id).options(*_EAGER).execution_options(populate_existing=True)
     )
     tour = result.scalar_one_or_none()
     if tour is None:
         raise NotFoundError("Tour not found")
-    if tour.status not in PUBLIC_TOUR_STATUSES:
+    if tour.status not in PUBLIC_TOUR_STATUSES and not is_admin:
         if viewer_role is None or tour.local_expert_role_id != viewer_role.id:
             raise NotFoundError("Tour not found")
     return tour

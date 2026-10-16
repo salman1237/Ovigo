@@ -90,14 +90,16 @@ async def get_own_property_or_404(db: AsyncSession, role: PartnerRole, property_
     return prop
 
 
-async def get_property_for_view(db: AsyncSession, property_id: uuid.UUID, viewer_role: PartnerRole | None) -> Property:
+async def get_property_for_view(
+    db: AsyncSession, property_id: uuid.UUID, viewer_role: PartnerRole | None, is_admin: bool = False
+) -> Property:
     result = await db.execute(
         select(Property).where(Property.id == property_id).options(*_EAGER).execution_options(populate_existing=True)
     )
     prop = result.scalar_one_or_none()
     if prop is None:
         raise NotFoundError("Property not found")
-    if prop.status != PropertyStatus.PUBLISHED:
+    if prop.status != PropertyStatus.PUBLISHED and not is_admin:
         if viewer_role is None or prop.host_role_id != viewer_role.id:
             raise NotFoundError("Property not found")
     return prop

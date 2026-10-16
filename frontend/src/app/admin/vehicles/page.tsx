@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronUp,
   Download,
+  Eye,
   FileCheck2,
   ShieldAlert,
   ShieldCheck,
@@ -12,7 +13,7 @@ import {
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonVariants } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
@@ -220,6 +221,14 @@ function VehicleReviewCard({ vehicle, onChange }: { vehicle: AdminVehicle; onCha
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={`/rent-a-car/${vehicle.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonVariants({ variant: "ghost", size: "sm", className: "text-xs" })}
+          >
+            <Eye className="h-4 w-4 mr-1" /> Preview
+          </a>
           <Button size="sm" variant="ghost" onClick={() => setShowDetails((v) => !v)} className="text-xs">
             {showDetails ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
             {showDetails ? "Hide Application" : "View Application & Docs"}

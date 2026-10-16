@@ -76,12 +76,14 @@ async def get_own_vehicle_or_404(db: AsyncSession, role: PartnerRole, vehicle_id
     return vehicle
 
 
-async def get_vehicle_for_view(db: AsyncSession, vehicle_id: uuid.UUID, viewer_role: PartnerRole | None) -> Vehicle:
+async def get_vehicle_for_view(
+    db: AsyncSession, vehicle_id: uuid.UUID, viewer_role: PartnerRole | None, is_admin: bool = False
+) -> Vehicle:
     result = await db.execute(select(Vehicle).where(Vehicle.id == vehicle_id))
     vehicle = result.scalar_one_or_none()
     if vehicle is None:
         raise NotFoundError("Vehicle not found")
-    if vehicle.status != VehicleStatus.PUBLISHED:
+    if vehicle.status != VehicleStatus.PUBLISHED and not is_admin:
         if viewer_role is None or vehicle.rent_a_car_role_id != viewer_role.id:
             raise NotFoundError("Vehicle not found")
     return vehicle

@@ -21,11 +21,15 @@ export function Tabs({
   value,
   onChange,
   className,
+  keepMounted = false,
 }: {
   items: TabItem[];
   value?: string;
   onChange?: (key: string) => void;
   className?: string;
+  /** Keep every tab's content mounted (hidden via CSS instead of unmounted) so
+   * component state inside an inactive tab survives switching away and back. */
+  keepMounted?: boolean;
 }) {
   const [internal, setInternal] = useState(items[0]?.key);
   const active = value ?? internal;
@@ -59,15 +63,25 @@ export function Tabs({
           </button>
         ))}
       </div>
-      <motion.div
-        key={active}
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2 }}
-        className="mt-5"
-      >
-        {activeItem?.content}
-      </motion.div>
+      {keepMounted ? (
+        <div className="mt-5">
+          {items.map((item) => (
+            <div key={item.key} className={item.key === active ? "" : "hidden"}>
+              {item.content}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <motion.div
+          key={active}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+          className="mt-5"
+        >
+          {activeItem?.content}
+        </motion.div>
+      )}
     </div>
   );
 }
