@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 import { HeroSearchWidget } from "@/components/shared/HeroSearchWidget";
 import { ApproxPrice } from "@/components/shared/ApproxPrice";
@@ -12,7 +14,9 @@ import { useRankedDestinations } from "@/hooks/useRankedDestinations";
 import { apiClient } from "@/lib/api-client";
 import { cmsBannerImageUrl, cmsHeroImageUrl, cmsTileImageUrl, destinationCoverUrl, firstImageId, propertyImageUrl, tourImageUrl } from "@/lib/media";
 import { formatMoney } from "@/lib/format";
+import { nonTravelerHomePath } from "@/lib/role-redirect";
 import { VEHICLE_TYPE_ICONS } from "@/lib/vehicleIcons";
+import { useAuthStore } from "@/stores/auth-store";
 import type { HomepageContent } from "@/types/cms";
 import { GUIDE_CERTIFICATION_LABELS, type PublicGuideSummary } from "@/types/guides";
 import { VEHICLE_TYPE_LABELS, type Vehicle } from "@/types/rentcar";
@@ -38,6 +42,23 @@ const ALL_SERVICES = [
 const TILTS = ["-rotate-3", "rotate-2", "-rotate-2", "rotate-3", "-rotate-1", "rotate-1"];
 
 export default function HomePage() {
+  const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+
+  // Already-authenticated admins/approved partners landing on "/" (not just a fresh
+  // login submit) get sent to their own dashboard — travelers and logged-out
+  // visitors see this page as normal.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    nonTravelerHomePath(user).then((path) => {
+      if (!cancelled && path) router.replace(path);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, router]);
+
   const ranked = useRankedDestinations();
   const { data: cms } = useQuery({
     queryKey: ["cms", "homepage"],

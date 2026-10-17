@@ -14,27 +14,9 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { nonTravelerHomePath } from "@/lib/role-redirect";
 import { useAuthStore } from "@/stores/auth-store";
-import type { PartnerRole } from "@/types/partner";
 import type { TokenPair } from "@/types/user";
-
-/** Where to land right after sign-in, absent an explicit `next` param. Admins go to
- * /admin; anyone holding at least one approved partner role goes to their dashboard;
- * plain travelers keep landing on the homepage. */
-export async function postLoginRedirectPath(user: TokenPair["user"]): Promise<string> {
-  if (user.system_role === "admin" || user.system_role === "super_admin") {
-    return "/admin";
-  }
-  try {
-    const roles = await apiClient.get<PartnerRole[]>("/api/v1/partners/roles", { auth: true });
-    if (roles.some((r) => r.status === "approved")) {
-      return "/dashboard";
-    }
-  } catch {
-    // Fall through to the homepage if the roles lookup fails for any reason.
-  }
-  return "/";
-}
 
 const loginSchema = z.object({
   identifier: z.string().min(1, "Email or phone is required"),
@@ -69,7 +51,7 @@ function LoginContent() {
       const tokens = await apiClient.post<TokenPair>("/api/v1/auth/login", data);
       setSession(tokens);
       const next = searchParams.get("next");
-      router.push(next || (await postLoginRedirectPath(tokens.user)));
+      router.push(next || (await nonTravelerHomePath(tokens.user)) || "/");
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : "Something went wrong");
     }
